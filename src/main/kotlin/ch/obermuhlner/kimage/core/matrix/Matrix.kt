@@ -35,13 +35,13 @@ interface Matrix {
     }
 
     fun indexOf(row: Int, col: Int): Int {
-        checkRow(row, rows)
-        checkCol(col, cols)
+        checkRow(row)
+        checkCol(col)
         return row * cols + col
     }
 
     operator fun plus(other: Matrix): Matrix {
-        checkSameSize(this, other)
+        checkSameSize(other)
 
         val m = create()
         for (index in 0 until size) {
@@ -51,7 +51,7 @@ interface Matrix {
     }
 
     operator fun plusAssign(other: Matrix) {
-        checkSameSize(this, other)
+        checkSameSize(other)
 
         for (index in 0 until size) {
             this[index] += other[index]
@@ -59,7 +59,7 @@ interface Matrix {
     }
 
     operator fun minus(other: Matrix): Matrix {
-        checkSameSize(this, other)
+        checkSameSize(other)
 
         val m = create()
         for (index in 0 until size) {
@@ -69,7 +69,7 @@ interface Matrix {
     }
 
     operator fun minusAssign(other: Matrix) {
-        checkSameSize(this, other)
+        checkSameSize(other)
 
         for (index in 0 until size) {
             this[index] -= other[index]
@@ -77,7 +77,7 @@ interface Matrix {
     }
 
     operator fun times(other: Matrix): Matrix {
-        checkColsOtherRows(this, other)
+        checkColsOtherRows(other)
 
         val m = create(this.rows, other.cols)
         for (row in 0 until rows) {
@@ -143,7 +143,7 @@ interface Matrix {
     }
 
     infix fun elementTimes(other: Matrix): Matrix {
-        checkSameSize(this, other)
+        checkSameSize(other)
         val m = create()
         for (index in 0 until size) {
             m[index] = this[index] * other[index]
@@ -152,7 +152,7 @@ interface Matrix {
     }
 
     infix fun elementDiv(other: Matrix): Matrix {
-        checkSameSize(this, other)
+        checkSameSize(other)
         val m = create()
         for (index in 0 until size) {
             m[index] = this[index] / other[index]
@@ -170,6 +170,10 @@ interface Matrix {
         }
 
         return m
+    }
+
+    fun crop(croppedRow: Int, croppedCol: Int, croppedRows: Int, croppedCols: Int, strictClipping: Boolean = true): Matrix {
+        return CroppedMatrix(this, croppedRow, croppedCol, croppedRows, croppedCols, strictClipping)
     }
 
     fun create(newRows: Int = rows, newCols: Int = cols): Matrix

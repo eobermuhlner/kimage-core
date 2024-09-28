@@ -10,6 +10,8 @@ repositories {
 }
 
 dependencies {
+    implementation("gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2")
+
     testImplementation(kotlin("test"))
 }
 

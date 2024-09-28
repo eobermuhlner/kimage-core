@@ -39,14 +39,14 @@ class CroppedMatrix(
 
     private fun innerRow(row: Int): Int {
         if (strictClipping) {
-            checkRow(row, rows)
+            checkRow(row)
         }
         return row + offsetRow
     }
 
     private fun innerCol(col: Int): Int {
         if (strictClipping) {
-            checkCol(col, cols)
+            checkCol(col)
         }
         return col + offsetCol
     }
