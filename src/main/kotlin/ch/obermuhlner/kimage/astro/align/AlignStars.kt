@@ -11,7 +11,6 @@ import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.floor
-import kotlin.math.min
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -105,56 +104,62 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
     return stars.sortedByDescending { it.brightness }
 }
 
-// Function to calculate the transformation matrix from otherStars to referenceStars using RANSAC and star matching by angles
 fun calculateTransformationMatrix(
     referenceStars: List<Star>,
     otherStars: List<Star>,
     angleTolerance: Double = 0.01,
-    positionTolerance: Double = 2.0,
-    maxIterations: Int = 1000,
-    acceptInlierThresholdFactor: Double = 0.8
+    positionTolerance: Double = 5.0,
+    maxIterations: Int = 1000
 ): Matrix? {
-    var bestInliers = 0
     var bestTransformation: Matrix? = null
+    var bestInliers = 0
+    var bestError = Double.MAX_VALUE
 
     val referenceTriangles = computeTriangleFeatures(referenceStars)
     val otherTriangles = computeTriangleFeatures(otherStars)
-
-    val acceptInlierThreshold = (min(referenceStars.size, otherStars.size) * acceptInlierThresholdFactor).toInt()
+    println("Triangles: reference ${referenceTriangles.size}, other ${otherTriangles.size}")
 
     for (iteration in 1..maxIterations) {
-        if (otherTriangles.isEmpty()) break;
+        if (otherTriangles.isEmpty()) break
 
         // Randomly select a triangle from otherTriangles
         val randomIndex = Random.nextInt(otherTriangles.size)
         val otherTriangle = otherTriangles[randomIndex]
 
-        // Find matching triangles in referenceTriangles
+        // Find matching triangles in referenceTriangles based on angle similarity
         val matchingTriangles = referenceTriangles.filter { refTriangle ->
             anglesAreSimilar(otherTriangle.angles, refTriangle.angles, angleTolerance)
         }
 
         if (matchingTriangles.isEmpty()) continue
 
+        // Loop through matching triangles and compute transformation
         for (refTriangle in matchingTriangles) {
-            // Get the stars corresponding to the triangle indices
             val tripletOther = otherTriangle.indices.map { otherStars[it] }
             val tripletReference = refTriangle.indices.map { referenceStars[it] }
 
-            // Compute transformation matrix
+            // Compute the transformation matrix
             val transformation = computeTransformationMatrix(tripletOther, tripletReference)
             if (transformation != null) {
-                // Apply transformation
+                // Apply the transformation to the other stars
                 val transformedStars = applyTransformation(otherStars, transformation)
 
-                // Count inliers
                 val inliers = countInliers(transformedStars, referenceStars, positionTolerance)
 
                 if (inliers > bestInliers) {
-                    println("  $inliers inliers > $bestInliers")
+                    bestError = calculateSquareError(transformedStars, referenceStars)
+                    println("Inliers $inliers > $bestInliers - error: $bestError")
                     bestInliers = inliers
                     bestTransformation = transformation
-                    if (inliers >= acceptInlierThreshold) {
+                } else if (inliers == bestInliers) {
+                    val error = calculateSquareError(transformedStars, referenceStars)
+                    if (error < bestError) {
+                        println("Error $error < $bestError - $inliers inliers")
+                        bestError = error
+                        bestTransformation = transformation
+                    }
+
+                    if (error < 1e-6) {
                         return bestTransformation
                     }
                 }
@@ -163,6 +168,32 @@ fun calculateTransformationMatrix(
     }
 
     return bestTransformation
+}
+
+// Helper function to compute the sum of squared errors
+fun calculateSquareError(transformedStars: List<Star>, referenceStars: List<Star>): Double {
+    var totalError = 0.0
+
+    // Sum the squared distances between transformed stars and the closest reference stars
+    for (tStar in transformedStars) {
+        var minDistanceSquared = Double.MAX_VALUE
+
+        // Find the closest reference star for each transformed star
+        for (rStar in referenceStars) {
+            val dx = (tStar.x - rStar.x).toDouble()
+            val dy = (tStar.y - rStar.y).toDouble()
+            val distanceSquared = dx * dx + dy * dy
+
+            if (distanceSquared < minDistanceSquared) {
+                minDistanceSquared = distanceSquared
+            }
+        }
+
+        // Add the minimum squared distance for this transformed star
+        totalError += minDistanceSquared
+    }
+
+    return totalError
 }
 
 // Function to compute triangle features from a list of stars
@@ -298,7 +329,7 @@ fun triangleArea(p1: Star, p2: Star, p3: Star): Double {
 }
 
 // Function to apply the transformation matrix to a list of stars
-fun applyTransformation(stars: List<Star>, matrix: Matrix): List<Star> {
+fun applyTransformation(stars: List<Star>, transformationMatrix: Matrix): List<Star> {
     val transformedStars = mutableListOf<Star>()
     for (star in stars) {
         val x = star.x.toDouble()
@@ -308,7 +339,7 @@ fun applyTransformation(stars: List<Star>, matrix: Matrix): List<Star> {
         vector[1, 0] = y
         vector[2, 0] = 1.0
 
-        val result = matrix.times(vector)
+        val result = transformationMatrix.times(vector)
         val xTransformed = result[0, 0]
         val yTransformed = result[1, 0]
 
@@ -349,6 +380,9 @@ fun applyTransformationToImage(inputImage: Image, transformationMatrix: Matrix):
     val transformedGreen = DoubleMatrix.matrixOf(height, width)
     val transformedBlue = DoubleMatrix.matrixOf(height, width)
 
+    // Compute the inverse of the transformation matrix
+    val inverseTransformationMatrix = transformationMatrix.invert()!!
+
     // Iterate over each pixel in the output image (reference image coordinates)
     for (yPrime in 0 until height) {
         for (xPrime in 0 until width) {
@@ -359,20 +393,23 @@ fun applyTransformationToImage(inputImage: Image, transformationMatrix: Matrix):
             outputVector[2, 0] = 1.0
 
             // Compute the corresponding input coordinates using the inverse transformation
-            val inputVector = transformationMatrix.times(outputVector)
+            val inputVector = inverseTransformationMatrix.times(outputVector)
             val x = inputVector[0, 0]
             val y = inputVector[1, 0]
 
+            val adjustedY = y // height - 1 - y
+            val adjustedX = width - 1 - x
+
             // Check if the input coordinates are within the bounds of the input image
-            if (x >= 0 && x < width - 1 && y >= 0 && y < height - 1) {
+            if (adjustedX >= 0 && adjustedX < width - 1 && adjustedY >= 0 && adjustedY < height - 1) {
                 // Perform bilinear interpolation to get the pixel values
-                val x0 = floor(x).toInt()
+                val x0 = floor(adjustedX).toInt()
                 val x1 = x0 + 1
-                val y0 = floor(y).toInt()
+                val y0 = floor(adjustedY).toInt()
                 val y1 = y0 + 1
 
-                val dx = x - x0
-                val dy = y - y0
+                val dx = adjustedX - x0
+                val dy = adjustedY - y0
 
                 // Interpolate red channel
                 val redValue = interpolate(
