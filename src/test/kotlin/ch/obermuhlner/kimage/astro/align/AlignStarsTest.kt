@@ -165,7 +165,7 @@ class AlignStarsTest {
     }
 
     @Test
-    fun testApplyTransformationTranslation() {
+    fun testApplyTransformationToStarsTranslation() {
         val stars = listOf(
             Star(0, 0, 1.0),
             Star(1, 0, 1.0),
@@ -180,7 +180,7 @@ class AlignStarsTest {
             0.0, 0.0, 1.0
         )
 
-        val transformedStars = applyTransformation(stars, transform)
+        val transformedStars = applyTransformationToStars(stars, transform)
         val expectedTransformedStars = listOf(
             Star(1, 20, 1.0),
             Star(2, 20, 1.0),
@@ -190,7 +190,7 @@ class AlignStarsTest {
     }
 
     @Test
-    fun testApplyTransformationRotation() {
+    fun testApplyTransformationToStarsRotation() {
         val stars = listOf(
             Star(0, 0, 1.0),
             Star(1, 0, 1.0),
@@ -205,7 +205,7 @@ class AlignStarsTest {
             0.0,  0.0, 1.0
         )
 
-        val transformedStars = applyTransformation(stars, transform)
+        val transformedStars = applyTransformationToStars(stars, transform)
         val expectedTransformedStars = listOf(
             Star(0, 0, 1.0),
             Star(0, 1, 1.0),
@@ -229,7 +229,7 @@ class AlignStarsTest {
             0.0, 0.0, 1.0
         )
 
-        val transformedStars = applyTransformation(stars, transform)
+        val transformedStars = applyTransformationToStars(stars, transform)
         val expectedTransformedStars = listOf(
             Star(0, 0, 1.0),
             Star(2, 0, 1.0),

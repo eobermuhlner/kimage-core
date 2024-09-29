@@ -7,6 +7,8 @@ import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
+import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
+import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
 import java.io.File
 
@@ -35,6 +37,27 @@ fun main(args: Array<String>) {
 //        "aligned_debayer_Light_M16_0004.tif",
 //        "aligned_debayer_Light_M16_0005.tif",
 //    )
+
+//    stackImages(
+//        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212432_-10.0C_0001.tif",
+//        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212734_-10.0C_0002.tif",
+//        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213108_-10.1C_0003.tif",
+//        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213410_-10.0C_0004.tif",
+//        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213734_-10.0C_0005.tif",
+//    )
+}
+
+fun stackImages(vararg fileNames: String) {
+    val stacked = stack(
+        fileNames.map {
+            {
+                println("Loading $it")
+                ImageReader.read(File(it))
+            }
+        },
+        StackAlgorithm.Max
+    )
+    ImageWriter.write(stacked, File("stacked.tif"))
 }
 
 fun alignStarImages(

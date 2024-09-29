@@ -35,9 +35,9 @@ interface Matrix {
     }
 
     fun indexOf(row: Int, col: Int): Int {
-        checkRow(row)
-        checkCol(col)
-        return row * cols + col
+        //checkRow(row)
+        //checkCol(col)
+        return boundedRow(row) * cols + boundedCol(col)
     }
 
     operator fun plus(other: Matrix): Matrix {
@@ -172,6 +172,13 @@ interface Matrix {
         return m
     }
 
+    fun boundedRow(row: Int) = row.coerceIn(0 until rows)
+    fun boundedCol(col: Int) = col.coerceIn(0 until cols)
+
+    fun isInBounds(row: Int, col: Int): Boolean {
+        return row in 0 until rows && col in 0 until cols
+    }
+
     fun crop(croppedRow: Int, croppedCol: Int, croppedRows: Int, croppedCols: Int, strictClipping: Boolean = true): Matrix {
         return CroppedMatrix(this, croppedRow, croppedCol, croppedRows, croppedCols, strictClipping)
     }
@@ -186,14 +193,14 @@ interface Matrix {
 
     fun applyEach(func: (Double) -> Double) {
         for (index in 0 until size) {
-            this[index] = func.invoke(this[index])
+            this[index] = func(this[index])
         }
     }
 
     fun applyEach(func: (row: Int, col: Int, value: Double) -> Double) {
         for (row in 0 until rows) {
             for (col in 0 until cols) {
-                this[row, col] = func.invoke(row, col, this[row, col])
+                this[row, col] = func(row, col, this[row, col])
             }
         }
     }

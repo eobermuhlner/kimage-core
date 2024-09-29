@@ -3,6 +3,18 @@ package ch.obermuhlner.kimage.core.image
 import ch.obermuhlner.kimage.core.matrix.CroppedMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
 
+fun Image.crop(croppedX: Int, croppedY: Int, croppedWidth: Int, croppedHeight: Int, strictClipping: Boolean = true): Image {
+    return CroppedImage(this, croppedX, croppedY, croppedWidth, croppedHeight, strictClipping)
+}
+
+fun Image.cropCenter(radius: Int, croppedCenterX: Int = width / 2, croppedCenterY: Int = height / 2, strictClipping: Boolean = true): Image {
+    return cropCenter(radius, radius, croppedCenterX, croppedCenterY, strictClipping)
+}
+
+fun Image.cropCenter(radiusX: Int, radiusY: Int, croppedCenterX: Int = width / 2, croppedCenterY: Int = height / 2, strictClipping: Boolean = true): Image {
+    return crop(croppedCenterX - radiusX, croppedCenterY - radiusY, radiusX*2, radiusY*2, strictClipping)
+}
+
 class CroppedImage(
         private val image: Image,
         private val offsetX: Int,

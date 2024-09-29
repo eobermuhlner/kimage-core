@@ -15,7 +15,11 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 data class Star(val x: Int, val y: Int, val brightness: Double)
-data class TriangleFeature(val indices: List<Int>, val angles: List<Double>)
+data class TriangleFeature(
+    val indices: List<Int>,
+    val angles: List<Double>,
+    val orientation: Int
+)
 
 fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
     val height = image.height
@@ -126,9 +130,10 @@ fun calculateTransformationMatrix(
         val randomIndex = Random.nextInt(otherTriangles.size)
         val otherTriangle = otherTriangles[randomIndex]
 
-        // Find matching triangles in referenceTriangles based on angle similarity
+        // Find matching triangles in referenceTriangles based on angle similarity and orientation
         val matchingTriangles = referenceTriangles.filter { refTriangle ->
-            anglesAreSimilar(otherTriangle.angles, refTriangle.angles, angleTolerance)
+            anglesAreSimilar(otherTriangle.angles, refTriangle.angles, angleTolerance) &&
+                    otherTriangle.orientation == refTriangle.orientation
         }
 
         if (matchingTriangles.isEmpty()) continue
@@ -142,7 +147,7 @@ fun calculateTransformationMatrix(
             val transformation = computeTransformationMatrix(tripletOther, tripletReference)
             if (transformation != null) {
                 // Apply the transformation to the other stars
-                val transformedStars = applyTransformation(otherStars, transformation)
+                val transformedStars = applyTransformationToStars(otherStars, transformation)
 
                 val inliers = countInliers(transformedStars, referenceStars, positionTolerance)
 
@@ -211,12 +216,30 @@ fun computeTriangleFeatures(stars: List<Star>): List<TriangleFeature> {
                 val angles = computeTriangleAngles(starA, starB, starC)
                 val sortedAngles = angles.sorted()
 
-                triangleFeatures.add(TriangleFeature(listOf(i, j, k), sortedAngles))
+                val signedArea = triangleSignedArea(starA, starB, starC)
+                val orientation = if (signedArea >= 0) 1 else -1
+
+                triangleFeatures.add(
+                    TriangleFeature(
+                        indices = listOf(i, j, k),
+                        angles = sortedAngles,
+                        orientation = orientation
+                    )
+                )
             }
         }
     }
 
     return triangleFeatures
+}
+
+// Function to compute the signed area of a triangle
+fun triangleSignedArea(p1: Star, p2: Star, p3: Star): Double {
+    return 0.5 * (
+            p1.x * (p2.y - p3.y) +
+                    p2.x * (p3.y - p1.y) +
+                    p3.x * (p1.y - p2.y)
+            )
 }
 
 // Function to compute the internal angles of a triangle formed by three stars
@@ -329,7 +352,7 @@ fun triangleArea(p1: Star, p2: Star, p3: Star): Double {
 }
 
 // Function to apply the transformation matrix to a list of stars
-fun applyTransformation(stars: List<Star>, transformationMatrix: Matrix): List<Star> {
+fun applyTransformationToStars(stars: List<Star>, transformationMatrix: Matrix): List<Star> {
     val transformedStars = mutableListOf<Star>()
     for (star in stars) {
         val x = star.x.toDouble()
@@ -397,8 +420,8 @@ fun applyTransformationToImage(inputImage: Image, transformationMatrix: Matrix):
             val x = inputVector[0, 0]
             val y = inputVector[1, 0]
 
-            val adjustedY = y // height - 1 - y
-            val adjustedX = width - 1 - x
+            val adjustedX = x
+            val adjustedY = y
 
             // Check if the input coordinates are within the bounds of the input image
             if (adjustedX >= 0 && adjustedX < width - 1 && adjustedY >= 0 && adjustedY < height - 1) {
