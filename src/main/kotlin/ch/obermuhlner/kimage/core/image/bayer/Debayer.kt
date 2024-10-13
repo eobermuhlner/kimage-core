@@ -14,6 +14,7 @@ enum class DebayerInterpolation {
     Nearest,
     Bilinear
 }
+
 fun Image.debayer(
     pattern: BayerPattern = BayerPattern.RGGB,
     interpolation: DebayerInterpolation = DebayerInterpolation.Bilinear,
@@ -32,31 +33,27 @@ fun Image.debayer(
         BayerPattern.BGGR -> Pair(1, 1)
         BayerPattern.GBRG -> Pair(0, 1)
         BayerPattern.GRBG -> Pair(0, 1)
-        else -> throw java.lang.IllegalArgumentException("Unknown pattern: $pattern")
     }
     val (g1X, g1Y) = when (pattern) {
         BayerPattern.RGGB -> Pair(0, 1)
         BayerPattern.BGGR -> Pair(0, 1)
         BayerPattern.GBRG -> Pair(0, 0)
         BayerPattern.GRBG -> Pair(0, 0)
-        else -> throw java.lang.IllegalArgumentException("Unknown pattern: $pattern")
     }
     val (g2X, g2Y) = when (pattern) {
         BayerPattern.RGGB -> Pair(1, 0)
         BayerPattern.BGGR -> Pair(1, 0)
         BayerPattern.GBRG -> Pair(1, 1)
         BayerPattern.GRBG -> Pair(1, 1)
-        else -> throw java.lang.IllegalArgumentException("Unknown pattern: $pattern")
     }
     val (bX, bY) = when (pattern) {
         BayerPattern.RGGB -> Pair(1, 1)
         BayerPattern.BGGR -> Pair(0, 0)
         BayerPattern.GBRG -> Pair(0, 1)
         BayerPattern.GRBG -> Pair(1, 0)
-        else -> throw java.lang.IllegalArgumentException("Unknown pattern: $pattern")
     }
 
-    val mosaic = this[Channel.Gray].asXY()
+    val mosaicXY = this[Channel.Gray].asXY()
 
     for (badpixelCoord in badpixelCoords) {
         val x = badpixelCoord.first
@@ -65,34 +62,36 @@ fun Image.debayer(
         val surroundingValues = mutableListOf<Double>()
         for (dy in -2..2 step 4) {
             for (dx in -2..2 step 4) {
-                if (mosaic.isInBounds(x + dx, y + dy) && !badpixelCoords.contains(Pair(x + dx, y + dy))) {
-                    surroundingValues.add(mosaic[x + dx, y + dy])
+                if (mosaicXY.isInBounds(x + dx, y + dy) && !badpixelCoords.contains(Pair(x + dx, y + dy))) {
+                    surroundingValues.add(mosaicXY[x + dx, y + dy])
                 }
             }
         }
 
-        mosaic[x, y] = surroundingValues.median()
+        mosaicXY[x, y] = surroundingValues.median()
     }
 
-    val mosaicRedMatrix = DoubleMatrix(mosaic.width / 2, mosaic.height / 2)
-    val mosaicGreen1Matrix = DoubleMatrix(mosaic.width / 2, mosaic.height / 2)
-    val mosaicGreen2Matrix = DoubleMatrix(mosaic.width / 2, mosaic.height / 2)
-    val mosaicBlueMatrix = DoubleMatrix(mosaic.width / 2, mosaic.height / 2)
-    val mosaicGrayMatrix = DoubleMatrix(mosaic.width / 2, mosaic.height / 2)
+    val widthHalf = mosaicXY.width / 2
+    val heightHalf = mosaicXY.height / 2
+    val mosaicRedMatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicGreen1MatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicGreen2MatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicBlueMatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicGrayMatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
 
     for (y in 0 until this.height step 2) {
         for (x in 0 until this.width step 2) {
-            val r = mosaic[x+rX, y+rY]
-            val g1 = mosaic[x+g1X, y+g1Y]
-            val g2 = mosaic[x+g2X, y+g2Y]
-            val b = mosaic[x+bX, y+bY]
+            val r = mosaicXY[x+rX, y+rY]
+            val g1 = mosaicXY[x+g1X, y+g1Y]
+            val g2 = mosaicXY[x+g2X, y+g2Y]
+            val b = mosaicXY[x+bX, y+bY]
             val gray = (r + r + g1 + g2 + b + b) / 6
 
-            mosaicRedMatrix[x/2, y/2] = r
-            mosaicGreen1Matrix[x/2, y/2] = g1
-            mosaicGreen2Matrix[x/2, y/2] = g2
-            mosaicBlueMatrix[x/2, y/2] = b
-            mosaicGrayMatrix[x/2, y/2] = gray
+            mosaicRedMatrixXY[x/2, y/2] = r
+            mosaicGreen1MatrixXY[x/2, y/2] = g1
+            mosaicGreen2MatrixXY[x/2, y/2] = g2
+            mosaicBlueMatrixXY[x/2, y/2] = b
+            mosaicGrayMatrixXY[x/2, y/2] = gray
         }
     }
 
@@ -104,65 +103,79 @@ fun Image.debayer(
     val greenOffset = 0.0
     val blueOffset = 0.0
 
-    mosaicRedMatrix.applyEach { v -> (v - redOffset) * redFactor  }
-    mosaicGreen1Matrix.applyEach { v -> (v - greenOffset) * greenFactor  }
-    mosaicGreen2Matrix.applyEach { v -> (v - greenOffset) * greenFactor  }
-    mosaicBlueMatrix.applyEach { v -> (v - blueOffset) * blueFactor  }
+    mosaicRedMatrixXY.matrix.applyEach { v -> (v - redOffset) * redFactor  }
+    mosaicGreen1MatrixXY.matrix.applyEach { v -> (v - greenOffset) * greenFactor  }
+    mosaicGreen2MatrixXY.matrix.applyEach { v -> (v - greenOffset) * greenFactor  }
+    mosaicBlueMatrixXY.matrix.applyEach { v -> (v - blueOffset) * blueFactor  }
 
-    val redMatrix = DoubleMatrix.matrixOf(width, height)
-    val greenMatrix = DoubleMatrix.matrixOf(width, height)
-    val blueMatrix = DoubleMatrix.matrixOf(width, height)
+    val redMatrixXY = DoubleMatrix.matrixOf(height, width).asXY()
+    val greenMatrixXY = DoubleMatrix.matrixOf(height, width).asXY()
+    val blueMatrixXY = DoubleMatrix.matrixOf(height, width).asXY()
 
     when (interpolation) {
-        DebayerInterpolation.SuperPixelHalf, DebayerInterpolation.SuperPixel -> {
+        DebayerInterpolation.SuperPixelHalf -> {
             for (y in 0 until height) {
                 for (x in 0 until width) {
-                    val r = mosaicRedMatrix[x, y]
-                    val g1 = mosaicGreen1Matrix[x, y]
-                    val g2 = mosaicGreen2Matrix[x, y]
-                    val b = mosaicBlueMatrix[x, y]
+                    val r = mosaicRedMatrixXY[x, y]
+                    val g1 = mosaicGreen1MatrixXY[x, y]
+                    val g2 = mosaicGreen2MatrixXY[x, y]
+                    val b = mosaicBlueMatrixXY[x, y]
 
-                    redMatrix[x, y] = r
-                    greenMatrix[x, y] = (g1+g2)/2
-                    blueMatrix[x, y] = b
+                    redMatrixXY[x, y] = r
+                    greenMatrixXY[x, y] = (g1+g2)/2
+                    blueMatrixXY[x, y] = b
+                }
+            }
+        }
+        DebayerInterpolation.SuperPixel -> {
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    val r = mosaicRedMatrixXY[x/2, y/2]
+                    val g1 = mosaicGreen1MatrixXY[x/2, y/2]
+                    val g2 = mosaicGreen2MatrixXY[x/2, y/2]
+                    val b = mosaicBlueMatrixXY[x/2, y/2]
+
+                    redMatrixXY[x, y] = r
+                    greenMatrixXY[x, y] = (g1+g2)/2
+                    blueMatrixXY[x, y] = b
                 }
             }
         }
         DebayerInterpolation.None -> {
             for (y in 0 until height step 2) {
                 for (x in 0 until width step 2) {
-                    val r = mosaicRedMatrix[x/2, y/2]
-                    val g1 = mosaicGreen1Matrix[x/2, y/2]
-                    val g2 = mosaicGreen2Matrix[x/2, y/2]
-                    val b = mosaicBlueMatrix[x/2, y/2]
+                    val r = mosaicRedMatrixXY[x/2, y/2]
+                    val g1 = mosaicGreen1MatrixXY[x/2, y/2]
+                    val g2 = mosaicGreen2MatrixXY[x/2, y/2]
+                    val b = mosaicBlueMatrixXY[x/2, y/2]
 
-                    redMatrix[x+rX, y+rY] = r
-                    greenMatrix[x+g1X, y+g1Y] = g1
-                    greenMatrix[x+g2X, y+g2Y] = g2
-                    blueMatrix[x+bX, y+bY] = b
+                    redMatrixXY[x+rX, y+rY] = r
+                    greenMatrixXY[x+g1X, y+g1Y] = g1
+                    greenMatrixXY[x+g2X, y+g2Y] = g2
+                    blueMatrixXY[x+bX, y+bY] = b
                 }
             }
         }
         DebayerInterpolation.Nearest -> {
             for (y in 0 until height step 2) {
                 for (x in 0 until width step 2) {
-                    val r = mosaicRedMatrix[x / 2, y / 2]
-                    val g1 = mosaicGreen1Matrix[x / 2, y / 2]
-                    val g2 = mosaicGreen2Matrix[x / 2, y / 2]
-                    val b = mosaicBlueMatrix[x / 2, y / 2]
+                    val r = mosaicRedMatrixXY[x / 2, y / 2]
+                    val g1 = mosaicGreen1MatrixXY[x / 2, y / 2]
+                    val g2 = mosaicGreen2MatrixXY[x / 2, y / 2]
+                    val b = mosaicBlueMatrixXY[x / 2, y / 2]
 
-                    redMatrix[x + 0, y + 0] = r
-                    redMatrix[x + 1, y + 0] = r
-                    redMatrix[x + 0, y + 1] = r
-                    redMatrix[x + 1, y + 1] = r
-                    blueMatrix[x + 0, y + 0] = b
-                    blueMatrix[x + 1, y + 0] = b
-                    blueMatrix[x + 0, y + 1] = b
-                    blueMatrix[x + 1, y + 1] = b
-                    greenMatrix[x + 0, y + 0] = g1
-                    greenMatrix[x + 1, y + 0] = g1
-                    greenMatrix[x + 0, y + 1] = g2
-                    greenMatrix[x + 1, y + 1] = g2
+                    redMatrixXY[x + 0, y + 0] = r
+                    redMatrixXY[x+1, y + 0] = r
+                    redMatrixXY[x + 0, y+1] = r
+                    redMatrixXY[x+1, y+1] = r
+                    blueMatrixXY[x + 0, y + 0] = b
+                    blueMatrixXY[x+1, y + 0] = b
+                    blueMatrixXY[x + 0, y+1] = b
+                    blueMatrixXY[x+1, y+1] = b
+                    greenMatrixXY[x + 0, y + 0] = g1
+                    greenMatrixXY[x+1, y + 0] = g1
+                    greenMatrixXY[x + 0, y+1] = g2
+                    greenMatrixXY[x+1, y+1] = g2
                 }
             }
         }
@@ -176,42 +189,34 @@ fun Image.debayer(
                     val g: Double
                     val b: Double
                     if (dx == rX && dy == rY) {
-                        r = mosaic[x, y]
-                        g = (mosaic[x - 1, y] + mosaic[x + 1, y] + mosaic[x,
-                            y - 1
-                        ] + mosaic[x, y + 1]) / 4
-                        b = (mosaic[x - 1, y - 1] + mosaic[x - 1,
-                            y + 1
-                        ] + mosaic[x + 1, y - 1] + mosaic[x + 1, y + 1]) / 4
+                        r = mosaicXY[x, y]
+                        g = (mosaicXY[x-1, y] + mosaicXY[x+1, y] + mosaicXY[x, y-1] + mosaicXY[x, y+1]) / 4
+                        b = (mosaicXY[x-1, y-1] + mosaicXY[x-1, y+1] + mosaicXY[x+1, y-1] + mosaicXY[x+1, y+1]) / 4
                     } else if (dx == bX && dy == bY) {
-                        r = (mosaic[x - 1, y - 1] + mosaic[x - 1, y + 1] + mosaic[x + 1,
-                            y - 1
-                        ] + mosaic[x + 1, y + 1]) / 4
-                        g = (mosaic[x - 1, y] + mosaic[x + 1, y] + mosaic[x,
-                            y - 1
-                        ] + mosaic[x, y + 1]) / 4
-                        b = mosaic[x, y]
+                        r = (mosaicXY[x-1, y-1] + mosaicXY[x-1, y+1] + mosaicXY[x+1, y-1] + mosaicXY[x+1, y+1]) / 4
+                        g = (mosaicXY[x-1, y] + mosaicXY[x+1, y] + mosaicXY[x, y-1] + mosaicXY[x, y+1]) / 4
+                        b = mosaicXY[x, y]
                     } else {
-                        g = mosaic[x, y]
-                        if ((x - 1) % 2 == rX) {
-                            r = (mosaic[x - 1, y] + mosaic[x + 1, y]) / 2
-                            b = (mosaic[x, y - 1] + mosaic[x, y + 1]) / 2
+                        g = mosaicXY[x, y]
+                        if ((x-1) % 2 == rX) {
+                            r = (mosaicXY[x-1, y] + mosaicXY[x+1, y]) / 2
+                            b = (mosaicXY[x, y-1] + mosaicXY[x, y+1]) / 2
                         } else {
-                            r = (mosaic[x, y - 1] + mosaic[x, y + 1]) / 2
-                            b = (mosaic[x - 1, y] + mosaic[x + 1, y]) / 2
+                            r = (mosaicXY[x, y-1] + mosaicXY[x, y+1]) / 2
+                            b = (mosaicXY[x-1, y] + mosaicXY[x+1, y]) / 2
                         }
                     }
 
-                    redMatrix[x, y] = (r - redOffset) * redFactor
-                    greenMatrix[x, y] = (g - greenOffset) * greenFactor
-                    blueMatrix[x, y] = (b - blueOffset) * blueFactor
+                    redMatrixXY[x, y] = (r - redOffset) * redFactor
+                    greenMatrixXY[x, y] = (g - greenOffset) * greenFactor
+                    blueMatrixXY[x, y] = (b - blueOffset) * blueFactor
                 }
             }
         }
     }
 
     return MatrixImage(width, height,
-        Channel.Red to redMatrix,
-        Channel.Green to greenMatrix,
-        Channel.Blue to blueMatrix)
+        Channel.Red to redMatrixXY.matrix,
+        Channel.Green to greenMatrixXY.matrix,
+        Channel.Blue to blueMatrixXY.matrix)
 }
