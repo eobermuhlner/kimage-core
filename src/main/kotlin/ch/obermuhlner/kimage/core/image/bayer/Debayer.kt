@@ -21,6 +21,26 @@ enum class DebayerInterpolation {
     Bilinear
 }
 
+fun Image.debayerCleanupBadPixels(
+    pattern: BayerPattern = BayerPattern.RGGB,
+    interpolation: DebayerInterpolation = DebayerInterpolation.Bilinear,
+    red: Double = 1.0,
+    green: Double = 1.0,
+    blue: Double = 1.0,
+    minSigma: Double = 0.01,
+    gradientThresholdFactor: Double = 10.0,
+    steepCountThresholdFactor: Double = 0.75
+): MatrixImage {
+    val mosaic = if (this.hasChannel(Channel.Red)) {
+        this[Channel.Red]
+    } else {
+        this[Channel.Gray]
+    }
+    val badPixels = mosaic.findBayerBadPixels(minSigma, gradientThresholdFactor, steepCountThresholdFactor)
+    return debayer(pattern, interpolation, red, green, blue, badPixels)
+}
+
+
 fun Image.debayer(
     pattern: BayerPattern = BayerPattern.RGGB,
     interpolation: DebayerInterpolation = DebayerInterpolation.Bilinear,
