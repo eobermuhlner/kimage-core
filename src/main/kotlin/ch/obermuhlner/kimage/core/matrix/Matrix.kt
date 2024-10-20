@@ -1,8 +1,6 @@
 package ch.obermuhlner.kimage.core.matrix
 
-import ch.obermuhlner.kimage.core.matrix.check.checkCol
 import ch.obermuhlner.kimage.core.matrix.check.checkColsOtherRows
-import ch.obermuhlner.kimage.core.matrix.check.checkRow
 import ch.obermuhlner.kimage.core.matrix.check.checkSameSize
 import kotlin.math.abs
 
@@ -35,8 +33,6 @@ interface Matrix {
     }
 
     fun indexOf(row: Int, col: Int): Int {
-        //checkRow(row)
-        //checkCol(col)
         return boundedRow(row) * cols + boundedCol(col)
     }
 

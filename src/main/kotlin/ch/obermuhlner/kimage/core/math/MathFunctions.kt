@@ -78,8 +78,10 @@ private fun <T, U> Iterator<T>.reduceAndCount(initial: U, empty: U, accumulator:
     var count = 0
 
     for (value in this) {
-        result = accumulator.invoke(result, value)
-        count++
+        if (value != null) {
+            result = accumulator.invoke(result, value)
+            count++
+        }
     }
 
     return if (count == 0) Pair(empty, 0) else Pair(result, count)
@@ -141,8 +143,8 @@ private fun Iterator<Float>.sumAndCountFloat(): Pair<Float, Int> {
     return reduceAndCount(0f, Float.NaN) { a, b -> a + b }
 }
 
-fun Iterator<Double>.sumAndCountDouble(): Pair<Double, Int> {
-    return reduceAndCount(0.0, Double.NaN) { a, b -> a + b }
+fun Iterator<Double?>.sumAndCountDouble(): Pair<Double, Int> {
+    return reduceAndCount(0.0, Double.NaN) { a, b -> a + b!! }
 }
 
 fun Iterator<Float>.sum(): Float {
@@ -174,7 +176,7 @@ fun Iterator<Float>.average(): Float {
     return sum / count
 }
 
-fun Iterator<Double>.average(): Double {
+fun Iterator<Double?>.average(): Double {
     val (sum, count) = sumAndCountDouble()
     return sum / count
 }
@@ -183,7 +185,7 @@ fun Iterable<Float>.average(): Float {
     return iterator().average()
 }
 
-fun Iterable<Double>.average(): Double {
+fun Iterable<Double?>.average(): Double {
     return iterator().average()
 }
 
@@ -336,7 +338,20 @@ fun Iterable<Double>.median(): Double {
 fun Iterable<Double>.medianAbsoluteDeviation(): Double {
     val m = median()
     val list = toMutableList()
+    for (i in list.indices) {
+        list[i] = abs(list[i] - m)
+    }
     return list.onEach { abs(it - m) }.medianInplace()
+}
+
+fun Iterable<Double>.medianAndMedianAbsoluteDeviation(): Pair<Double, Double> {
+    val m = median()
+    val list = toMutableList()
+    for (i in list.indices) {
+        list[i] = abs(list[i] - m)
+    }
+    val mad = list.medianInplace()
+    return Pair(m, mad)
 }
 
 fun FloatArray.weightedAverage(weightFunction: (i: Int, value: Float) -> Float, offset: Int = 0, length: Int = size-offset): Float {
