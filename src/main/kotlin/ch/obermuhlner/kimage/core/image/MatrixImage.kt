@@ -42,8 +42,8 @@ class MatrixImage(
             width: Int,
             height: Int,
             channels: List<Channel>,
-            matrixFunc: (channel: Channel, width: Int, height: Int) -> Matrix = { _, _, _ -> FloatMatrix(width, height) })
-            : this(width, height, channels, channels.map { matrixFunc.invoke(it, width, height) })
+            matrixFunc: (channel: Channel, rows: Int, cols: Int) -> Matrix = { _, _, _ -> FloatMatrix(height, width) })
+            : this(width, height, channels, channels.map { matrixFunc.invoke(it, height, width) })
 
     constructor(image: Image) : this(image.width, image.height) {
         this.setPixels(image)

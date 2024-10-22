@@ -1,12 +1,24 @@
 package ch.obermuhlner.kimage.astro.align
 
 import ch.obermuhlner.kimage.core.image.Channel
+import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.crop
+import ch.obermuhlner.kimage.core.image.io.ImageWriter
+import ch.obermuhlner.kimage.core.image.minus
+import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.assertMatrixEquals
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.File
+import kotlin.math.PI
 import kotlin.math.sqrt
+import kotlin.random.Random
+
 
 class AlignStarsTest {
 
@@ -37,7 +49,7 @@ class AlignStarsTest {
             Star(0, 8, 1.0)
         )
 
-        val matrix = calculateTransformationMatrix(referenceStars, otherStars)!!
+        val matrix = calculateTransformationMatrix(referenceStars, otherStars, 2, 2)!!
 
         val expectedTransformation = DoubleMatrix.matrixOf(
             3, 3,
@@ -63,7 +75,7 @@ class AlignStarsTest {
             Star(10, 14, 1.0)
         )
 
-        val transformation = calculateTransformationMatrix(referenceStars, otherStars)!!
+        val transformation = calculateTransformationMatrix(referenceStars, otherStars, 100, 100)!!
 
         val expectedTransformation = DoubleMatrix.matrixOf(
             3, 3,
@@ -137,21 +149,55 @@ class AlignStarsTest {
     }
 
     @Test
-    fun testComputeTransformationMatrix() {
-        val tripletOther = listOf(Star(0, 0, 1.0), Star(1, 0, 1.0), Star(0, 1, 1.0))
-        val tripletReference = listOf(Star(0, 0, 1.0), Star(2, 0, 1.0), Star(0, 2, 1.0))
+    fun testComputeTransformationMatrixTranslationX() {
+        val tripletOther = listOf(
+            Star(0, 0, 1.0),
+            Star(1, 0, 1.0),
+            Star(0, 2, 1.0)
+        )
+        val tripletReference = listOf(
+            Star(10, 0, 1.0),
+            Star(11, 0, 1.0),
+            Star(10, 2, 1.0)
+        )
 
-        val transformation = computeTransformationMatrix(tripletOther, tripletReference)
+        val transformation = computeTransformationMatrix(tripletOther, tripletReference, 100, 100)
         assertNotNull(transformation)
 
         val expectedTransformation = DoubleMatrix.matrixOf(
             3, 3,
-            2.0, 0.0, 0.0,
-            0.0, 2.0, 0.0,
+            1.0, 0.0, 10.0,
+            0.0, 1.0, 0.0,
             0.0, 0.0, 1.0
         )
 
-        assertTrue(transformation!!.contentEquals(expectedTransformation))
+        assertMatrixEquals(expectedTransformation, transformation!!)
+    }
+
+    @Test
+    fun testComputeTransformationMatrixTranslationY() {
+        val tripletOther = listOf(
+            Star(0, 0, 1.0),
+            Star(1, 0, 1.0),
+            Star(0, 2, 1.0)
+        )
+        val tripletReference = listOf(
+            Star(0, 10, 1.0),
+            Star(1, 10, 1.0),
+            Star(0, 12, 1.0)
+        )
+
+        val transformation = computeTransformationMatrix(tripletOther, tripletReference, 0, 0)
+        assertNotNull(transformation)
+
+        val expectedTransformation = DoubleMatrix.matrixOf(
+            3, 3,
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 10.0,
+            0.0, 0.0, 1.0
+        )
+
+        assertMatrixEquals(expectedTransformation, transformation!!)
     }
 
     @Test
@@ -180,7 +226,7 @@ class AlignStarsTest {
             0.0, 0.0, 1.0
         )
 
-        val transformedStars = applyTransformationToStars(stars, transform)
+        val transformedStars = applyTransformationToStars(stars, transform, 2, 2)
         val expectedTransformedStars = listOf(
             Star(1, 20, 1.0),
             Star(2, 20, 1.0),
@@ -193,7 +239,7 @@ class AlignStarsTest {
     fun testApplyTransformationToStarsRotation() {
         val stars = listOf(
             Star(0, 0, 1.0),
-            Star(1, 0, 1.0),
+            Star(1, 1, 1.0),
             Star(0, 1, 1.0)
         )
 
@@ -205,11 +251,11 @@ class AlignStarsTest {
             0.0,  0.0, 1.0
         )
 
-        val transformedStars = applyTransformationToStars(stars, transform)
+        val transformedStars = applyTransformationToStars(stars, transform, 2, 2)
         val expectedTransformedStars = listOf(
-            Star(0, 0, 1.0),
             Star(0, 1, 1.0),
-            Star(-1, 0, 1.0)  // After rotation, star at (0,1) moves to (-1,0)
+            Star(1, 1, 1.0),
+            Star(-1, 0, 1.0)
         )
         assertEquals(expectedTransformedStars, transformedStars)
     }
@@ -229,7 +275,7 @@ class AlignStarsTest {
             0.0, 0.0, 1.0
         )
 
-        val transformedStars = applyTransformationToStars(stars, transform)
+        val transformedStars = applyTransformationToStars(stars, transform, 2, 2)
         val expectedTransformedStars = listOf(
             Star(0, 0, 1.0),
             Star(2, 0, 1.0),
@@ -260,14 +306,23 @@ class AlignStarsTest {
         val image = MatrixImage(3, 3, listOf(Channel.Red, Channel.Green, Channel.Blue), listOf(red, green, blue))
 
         // Translation matrix (moves pixel to the right by 1 unit)
-        val translationMatrix = DoubleMatrix.matrixOf(
+        val transformationMatrix = DoubleMatrix.matrixOf(
             3, 3,
             1.0, 0.0, 1.0,
             0.0, 1.0, 0.0,
             0.0, 0.0, 1.0
         )
 
-        val transformedImage = applyTransformationToImage(image, translationMatrix)
+        decomposeTransformationMatrix(transformationMatrix).let {
+            assertEquals(1.0, it.translationX)
+            assertEquals(0.0, it.translationY)
+            assertEquals(1.0, it.scaleX)
+            assertEquals(1.0, it.scaleY)
+            assertEquals(0.0, it.rotation)
+            assertEquals(0.0, it.shear)
+        }
+
+        val transformedImage = applyTransformationToImage(image, transformationMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -292,15 +347,24 @@ class AlignStarsTest {
         val blue = DoubleMatrix.matrixOf(3, 3)
         val image = MatrixImage(3, 3, listOf(Channel.Red, Channel.Green, Channel.Blue), listOf(red, green, blue))
 
-        // Translation matrix (moves pixel to the right by 1 unit)
-        val translationMatrix = DoubleMatrix.matrixOf(
+        // Translation matrix (moves pixel down by 1 unit)
+        val transformationMatrix = DoubleMatrix.matrixOf(
             3, 3,
             1.0, 0.0, 0.0,
             0.0, 1.0, 1.0,
             0.0, 0.0, 1.0
         )
 
-        val transformedImage = applyTransformationToImage(image, translationMatrix)
+        decomposeTransformationMatrix(transformationMatrix).let {
+            assertEquals(0.0, it.translationX)
+            assertEquals(1.0, it.translationY)
+            assertEquals(1.0, it.scaleX)
+            assertEquals(1.0, it.scaleY)
+            assertEquals(0.0, it.rotation)
+            assertEquals(0.0, it.shear)
+        }
+
+        val transformedImage = applyTransformationToImage(image, transformationMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -359,14 +423,23 @@ class AlignStarsTest {
         val image = MatrixImage(3, 3, listOf(Channel.Red, Channel.Green, Channel.Blue), listOf(red, green, blue))
 
         // 90-degree rotation matrix
-        val rotationMatrix = DoubleMatrix.matrixOf(
+        val transformationMatrix = DoubleMatrix.matrixOf(
             3, 3,
             0.0, -1.0, 0.0,
             1.0, 0.0, 0.0,
             0.0, 0.0, 1.0
         )
 
-        val transformedImage = applyTransformationToImage(image, rotationMatrix)
+        decomposeTransformationMatrix(transformationMatrix).let {
+            assertEquals(0.0, it.translationX)
+            assertEquals(0.0, it.translationY)
+            assertEquals(1.0, it.scaleX)
+            assertEquals(1.0, it.scaleY)
+            assertEquals(PI/2.0, it.rotation, 1E-6)
+            assertEquals(0.0, it.shear)
+        }
+
+        val transformedImage = applyTransformationToImage(image, transformationMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -383,5 +456,41 @@ class AlignStarsTest {
     fun testInterpolate() {
         val result = interpolate(1.0, 2.0, 3.0, 4.0, 0.5, 0.5)
         assertEquals(2.5, result, 1e-6)
+    }
+
+    @Test
+    fun testAlignStarImage() {
+        val img1 = createStarImage(1000, 1000, 100)
+        ImageWriter.write(img1, File("img1"))
+        val img2 = img1.crop(10, 0, img1.width, img1.height)
+        ImageWriter.write(img2, File("img2"))
+
+        val referenceStars = findStars(img1)
+        val otherStars = findStars(img2)
+        val transform = calculateTransformationMatrix(referenceStars, otherStars, img1.width, img2.height)!!
+        println(formatTransformation(decomposeTransformationMatrix(transform)))
+        val actualImg = applyTransformationToImage(img1, transform)
+        ImageWriter.write(actualImg, File("img3"))
+
+        val expectedImg = img1.crop(30, 0, img2.width, img2.height)
+        val diffImg = expectedImg - actualImg!!
+        val error = diffImg.values().map{ it -> it*it }.sum() / (diffImg.width * diffImg.height)
+        println(error)
+    }
+
+    private fun createStarImage(width: Int, height: Int, starCount: Int = width * height / 100, seed: Long = System.currentTimeMillis()): Image {
+        val m = DoubleMatrix.matrixOf(width, height)
+        val random = Random(seed)
+        for (i in 0 until starCount) {
+            val x = random.nextInt(width)
+            val y = random.nextInt(width)
+            val brightness = random.nextDouble()
+            m[y, x] = brightness
+        }
+        return MatrixImage(width, height,
+            Channel.Red to m,
+            Channel.Green to m,
+            Channel.Blue to m
+        )
     }
 }

@@ -25,8 +25,8 @@ fun Image.bayer(pattern: BayerPattern = BayerPattern.RGGB): MatrixImage {
     val bayerMatrix = when (pattern) {
         BayerPattern.RGGB -> listOf(redMatrix, greenMatrix, greenMatrix, blueMatrix)
         BayerPattern.BGGR -> listOf(blueMatrix, greenMatrix, greenMatrix, redMatrix)
-        BayerPattern.GBRG -> listOf(greenMatrix, blueMatrix, greenMatrix, redMatrix)
-        BayerPattern.GRBG -> listOf(greenMatrix, redMatrix, greenMatrix, blueMatrix)
+        BayerPattern.GBRG -> listOf(greenMatrix, blueMatrix, redMatrix, greenMatrix)
+        BayerPattern.GRBG -> listOf(greenMatrix, redMatrix, blueMatrix, greenMatrix)
     }
 
     for (y in 0 until height) {

@@ -56,6 +56,14 @@ class DoubleMatrix(override val rows: Int, override val cols: Int) : Matrix {
             return DoubleMatrix(rows, cols, init)
         }
 
+        fun matrixOf(rows: Int, cols: Int, init: (index: Int) -> Double): Matrix {
+            val m = DoubleMatrix(rows, cols)
+            for (index in 0 until m.size) {
+                m[index] = init(index)
+            }
+            return m
+        }
+
         fun identity(size: Int): Matrix {
             val m = DoubleMatrix(size, size)
             for (i in 0 until size) {

@@ -1,8 +1,10 @@
 package ch.obermuhlner.kimage.astro.align
 
+import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
 import ch.obermuhlner.kimage.core.image.bayer.debayer
+import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.stack.stack
@@ -33,7 +35,8 @@ fun processCalibrationImages(
             {
                 var img = ImageReader.read(file)
                 if (debayer) {
-                    img = img.debayer(bayerPattern)
+                    val badPixels = img[Channel.Red].findBayerBadPixels()
+                    img = img.debayer(bayerPattern, badpixelCoords = badPixels)
                 }
                 img
             }

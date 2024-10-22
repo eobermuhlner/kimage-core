@@ -1,7 +1,8 @@
 package ch.obermuhlner.kimage.core.image.io
 
 import ch.obermuhlner.kimage.core.image.Image
-import ch.obermuhlner.kimage.core.image.values.onEach
+import ch.obermuhlner.kimage.core.image.io.dimg.DoubleImageIO
+import ch.obermuhlner.kimage.core.image.io.json.toJson
 import nom.tam.fits.Fits
 import nom.tam.fits.FitsFactory
 import nom.tam.util.BufferedFile
@@ -27,7 +28,7 @@ object ImageWriter {
 
     fun write(image: Image, output: File) {
         val name = output.name
-        for (format in ImageFormat.values()) {
+        for (format in ImageFormat.entries) {
             for (extension in format.extensions) {
                 if (name.length > extension.length && name.substring(name.length - extension.length).equals(extension, ignoreCase = true)) {
                     write(image, output, format)
@@ -43,6 +44,16 @@ object ImageWriter {
 
         if (format == ImageFormat.FITS) {
             writeFits(image, output)
+            return
+        }
+
+        if (format == ImageFormat.JSON) {
+            writeJson(image, output)
+            return
+        }
+
+        if (format == ImageFormat.DIMG) {
+            DoubleImageIO.writeImage(image, output)
             return
         }
 
@@ -85,6 +96,10 @@ object ImageWriter {
         }
 
         ImageIO.write(bufferedImage, format.name, output)
+    }
+
+    private fun writeJson(image: Image, output: File) {
+        output.writeText(image.toJson())
     }
 
     private fun writeFits(image: Image, output: File) {

@@ -3,6 +3,9 @@ package ch.obermuhlner.kimage.core.image.io
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.io.dimg.DoubleImageIO
+import ch.obermuhlner.kimage.core.image.io.json.JsonImageParser
+import ch.obermuhlner.kimage.core.image.io.json.JsonTokenizer
 import ch.obermuhlner.kimage.core.matrix.FloatMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
 import nom.tam.fits.BasicHDU
@@ -18,6 +21,14 @@ object ImageReader {
     fun read(file: File): Image {
         if (file.extension == "fits" || file.extension == "fit") {
             return readFits(file)
+        }
+
+        if (file.extension == "json") {
+            return readJson(file)
+        }
+
+        if (file.extension == "dimg") {
+            return DoubleImageIO.readImage(file)
         }
 
         val image = try {
@@ -66,6 +77,10 @@ object ImageReader {
         }
 
         return matrixImage
+    }
+
+    private fun readJson(file: File): Image {
+        return JsonImageParser(JsonTokenizer(file.readText())).parseImage()
     }
 
     private fun readFits(file: File): Image {

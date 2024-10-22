@@ -10,14 +10,13 @@ import ch.obermuhlner.kimage.astro.align.processCalibrationImages
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
-import ch.obermuhlner.kimage.core.image.bayer.debayer
+import ch.obermuhlner.kimage.core.image.bayer.debayerCleanupBadPixels
 import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.values.applyEach
-import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.math.average
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
@@ -44,7 +43,8 @@ fun normalizeImage(image: Image?): Image? {
 
 fun astroCalibrate(args: Array<String>) {
     val inputImageExtension: String = "fit"
-    val debayer: Boolean = true
+    val debayerCalibrationFrames: Boolean = true
+    val debayerLightFrames: Boolean = true
     val bayerPattern: BayerPattern = BayerPattern.RGGB
     val biasDirectory: String = "../bias"
     val flatDirectory: String = "../flat"
@@ -61,10 +61,10 @@ fun astroCalibrate(args: Array<String>) {
 
 
     val currentDir = File(".")
-    var bias = processCalibrationImages(currentDir.resolve(biasDirectory), "bias", debayer)
-    var flat = normalizeImage(processCalibrationImages(currentDir.resolve(flatDirectory), "flat", debayer))
-    var darkflat = processCalibrationImages(currentDir.resolve(darkflatDirectory), "darkflat", debayer)
-    var dark = processCalibrationImages(currentDir.resolve(darkDirectory), "dark", debayer)
+    var bias = processCalibrationImages(currentDir.resolve(biasDirectory), "bias", debayerCalibrationFrames)
+    var flat = normalizeImage(processCalibrationImages(currentDir.resolve(flatDirectory), "flat", debayerCalibrationFrames))
+    var darkflat = processCalibrationImages(currentDir.resolve(darkflatDirectory), "darkflat", debayerCalibrationFrames)
+    var dark = processCalibrationImages(currentDir.resolve(darkDirectory), "dark", debayerCalibrationFrames)
 
     val files = currentDir.listFiles() ?: return
 
@@ -100,8 +100,8 @@ fun astroCalibrate(args: Array<String>) {
         inputFiles.forEach { inputFile ->
             println("Loading $inputFile")
             var light = ImageReader.read(inputFile)
-            if (debayer) {
-                light = light.debayer(bayerPattern)
+            if (debayerLightFrames) {
+                light = light.debayerCleanupBadPixels(bayerPattern)
             }
 
             for (channel in light.channels) {
@@ -124,8 +124,8 @@ fun astroCalibrate(args: Array<String>) {
     val calibratedFiles = inputFiles.map { inputFile ->
         println("Loading $inputFile")
         var light = ImageReader.read(inputFile)
-        if (debayer) {
-            light = light.debayer(bayerPattern)
+        if (debayerLightFrames) {
+            light = light.debayerCleanupBadPixels(bayerPattern)
         }
 
         if (bias != null) {
@@ -163,6 +163,8 @@ fun astroCalibrate(args: Array<String>) {
 
     var referenceImageProcessed = false
     var referenceStars: List<Star> = emptyList<Star>()
+    var referenceImageWidth = 0
+    var referenceImageHeight = 0
     val alignedFiles = calibratedFiles.mapNotNull { calibratedFile ->
         println("Loading $calibratedFile")
         var light = ImageReader.read(calibratedFile)
@@ -170,12 +172,16 @@ fun astroCalibrate(args: Array<String>) {
         val alignedImage = if (!referenceImageProcessed) {
             referenceImageProcessed = true
             referenceStars = findStars(light, starTheshold)
+            referenceImageWidth = light.width
+            referenceImageHeight = light.height
             light
         } else {
             val imageStars = findStars(light, starTheshold)
             val transform = calculateTransformationMatrix(
                 referenceStars.take(maxStars),
                 imageStars.take(maxStars),
+                referenceImageWidth,
+                referenceImageHeight,
                 positionTolerance = positionTolerance
             )
             if (transform != null) {

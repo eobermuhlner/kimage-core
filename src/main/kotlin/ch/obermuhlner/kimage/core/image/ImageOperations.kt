@@ -48,8 +48,8 @@ operator fun Image.times(other: Image): Image {
         this.channels
     ) { channel, _, _ ->
         val m = this[channel].copy()
-        m.applyEach { x, y, value ->
-            value * other[channel][x, y]
+        m.applyEach { row, col, value ->
+            value * other[channel][row, col]
         }
         m
     }

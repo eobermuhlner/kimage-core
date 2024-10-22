@@ -4,6 +4,7 @@ import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.math.average
+import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
 import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
@@ -47,7 +48,7 @@ fun Image.debayer(
     red: Double = 1.0,
     green: Double = 1.0,
     blue: Double = 1.0,
-    badpixelCoords: Set<Pair<Int, Int>> = emptySet()
+    badpixelCoords: Set<Pair<Int, Int>> = emptySet(),
 ): MatrixImage {
     val (width, height) = when (interpolation) {
         DebayerInterpolation.SuperPixelHalf -> Pair(this.width / 2, this.height / 2)
@@ -58,25 +59,25 @@ fun Image.debayer(
         BayerPattern.RGGB -> Pair(0, 0)
         BayerPattern.BGGR -> Pair(1, 1)
         BayerPattern.GBRG -> Pair(0, 1)
-        BayerPattern.GRBG -> Pair(0, 1)
+        BayerPattern.GRBG -> Pair(1, 0)
     }
     val (g1X, g1Y) = when (pattern) {
-        BayerPattern.RGGB -> Pair(0, 1)
-        BayerPattern.BGGR -> Pair(0, 1)
+        BayerPattern.RGGB -> Pair(1, 0)
+        BayerPattern.BGGR -> Pair(1, 0)
         BayerPattern.GBRG -> Pair(0, 0)
         BayerPattern.GRBG -> Pair(0, 0)
     }
     val (g2X, g2Y) = when (pattern) {
-        BayerPattern.RGGB -> Pair(1, 0)
-        BayerPattern.BGGR -> Pair(1, 0)
+        BayerPattern.RGGB -> Pair(0, 1)
+        BayerPattern.BGGR -> Pair(0, 1)
         BayerPattern.GBRG -> Pair(1, 1)
         BayerPattern.GRBG -> Pair(1, 1)
     }
     val (bX, bY) = when (pattern) {
         BayerPattern.RGGB -> Pair(1, 1)
         BayerPattern.BGGR -> Pair(0, 0)
-        BayerPattern.GBRG -> Pair(0, 1)
-        BayerPattern.GRBG -> Pair(1, 0)
+        BayerPattern.GBRG -> Pair(1, 0)
+        BayerPattern.GRBG -> Pair(0, 1)
     }
 
     val mosaic = if (badpixelCoords.isEmpty()) {
@@ -110,18 +111,10 @@ fun Image.debayer(
         }
     }
 
-    val redFactor = 1.0 / red
-    val greenFactor = 1.0 / green
-    val blueFactor = 1.0 / blue
-
-    val redOffset = 0.0
-    val greenOffset = 0.0
-    val blueOffset = 0.0
-
-    mosaicRedMatrixXY.matrix.applyEach { v -> (v - redOffset) * redFactor  }
-    mosaicGreen1MatrixXY.matrix.applyEach { v -> (v - greenOffset) * greenFactor  }
-    mosaicGreen2MatrixXY.matrix.applyEach { v -> (v - greenOffset) * greenFactor  }
-    mosaicBlueMatrixXY.matrix.applyEach { v -> (v - blueOffset) * blueFactor  }
+    mosaicRedMatrixXY.matrix.applyEach { v -> v * red  }
+    mosaicGreen1MatrixXY.matrix.applyEach { v -> v * green  }
+    mosaicGreen2MatrixXY.matrix.applyEach { v -> v * green  }
+    mosaicBlueMatrixXY.matrix.applyEach { v -> v * blue  }
 
     val redMatrixXY = DoubleMatrix.matrixOf(height, width).asBoundedXY()
     val greenMatrixXY = DoubleMatrix.matrixOf(height, width).asBoundedXY()
@@ -222,12 +215,22 @@ fun Image.debayer(
                         }
                     }
 
-                    redMatrixXY[x, y] = (r - redOffset) * redFactor
-                    greenMatrixXY[x, y] = (g - greenOffset) * greenFactor
-                    blueMatrixXY[x, y] = (b - blueOffset) * blueFactor
+                    redMatrixXY[x, y] = r * red
+                    greenMatrixXY[x, y] = g * green
+                    blueMatrixXY[x, y] = b * blue
                 }
             }
         }
+    }
+
+    if (red > 1.0) {
+        redMatrixXY.matrix.applyEach { v -> clamp(v, 0.0, 1.0) }
+    }
+    if (green > 1.0) {
+        greenMatrixXY.matrix.applyEach { v -> clamp(v, 0.0, 1.0) }
+    }
+    if (blue > 1.0) {
+        blueMatrixXY.matrix.applyEach { v -> clamp(v, 0.0, 1.0) }
     }
 
     return MatrixImage(width, height,

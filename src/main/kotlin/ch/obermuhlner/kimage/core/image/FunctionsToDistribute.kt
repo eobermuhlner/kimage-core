@@ -56,7 +56,7 @@ fun Image.histogramImage(
 }
 
 fun Image.copy(): Image {
-    return MatrixImage(this.width, this.height, this.channels) { channel, width, height ->
+    return MatrixImage(this.width, this.height, this.channels) { channel, _, _ ->
         this[channel].copy()
     }
 }
