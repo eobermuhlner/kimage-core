@@ -85,22 +85,22 @@ fun Image.debayer(
     } else {
         this[Channel.Gray].cleanupBayerBadPixels(badpixelCoords)
     }
-    val mosaicXY = mosaic.asBoundedXY()
+    val mosaicXY = mosaic.asXY()
 
     val widthHalf = mosaicXY.width / 2
     val heightHalf = mosaicXY.height / 2
-    val mosaicRedMatrixXY = DoubleMatrix(heightHalf, widthHalf).asBoundedXY()
-    val mosaicGreen1MatrixXY = DoubleMatrix(heightHalf, widthHalf).asBoundedXY()
-    val mosaicGreen2MatrixXY = DoubleMatrix(heightHalf, widthHalf).asBoundedXY()
-    val mosaicBlueMatrixXY = DoubleMatrix(heightHalf, widthHalf).asBoundedXY()
-    val mosaicGrayMatrixXY = DoubleMatrix(heightHalf, widthHalf).asBoundedXY()
+    val mosaicRedMatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicGreen1MatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicGreen2MatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicBlueMatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
+    val mosaicGrayMatrixXY = DoubleMatrix(heightHalf, widthHalf).asXY()
 
     for (y in 0 until this.height step 2) {
         for (x in 0 until this.width step 2) {
-            val r = mosaicXY[x+rX, y+rY]!!
-            val g1 = mosaicXY[x+g1X, y+g1Y]!!
-            val g2 = mosaicXY[x+g2X, y+g2Y]!!
-            val b = mosaicXY[x+bX, y+bY]!!
+            val r = mosaicXY[x+rX, y+rY]
+            val g1 = mosaicXY[x+g1X, y+g1Y]
+            val g2 = mosaicXY[x+g2X, y+g2Y]
+            val b = mosaicXY[x+bX, y+bY]
             val gray = (r + r + g1 + g2 + b + b) / 6
 
             mosaicRedMatrixXY[x/2, y/2] = r
@@ -124,10 +124,10 @@ fun Image.debayer(
         DebayerInterpolation.SuperPixelHalf -> {
             for (y in 0 until height) {
                 for (x in 0 until width) {
-                    val r = mosaicRedMatrixXY[x, y]!!
-                    val g1 = mosaicGreen1MatrixXY[x, y]!!
-                    val g2 = mosaicGreen2MatrixXY[x, y]!!
-                    val b = mosaicBlueMatrixXY[x, y]!!
+                    val r = mosaicRedMatrixXY[x, y]
+                    val g1 = mosaicGreen1MatrixXY[x, y]
+                    val g2 = mosaicGreen2MatrixXY[x, y]
+                    val b = mosaicBlueMatrixXY[x, y]
 
                     redMatrixXY[x, y] = r
                     greenMatrixXY[x, y] = (g1+g2)/2
@@ -138,10 +138,10 @@ fun Image.debayer(
         DebayerInterpolation.SuperPixel -> {
             for (y in 0 until height) {
                 for (x in 0 until width) {
-                    val r = mosaicRedMatrixXY[x/2, y/2]!!
-                    val g1 = mosaicGreen1MatrixXY[x/2, y/2]!!
-                    val g2 = mosaicGreen2MatrixXY[x/2, y/2]!!
-                    val b = mosaicBlueMatrixXY[x/2, y/2]!!
+                    val r = mosaicRedMatrixXY[x/2, y/2]
+                    val g1 = mosaicGreen1MatrixXY[x/2, y/2]
+                    val g2 = mosaicGreen2MatrixXY[x/2, y/2]
+                    val b = mosaicBlueMatrixXY[x/2, y/2]
 
                     redMatrixXY[x, y] = r
                     greenMatrixXY[x, y] = (g1+g2)/2
@@ -152,10 +152,10 @@ fun Image.debayer(
         DebayerInterpolation.None -> {
             for (y in 0 until height step 2) {
                 for (x in 0 until width step 2) {
-                    val r = mosaicRedMatrixXY[x/2, y/2]!!
-                    val g1 = mosaicGreen1MatrixXY[x/2, y/2]!!
-                    val g2 = mosaicGreen2MatrixXY[x/2, y/2]!!
-                    val b = mosaicBlueMatrixXY[x/2, y/2]!!
+                    val r = mosaicRedMatrixXY[x/2, y/2]
+                    val g1 = mosaicGreen1MatrixXY[x/2, y/2]
+                    val g2 = mosaicGreen2MatrixXY[x/2, y/2]
+                    val b = mosaicBlueMatrixXY[x/2, y/2]
 
                     redMatrixXY[x+rX, y+rY] = r
                     greenMatrixXY[x+g1X, y+g1Y] = g1
@@ -167,10 +167,10 @@ fun Image.debayer(
         DebayerInterpolation.Nearest -> {
             for (y in 0 until height step 2) {
                 for (x in 0 until width step 2) {
-                    val r = mosaicRedMatrixXY[x / 2, y / 2]!!
-                    val g1 = mosaicGreen1MatrixXY[x / 2, y / 2]!!
-                    val g2 = mosaicGreen2MatrixXY[x / 2, y / 2]!!
-                    val b = mosaicBlueMatrixXY[x / 2, y / 2]!!
+                    val r = mosaicRedMatrixXY[x / 2, y / 2]
+                    val g1 = mosaicGreen1MatrixXY[x / 2, y / 2]
+                    val g2 = mosaicGreen2MatrixXY[x / 2, y / 2]
+                    val b = mosaicBlueMatrixXY[x / 2, y / 2]
 
                     redMatrixXY[x + 0, y + 0] = r
                     redMatrixXY[x+1, y + 0] = r
@@ -188,6 +188,7 @@ fun Image.debayer(
             }
         }
         DebayerInterpolation.Bilinear -> {
+            val mosaicBoundedXY = mosaic.asBoundedXY()
             for (y in 0 until height) {
                 for (x in 0 until width) {
                     val dx = x % 2
@@ -197,21 +198,21 @@ fun Image.debayer(
                     val g: Double
                     val b: Double
                     if (dx == rX && dy == rY) {
-                        r = mosaicXY[x, y]!!
-                        g = listOf(mosaicXY[x-1, y], mosaicXY[x+1, y], mosaicXY[x, y-1], mosaicXY[x, y+1]).average()
-                        b = listOf(mosaicXY[x-1, y-1], mosaicXY[x-1, y+1], mosaicXY[x+1, y-1], mosaicXY[x+1, y+1]).average()
+                        r = mosaicBoundedXY[x, y]!!
+                        g = listOf(mosaicBoundedXY[x-1, y], mosaicBoundedXY[x+1, y], mosaicBoundedXY[x, y-1], mosaicBoundedXY[x, y+1]).average()
+                        b = listOf(mosaicBoundedXY[x-1, y-1], mosaicBoundedXY[x-1, y+1], mosaicBoundedXY[x+1, y-1], mosaicBoundedXY[x+1, y+1]).average()
                     } else if (dx == bX && dy == bY) {
-                        r = listOf(mosaicXY[x-1, y-1], mosaicXY[x-1, y+1], mosaicXY[x+1, y-1], mosaicXY[x+1, y+1]).average()
-                        g = listOf(mosaicXY[x-1, y], mosaicXY[x+1, y], mosaicXY[x, y-1], mosaicXY[x, y+1]).average()
-                        b = mosaicXY[x, y]!!
+                        r = listOf(mosaicBoundedXY[x-1, y-1], mosaicBoundedXY[x-1, y+1], mosaicBoundedXY[x+1, y-1], mosaicBoundedXY[x+1, y+1]).average()
+                        g = listOf(mosaicBoundedXY[x-1, y], mosaicBoundedXY[x+1, y], mosaicBoundedXY[x, y-1], mosaicBoundedXY[x, y+1]).average()
+                        b = mosaicBoundedXY[x, y]!!
                     } else {
-                        g = mosaicXY[x, y]!!
+                        g = mosaicBoundedXY[x, y]!!
                         if ((x-1) % 2 == rX) {
-                            r = listOf(mosaicXY[x-1, y], mosaicXY[x+1, y]).average()
-                            b = listOf(mosaicXY[x, y-1], mosaicXY[x, y+1]).average()
+                            r = listOf(mosaicBoundedXY[x-1, y], mosaicBoundedXY[x+1, y]).average()
+                            b = listOf(mosaicBoundedXY[x, y-1], mosaicBoundedXY[x, y+1]).average()
                         } else {
-                            r = listOf(mosaicXY[x, y-1], mosaicXY[x, y+1]).average()
-                            b = listOf(mosaicXY[x-1, y], mosaicXY[x+1, y]).average()
+                            r = listOf(mosaicBoundedXY[x, y-1], mosaicBoundedXY[x, y+1]).average()
+                            b = listOf(mosaicBoundedXY[x-1, y], mosaicBoundedXY[x+1, y]).average()
                         }
                     }
 
@@ -294,7 +295,7 @@ fun Matrix.cleanupBayerBadPixels(
     badpixelCoords: Set<Pair<Int, Int>> = emptySet()
 ): Matrix {
     val mosaic = copy()
-    val mosaicXY = mosaic.asBoundedXY()
+    val mosaicBoundedXY = mosaic.asBoundedXY()
 
     for (badpixelCoord in badpixelCoords) {
         val x = badpixelCoord.first
@@ -303,13 +304,13 @@ fun Matrix.cleanupBayerBadPixels(
         val surroundingValues = mutableListOf<Double>()
         for (dy in -2..2 step 2) {
             for (dx in -2..2 step 2) {
-                if ((dx != 0 && dy != 0) && mosaicXY.isInBounds(x + dx, y + dy) && !badpixelCoords.contains(Pair(x + dx, y + dy))) {
-                    surroundingValues.add(mosaicXY[x + dx, y + dy]!!)
+                if ((dx != 0 && dy != 0) && mosaicBoundedXY.isInBounds(x + dx, y + dy) && !badpixelCoords.contains(Pair(x + dx, y + dy))) {
+                    surroundingValues.add(mosaicBoundedXY[x + dx, y + dy]!!)
                 }
             }
         }
 
-        mosaicXY[x, y] = surroundingValues.median()
+        mosaicBoundedXY[x, y] = surroundingValues.median()
     }
     return mosaic
 }
