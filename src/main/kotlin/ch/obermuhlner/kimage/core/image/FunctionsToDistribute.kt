@@ -1,20 +1,6 @@
 package ch.obermuhlner.kimage.core.image
 
-import ch.obermuhlner.kimage.core.huge.HugeFloatArray
 import ch.obermuhlner.kimage.core.math.Histogram
-import ch.obermuhlner.kimage.core.math.StandardDeviation
-import ch.obermuhlner.kimage.core.math.average
-import ch.obermuhlner.kimage.core.math.clamp
-import ch.obermuhlner.kimage.core.math.huberWinsorizedSigmaClipInplace
-import ch.obermuhlner.kimage.core.math.median
-import ch.obermuhlner.kimage.core.math.medianInplace
-import ch.obermuhlner.kimage.core.math.sigmaClipInplace
-import ch.obermuhlner.kimage.core.math.sigmaWinsorizeInplace
-import ch.obermuhlner.kimage.core.math.stddev
-import ch.obermuhlner.kimage.core.math.weightedAverage
-import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
-import ch.obermuhlner.kimage.core.matrix.Matrix
-import java.util.*
 import kotlin.math.*
 
 // exaggerates low values but never reaches 1.0

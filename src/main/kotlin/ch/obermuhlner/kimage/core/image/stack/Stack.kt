@@ -1,6 +1,7 @@
 package ch.obermuhlner.kimage.core.image.stack
 
-import ch.obermuhlner.kimage.core.huge.HugeFloatArray
+import ch.obermuhlner.kimage.core.huge.HugeMultiDimensionalFloatArray
+import ch.obermuhlner.kimage.core.huge.MultiDimensionalFloatArray
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.image.crop
@@ -15,7 +16,6 @@ import ch.obermuhlner.kimage.core.math.sigmaWinsorizeInplace
 import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.math.weightedAverage
 import ch.obermuhlner.kimage.core.matrix.stack.max
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -43,11 +43,12 @@ fun stack(
     imageSuppliers: List<() -> Image>,
     algorithm: StackAlgorithm = StackAlgorithm.Median,
     kappa: Double = 2.0,
-    iterations: Int = 10
+    iterations: Int = 10,
+    multiDimensionalFloatArraySupplier: (Int, Int, Int) -> MultiDimensionalFloatArray = { dim1, dim2, dim3 -> HugeMultiDimensionalFloatArray(dim1, dim2, dim3) }
 ): Image {
-    var baseImage: Image = imageSuppliers[0]()
+    val baseImage: Image = imageSuppliers[0]()
     val channels = baseImage.channels
-    val huge = HugeFloatArray(imageSuppliers.size, channels.size, baseImage.width, baseImage.height)
+    val huge = multiDimensionalFloatArraySupplier(imageSuppliers.size, channels.size, baseImage.width * baseImage.height)
 
     for (imageIndex in imageSuppliers.indices) {
         val image = if (imageIndex == 0) {
@@ -69,8 +70,8 @@ fun stack(
     val stackingMethod: (FloatArray) -> Float = when (algorithm) {
         StackAlgorithm.Median -> { array -> array.median() }
         StackAlgorithm.Average -> { array -> array.average() }
-        StackAlgorithm.Max -> { array -> array.maxOrNull()!! }
-        StackAlgorithm.Min -> { array -> array.minOrNull()!! }
+        StackAlgorithm.Max -> { array -> array.maxOrNull() ?: 0.0f }
+        StackAlgorithm.Min -> { array -> array.minOrNull() ?: 0.0f }
         StackAlgorithm.SigmaClipMedian -> { array ->
             val clippedLength = array.sigmaClipInplace(kappa.toFloat(), iterations, histogram = sigmaClipHistogram)
             array.medianInplace(0, clippedLength)
@@ -113,7 +114,6 @@ fun stack(
             val clippedLength = array.sigmaClipInplace(kappa.toFloat(), iterations, histogram = sigmaClipHistogram)
             val median = array.median(0, clippedLength)
             val sigma = array.stddev(StandardDeviation.Population, 0, clippedLength)
-            val factor = 1 / (sqrt(2 * PI))
             array.weightedAverage({ _, v ->
                 val x = abs(v - median) / sigma
                 1 / (sqrt(x + 1))
