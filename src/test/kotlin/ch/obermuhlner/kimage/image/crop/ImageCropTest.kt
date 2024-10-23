@@ -64,20 +64,22 @@ class ImageCropTest: AbstractImageProcessingTest() {
     fun `should handle cropping exactly on image boundaries`() {
         val image = readTestImage()
 
-        val croppedImage = image.crop(0, 0, image.width, image.height, strictClipping = true)
-        assertEquals(image.width, croppedImage.width)
-        assertEquals(image.height, croppedImage.height)
-        assertReferenceImage("crop(0,0,width,height)", croppedImage)
-        assertImage(image, croppedImage)
+        image.crop(0, 0, image.width, image.height, strictClipping = true).let {
+            assertEquals(image.width, it.width)
+            assertEquals(image.height, it.height)
+            assertReferenceImage("crop(0,0,width,height)", it)
+            assertImage(image, it)
+        }
     }
 
     @Test
     fun `should allow cropping out of bounds in non-strict mode`() {
         val image = readTestImage()
 
-        val croppedImage = image.crop(-10, -10, 100, 100, strictClipping = false)
-        assertEquals(100, croppedImage.width)  // Assuming image width is 80
-        assertEquals(100, croppedImage.height) // Assuming image height is 80
-        assertReferenceImage("crop(-10,-10,100,100,strictClipping=false)", croppedImage)
+        image.crop(-10, -10, 100, 100, strictClipping = false).let {
+            assertEquals(100, it.width)  // Assuming image width is 80
+            assertEquals(100, it.height) // Assuming image height is 80
+            assertReferenceImage("crop(-10,-10,100,100,strictClipping=false)", it)
+        }
     }
 }
