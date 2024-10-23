@@ -6,14 +6,11 @@ import ch.obermuhlner.kimage.core.image.bayer.bayer
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import org.junit.jupiter.api.Test
-import java.awt.Color.blue
-import java.awt.Color.green
-import java.awt.Color.red
 
 class ImageDebayerTest : AbstractImageProcessingTest() {
     @Test
     fun `should debayer image with bayer pattern and interpolation`() {
-        val image = readTestImage("lena512.png")
+        val image = readTestImage()
         assertReferenceImage("default", image.bayer().debayer())
 
         for (bayerPattern in BayerPattern.entries) {
@@ -27,7 +24,7 @@ class ImageDebayerTest : AbstractImageProcessingTest() {
 
     @Test
     fun `should debayer image with rgb factors`() {
-        val bayerImage = readTestImage("lena512.png").bayer()
+        val bayerImage = readTestImage().bayer()
 
         assertReferenceImage("r0", bayerImage.debayer(red = 0.0))
         assertReferenceImage("g0", bayerImage.debayer(green = 0.0))

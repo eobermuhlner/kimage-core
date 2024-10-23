@@ -12,7 +12,6 @@ class ImageProcessingTest: AbstractImageProcessingTest() {
 
     @Test
     fun `should load test images`() {
-        assertReferenceImage("lena512.png", readTestImage("lena512.png"))
-        assertReferenceImage("monarch.bmp", readTestImage("monarch.bmp"))
+        assertReferenceImage("default", readTestImage())
     }
 }

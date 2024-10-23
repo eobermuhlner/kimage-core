@@ -11,8 +11,8 @@ class ImageBayerTest : AbstractImageProcessingTest() {
     fun `should bayer image`() {
         for (bayerPattern in BayerPattern.entries) {
             assertReferenceImage(
-                "lena_$bayerPattern",
-                readTestImage("lena512.png").bayer(bayerPattern)
+                "$bayerPattern",
+                readTestImage().bayer(bayerPattern)
             )
         }
     }

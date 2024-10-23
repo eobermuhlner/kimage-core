@@ -11,7 +11,7 @@ class ImageScaleTest: AbstractImageProcessingTest() {
 
     @Test
     fun `should scaleTo image`() {
-        val image = readTestImage("monarch.bmp")
+        val image = readTestImage()
 
         assertImage(image, image.scaleTo(image.width, image.height, scaling = Scaling.Nearest)) // only Nearest guarantees unchanged values
         assertReferenceImage("scaleTo(w,h,Bilinear)", image.scaleTo(image.width, image.height, scaling = Scaling.Bilinear))
@@ -26,13 +26,15 @@ class ImageScaleTest: AbstractImageProcessingTest() {
 
     @Test
     fun `should scaleBy image`() {
-        val image = readTestImage("monarch_small.png")
+        val image = readTestImage()
 
         assertImage(image, image.scaleBy(1.0, 1.0, scaling = Scaling.Nearest)) // only Nearest guarantees unchanged values
         assertReferenceImage("scaleBy(1,1,Bilinear)", image.scaleBy(1.0, 1.0, scaling = Scaling.Bilinear))
         assertReferenceImage("scaleBy(1,1,Bicubic)", image.scaleBy(1.0, 1.0, scaling = Scaling.Bicubic))
 
         assertReferenceImage("scaleBy(1.2,0.7)", image.scaleBy(1.2, 0.7))
+        assertReferenceImage("scaleBy(0.25,0.25)", image.scaleBy(0.25, 0.25))
+        assertReferenceImage("scaleBy(0.125,0.125)", image.scaleBy(0.125, 0.125))
 
         for (scaling in Scaling.entries) {
             assertReferenceImage("scaleBy(2,4,$scaling)", image.scaleBy(2.0, 4.0, scaling = scaling))
