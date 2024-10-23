@@ -30,8 +30,8 @@ private fun Matrix.scaleNearestTo(newRows: Int, newCols: Int, offsetRow: Double 
     val m = create(newRows, newCols)
     for (newRow in 0 until newRows) {
         for (newCol in 0 until newCols) {
-            val oldRow = (newRow.toDouble() / newRows * rows + offsetRow).toInt()
-            val oldCol = (newCol.toDouble() / newCols * cols + offsetCol).toInt()
+            val oldRow = (newRow.toDouble() / newRows * rows + offsetRow + 0.5).toInt()
+            val oldCol = (newCol.toDouble() / newCols * cols + offsetCol + 0.5).toInt()
 
             val newValue = this[oldRow, oldCol]
             m[newRow, newCol] = newValue
