@@ -1,6 +1,8 @@
-package ch.obermuhlner.kimage.core.image
+package ch.obermuhlner.kimage.core.image.crop
 
-import ch.obermuhlner.kimage.core.matrix.CroppedMatrix
+import ch.obermuhlner.kimage.core.image.Channel
+import ch.obermuhlner.kimage.core.image.Image
+import ch.obermuhlner.kimage.core.matrix.crop.CroppedMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
 
 fun Image.crop(croppedX: Int, croppedY: Int, croppedWidth: Int, croppedHeight: Int, strictClipping: Boolean = true): Image {
@@ -16,13 +18,26 @@ fun Image.cropCenter(radiusX: Int, radiusY: Int, croppedCenterX: Int = width / 2
 }
 
 class CroppedImage(
-        private val image: Image,
-        private val offsetX: Int,
-        private val offsetY: Int,
-        override val width: Int,
-        override val height: Int,
-        private val strictClipping: Boolean = true)
-    : Image {
+    private val image: Image,
+    private val offsetX: Int,
+    private val offsetY: Int,
+    override val width: Int,
+    override val height: Int,
+    private val strictClipping: Boolean = true
+): Image {
+
+    init {
+        if (strictClipping) {
+            require(offsetX >= 0) { "offsetX must be >= 0: $offsetX" }
+            require(offsetY >= 0) { "offsetY must be >= 0: $offsetY" }
+            require(offsetX < image.width) { "offsetX must be < image.width: $offsetX" }
+            require(offsetY < image.height) { "offsetY must be < image.height: $offsetY" }
+            require(width >= 0) { "width must be >= 0: $width" }
+            require(height >= 0) { "width must be >= 0: $height" }
+            require(width <= image.width-offsetX) { "width must be <= image.width - offsetX: $width" }
+            require(height <= image.height-offsetY) { "width must be <= image.height - offsetX: $height" }
+        }
+    }
 
     override val channels: List<Channel>
         get() = image.channels

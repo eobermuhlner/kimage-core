@@ -2,6 +2,7 @@ package ch.obermuhlner.kimage.core.matrix
 
 import ch.obermuhlner.kimage.core.matrix.check.checkColsOtherRows
 import ch.obermuhlner.kimage.core.matrix.check.checkSameSize
+import ch.obermuhlner.kimage.core.matrix.crop.CroppedMatrix
 import kotlin.math.abs
 
 interface Matrix {

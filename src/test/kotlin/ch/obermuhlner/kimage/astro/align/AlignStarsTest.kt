@@ -3,7 +3,7 @@ package ch.obermuhlner.kimage.astro.align
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
-import ch.obermuhlner.kimage.core.image.crop
+import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.values.values

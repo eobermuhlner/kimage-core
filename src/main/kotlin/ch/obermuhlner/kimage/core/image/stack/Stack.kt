@@ -4,7 +4,7 @@ import ch.obermuhlner.kimage.core.huge.HugeMultiDimensionalFloatArray
 import ch.obermuhlner.kimage.core.huge.MultiDimensionalFloatArray
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
-import ch.obermuhlner.kimage.core.image.crop
+import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.math.Histogram
 import ch.obermuhlner.kimage.core.math.StandardDeviation
 import ch.obermuhlner.kimage.core.math.average

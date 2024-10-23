@@ -1,5 +1,6 @@
-package ch.obermuhlner.kimage.core.matrix
+package ch.obermuhlner.kimage.core.matrix.crop
 
+import ch.obermuhlner.kimage.core.matrix.Matrix
 import ch.obermuhlner.kimage.core.matrix.check.checkCol
 import ch.obermuhlner.kimage.core.matrix.check.checkRow
 import java.util.Objects
