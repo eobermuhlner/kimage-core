@@ -19,9 +19,9 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-fun Image.max(other: Image): Image {
-    return MatrixImage(width, height, channels) { channel, _, _ ->
-        max(this[channel], other[channel])
+fun max(firstImage: Image, vararg otherImages: Image): Image {
+    return MatrixImage(firstImage.width, firstImage.height, firstImage.channels) { channel, _, _ ->
+        max(firstImage[channel], *otherImages.map { it[channel] }.toTypedArray())
     }
 }
 
