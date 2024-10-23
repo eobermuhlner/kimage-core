@@ -115,8 +115,12 @@ fun stack(
             val median = array.median(0, clippedLength)
             val sigma = array.stddev(StandardDeviation.Population, 0, clippedLength)
             array.weightedAverage({ _, v ->
-                val x = abs(v - median) / sigma
-                1 / (sqrt(x + 1))
+                if (sigma == 0.0f) {
+                    1.0f
+                } else {
+                    val x = abs(v - median) / sigma
+                    1 / (sqrt(x + 1))
+                }
             }, 0, clippedLength)
         }
     }
