@@ -45,6 +45,7 @@ abstract class AbstractImageProcessingTest {
         assertEquals(expected.width, actual.width, "$name.width")
         assertEquals(expected.height, actual.height, "$name.height")
         assertEquals(expected.channels, actual.channels, "$name.channels")
+
         for (channel in expected.channels) {
             val expectedMatrixXY = expected[channel].asXY()
             val actualMatrixXY = actual[channel].asXY()
@@ -58,7 +59,7 @@ abstract class AbstractImageProcessingTest {
         }
     }
 
-    fun readTestImage(name: String): Image {
+    fun readTestImage(name: String = "flowers_small.png"): Image {
         return ImageReader.read(File(testInputDirectory, name))
     }
 }
