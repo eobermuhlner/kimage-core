@@ -9,25 +9,34 @@ import ch.obermuhlner.kimage.core.matrix.values.values
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 object DoubleImageIO {
 
     fun writeImage(image: Image, file: File) {
-        DataOutputStream(file.outputStream()).use { output ->
+        ZipOutputStream(file.outputStream()).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("image"))
+            val output = DataOutputStream(zip)
             output.writeInt(image.width)
             output.writeInt(image.height)
             output.writeInt(image.channels.size)
+
             for (channel in image.channels) {
                 output.writeUTF(channel.name)
                 image[channel].values().forEach { value ->
                     output.writeDouble(value)
                 }
             }
+            output.flush()
+            zip.closeEntry()
         }
     }
 
     fun readImage(file: File): Image {
-        return DataInputStream(file.inputStream()).use { input ->
+        return ZipInputStream(file.inputStream()).use { zip ->
+            zip.nextEntry
+            val input = DataInputStream(zip)
             val width = input.readInt()
             val height = input.readInt()
             val channelCount = input.readInt()
