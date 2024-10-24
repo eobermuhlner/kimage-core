@@ -2,8 +2,6 @@ package ch.obermuhlner.kimage.image
 
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.MatrixImage
-import ch.obermuhlner.kimage.core.image.values.applyEach
-import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.matrix.Matrix
 import org.junit.jupiter.api.Test
 

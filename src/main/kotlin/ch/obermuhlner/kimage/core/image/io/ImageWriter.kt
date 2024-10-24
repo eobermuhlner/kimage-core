@@ -7,9 +7,9 @@ import nom.tam.fits.Fits
 import nom.tam.fits.FitsFactory
 import nom.tam.util.BufferedFile
 import java.awt.color.ColorSpace
-import java.awt.image.*
+import java.awt.image.BufferedImage
+import java.awt.image.DataBuffer
 import java.io.File
-import java.lang.IllegalArgumentException
 import javax.imageio.ImageIO
 import javax.imageio.ImageTypeSpecifier
 
@@ -40,24 +40,26 @@ object ImageWriter {
     }
 
     fun write(image: Image, output: File, format: ImageFormat) {
-        if (format == ImageFormat.FITS) {
-            writeFits(image, output)
-            return
+        when (format) {
+            ImageFormat.FITS -> {
+                writeFits(image, output)
+                return
+            }
+            ImageFormat.JSON -> {
+                writeJson(image, output)
+                return
+            }
+            ImageFormat.DIMG -> {
+                DoubleImageIO.writeImage(image, output)
+                return
+            }
+            else -> writeStandardImage(image, output, format)
         }
+    }
 
-        if (format == ImageFormat.JSON) {
-            writeJson(image, output)
-            return
-        }
-
-        if (format == ImageFormat.DIMG) {
-            DoubleImageIO.writeImage(image, output)
-            return
-        }
-
+    private fun writeStandardImage(image: Image, output: File, format: ImageFormat) {
         val bufferedImage = when (format) {
-            ImageFormat.TIF -> createBufferedImageUShort(image.width, image.height, image.channels.size)
-            ImageFormat.PNG -> createBufferedImageUShort(image.width, image.height, image.channels.size)
+            ImageFormat.TIF, ImageFormat.PNG -> createBufferedImageUShort(image.width, image.height, image.channels.size)
             ImageFormat.JPG -> BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_RGB)
             else -> throw IllegalArgumentException("Unknown format: $format")
         }
@@ -66,41 +68,39 @@ object ImageWriter {
         for (y in 0 until image.height) {
             for (x in 0 until image.width) {
                 image.getPixel(x, y, color)
-
-                val isWritable = bufferedImage.isAlphaPremultiplied.not() && bufferedImage.colorModel.isAlphaPremultiplied.not()
-
-                if (isWritable) {
-                    when (bufferedImage.raster.transferType) {
-                        DataBuffer.TYPE_USHORT -> for (i in color.indices) {
-                            color[i] = (color[i] * UShort.MAX_VALUE.toDouble() + 0.5).coerceIn(0.0, UShort.MAX_VALUE.toDouble())
-                        }
-                        DataBuffer.TYPE_SHORT -> for (i in color.indices) {
-                            color[i] = ((color[i] * Short.MAX_VALUE.toDouble() + 0.5) + Short.MAX_VALUE).coerceIn(0.0, 65535.0)
-                        }
-                        DataBuffer.TYPE_INT -> for (i in color.indices) {
-                            color[i] = (color[i] * Int.MAX_VALUE.toDouble() + 0.5).coerceIn(0.0, Int.MAX_VALUE.toDouble())
-                        }
-                        DataBuffer.TYPE_BYTE -> for (i in color.indices) {
-                            color[i] = (color[i] * 255.0 + 0.5).coerceIn(0.0, 255.0)
-                        }
-                    }
-                    bufferedImage.raster.setPixel(x, y, color)
-                } else {
-                    val rgb = if (image.channels.size == 1) {
-                        val gray = (color[0] * 255.0 + 0.5).toInt()
-                        (gray shl 16) or (gray shl 8) or gray
-                    } else {
-                        val r = (color[0] * 255.0 + 0.5).toInt() shl 16
-                        val g = (color[1] * 255.0 + 0.5).toInt() shl 8
-                        val b = (color[2] * 255.0 + 0.5).toInt()
-                        r or g or b
-                    }
-                    bufferedImage.setRGB(x, y, rgb)
-                }
+                writePixelToBufferedImage(bufferedImage, x, y, color)
             }
         }
 
-        ImageIO.write(bufferedImage, format.name, output)
+        ImageIO.write(bufferedImage, format.name.lowercase(), output)
+    }
+
+    private fun writePixelToBufferedImage(bufferedImage: BufferedImage, x: Int, y: Int, color: DoubleArray) {
+        if (bufferedImage.type != BufferedImage.TYPE_INT_RGB) {
+            val adjustedColor = adjustColorForBufferType(bufferedImage.raster.transferType, color)
+            bufferedImage.raster.setPixel(x, y, adjustedColor)
+        } else {
+            val rgb = if (color.size == 1) {
+                val gray = (color[0] * 255.0 + 0.5).toInt()
+                (gray shl 16) or (gray shl 8) or gray
+            } else {
+                val r = (color[0] * 255.0 + 0.5).toInt() shl 16
+                val g = (color[1] * 255.0 + 0.5).toInt() shl 8
+                val b = (color[2] * 255.0 + 0.5).toInt()
+                r or g or b
+            }
+            bufferedImage.setRGB(x, y, rgb)
+        }
+    }
+
+    private fun adjustColorForBufferType(transferType: Int, color: DoubleArray): DoubleArray {
+        return when (transferType) {
+            DataBuffer.TYPE_USHORT -> color.map { (it * UShort.MAX_VALUE.toDouble() + 0.5).coerceIn(0.0, UShort.MAX_VALUE.toDouble()) }.toDoubleArray()
+            DataBuffer.TYPE_SHORT -> color.map { ((it * Short.MAX_VALUE.toDouble() + 0.5) + Short.MAX_VALUE).coerceIn(0.0, 65535.0) }.toDoubleArray()
+            DataBuffer.TYPE_INT -> color.map { (it * Int.MAX_VALUE.toDouble() + 0.5).coerceIn(0.0, Int.MAX_VALUE.toDouble()) }.toDoubleArray()
+            DataBuffer.TYPE_BYTE -> color.map { (it * 255.0 + 0.5).coerceIn(0.0, 255.0) }.toDoubleArray()
+            else -> color // No adjustment for unknown transfer types
+        }
     }
 
     private fun writeJson(image: Image, output: File) {
@@ -111,7 +111,7 @@ object ImageWriter {
         val data = Array(image.channels.size) { channelIndex ->
             Array(image.height) { y ->
                 FloatArray(image.width) { x ->
-                    image[image.channels[channelIndex]][x, y].toFloat()
+                    image[image.channels[channelIndex]][y, x].toFloat()
                 }
             }
         }

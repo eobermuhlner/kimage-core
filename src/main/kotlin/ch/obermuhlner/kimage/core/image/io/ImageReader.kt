@@ -19,87 +19,79 @@ import javax.imageio.ImageIO
 object ImageReader {
 
     fun read(file: File): Image {
-        if (file.extension == "fits" || file.extension == "fit") {
-            return readFits(file)
+        return when (file.extension.lowercase()) {
+            "fits", "fit" -> readFits(file)
+            "json" -> readJson(file)
+            "dimg" -> DoubleImageIO.readImage(file)
+            else -> readStandardImage(file)
         }
+    }
 
-        if (file.extension == "json") {
-            return readJson(file)
+    private fun readStandardImage(file: File): MatrixImage {
+        val image = ImageIO.read(file)
+            ?: throw RuntimeException("Failed to read image: $file")
+
+        return when (image.type) {
+            BufferedImage.TYPE_BYTE_GRAY -> readGrayImage(image, 255.0)
+            BufferedImage.TYPE_USHORT_GRAY -> readGrayImage(image, 65535.0)
+            BufferedImage.TYPE_CUSTOM -> readCustomImage(image)
+            else -> readColorImage(image)
         }
+    }
 
-        if (file.extension == "dimg") {
-            return DoubleImageIO.readImage(file)
+    private fun readGrayImage(image: BufferedImage, maxValue: Double): MatrixImage {
+        val matrixImage = MatrixImage(image.width, image.height, Channel.Gray)
+        val grayMatrix = matrixImage[Channel.Gray]
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val gray = image.raster.getSample(x, y, 0) / maxValue
+                grayMatrix[y, x] = gray
+            }
         }
+        return matrixImage
+    }
 
-        val image = try {
-            ImageIO.read(file)
-        } catch (ex: Exception) {
-            throw RuntimeException("Failed to read image: $file", ex)
-        } ?: throw RuntimeException("Failed to read image: $file")
-
-        val matrixImage = if (image.type == BufferedImage.TYPE_BYTE_GRAY) {
-            val matrixImage = MatrixImage(image.width, image.height, Channel.Gray)
-            val grayMatrix = matrixImage[Channel.Gray]
-            for (y in 0 until image.height) {
-                for (x in 0 until image.width) {
-                    val gray = image.raster.getSample(x, y, 0) / 255.0
-                    grayMatrix[y, x] = gray
-                }
+    private fun readColorImage(image: BufferedImage): MatrixImage {
+        val matrixImage = MatrixImage(image.width, image.height)
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val argb = image.getRGB(x, y)
+                val color = doubleArrayOf(
+                    (argb shr 16 and 0xff) / 255.0,
+                    (argb shr 8 and 0xff) / 255.0,
+                    (argb and 0xff) / 255.0
+                )
+                matrixImage.setPixel(x, y, color)
             }
-            matrixImage
-        } else if (image.type == BufferedImage.TYPE_USHORT_GRAY) {
-            val matrixImage = MatrixImage(image.width, image.height, Channel.Gray)
-            val grayMatrix = matrixImage[Channel.Gray]
-            for (y in 0 until image.height) {
-                for (x in 0 until image.width) {
-                    val gray = image.raster.getSample(x, y, 0) / 65535.0
-                    grayMatrix[y, x] = gray
-                }
-            }
-            matrixImage
-        } else if (image.type == BufferedImage.TYPE_CUSTOM) {
-            val color = DoubleArray(3)
-            // TODO check colorModel and convert non-RGB correctly
-            val matrixImage = MatrixImage(image.width, image.height)
-            for (y in 0 until image.height) {
-                for (x in 0 until image.width) {
-                    image.raster.getPixel(x, y, color)
-
-                    when (image.raster.transferType) {
-                        DataBuffer.TYPE_USHORT -> for (i in color.indices) {
-                            color[i] = color[i]/65535.0
-                        }
-                        DataBuffer.TYPE_SHORT -> for (i in color.indices) {
-                            color[i] = (color[i] + 32768)/65535.0
-                        }
-                        DataBuffer.TYPE_INT -> for (i in color.indices) {
-                            color[i] = color[i]/Int.MAX_VALUE.toDouble()
-                        }
-                        DataBuffer.TYPE_BYTE -> for (i in color.indices) {
-                            color[i] = color[i]/255.0
-                        }
-                    }
-
-                    matrixImage.setPixel(x, y, color)
-                }
-            }
-            matrixImage
-        } else {
-            val color = DoubleArray(3)
-            val matrixImage = MatrixImage(image.width, image.height)
-            for (y in 0 until image.height) {
-                for (x in 0 until image.width) {
-                    val argb = image.getRGB(x, y)
-                    //alpha = (argb shr 24 and 0xff) / 255.0
-                    color[0] = (argb shr 16 and 0xff) / 255.0
-                    color[1] = (argb shr 8 and 0xff) / 255.0
-                    color[2] = (argb and 0xff) / 255.0
-                    matrixImage.setPixel(x, y, color)
-                }
-            }
-            matrixImage
         }
+        return matrixImage
+    }
 
+    private fun readCustomImage(image: BufferedImage): MatrixImage {
+        val color = DoubleArray(3)
+        val matrixImage = MatrixImage(image.width, image.height)
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                image.raster.getPixel(x, y, color)
+
+                val maxValue = when (image.raster.transferType) {
+                    DataBuffer.TYPE_USHORT -> 65535.0
+                    DataBuffer.TYPE_SHORT -> 65535.0
+                    DataBuffer.TYPE_INT -> Int.MAX_VALUE.toDouble()
+                    DataBuffer.TYPE_BYTE -> 255.0
+                    else -> 1.0 // Fallback, avoid division by zero
+                }
+
+                for (i in color.indices) {
+                    color[i] = if (image.raster.transferType == DataBuffer.TYPE_SHORT)
+                        (color[i] + 32768) / maxValue
+                    else
+                        color[i] / maxValue
+                }
+
+                matrixImage.setPixel(x, y, color)
+            }
+        }
         return matrixImage
     }
 
@@ -173,7 +165,7 @@ object ImageReader {
                     width = hdu.axes[2]
 
                     for (channelIndex in 0 until channels) {
-                        val matrix = FloatMatrix(width, height)
+                        val matrix = FloatMatrix(height, width)
 
                         matrices += when (hdu.bitPix) {
                             BasicHDU.BITPIX_BYTE -> {

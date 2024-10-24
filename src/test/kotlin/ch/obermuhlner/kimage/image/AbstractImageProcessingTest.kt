@@ -27,17 +27,19 @@ abstract class AbstractImageProcessingTest {
         assertReferenceImage(name, image, "dimg", epsilon)
     }
 
-    fun assertReferenceImage(name: String, image: Image, extension: String, epsilon: Double) {
+    fun assertReferenceImage(name: String, image: Image, extension: String, epsilon: Double): Image {
         val directory = testResultsDirectory()
         directory.mkdirs()
         val referenceImageFile = File(directory, "$name.$extension")
-        if (!referenceImageFile.exists()) {
+        return if (!referenceImageFile.exists()) {
             println("Writing reference image: $referenceImageFile")
             ImageWriter.write(image, referenceImageFile)
+            image
         } else {
             println("Reading reference image: $referenceImageFile")
             val referenceImage = ImageReader.read(referenceImageFile)
             assertImage(referenceImage, image, name, epsilon)
+            referenceImage
         }
     }
 
