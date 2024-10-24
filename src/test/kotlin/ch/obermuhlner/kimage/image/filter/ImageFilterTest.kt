@@ -7,18 +7,23 @@ import ch.obermuhlner.kimage.core.image.filter.boxBlur3Filter
 import ch.obermuhlner.kimage.core.image.filter.edgeDetectionCrossFilter
 import ch.obermuhlner.kimage.core.image.filter.edgeDetectionDiagonalFilter
 import ch.obermuhlner.kimage.core.image.filter.edgeDetectionStrongFilter
+import ch.obermuhlner.kimage.core.image.filter.edgeEnhancementFilter
+import ch.obermuhlner.kimage.core.image.filter.embossFilter
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlur3Filter
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlur5Filter
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlur7Filter
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlurFilter
+import ch.obermuhlner.kimage.core.image.filter.highPassFilter
 import ch.obermuhlner.kimage.core.image.filter.kernelFilter
+import ch.obermuhlner.kimage.core.image.filter.laplacianFilter
 import ch.obermuhlner.kimage.core.image.filter.medianFilter
 import ch.obermuhlner.kimage.core.image.filter.medianPixelFilter
+import ch.obermuhlner.kimage.core.image.filter.motionBlurFilter
 import ch.obermuhlner.kimage.core.image.filter.sharpenFilter
 import ch.obermuhlner.kimage.core.image.filter.slowMedianFilter
-import ch.obermuhlner.kimage.core.image.filter.sobelFilter
 import ch.obermuhlner.kimage.core.image.filter.sobel3Filter
 import ch.obermuhlner.kimage.core.image.filter.sobel5Filter
+import ch.obermuhlner.kimage.core.image.filter.sobelFilter
 import ch.obermuhlner.kimage.core.image.filter.unsharpMaskFilter
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
@@ -30,32 +35,81 @@ class ImageFilterTest : AbstractImageProcessingTest() {
     fun `should apply box blur filter`() {
         val image = readTestImage()
 
-        val boxBlurImage = image.boxBlur3Filter()
-        assertReferenceImage("boxBlur3Filter()", boxBlurImage)
+        image.boxBlur3Filter().let {
+            assertReferenceImage("boxBlur3Filter()", it)
+        }
+    }
+
+    @Test
+    fun `should apply emboss filter`() {
+        val image = readTestImage()
+
+        image.embossFilter().let {
+            assertReferenceImage("embossFilter()", it)
+        }
+    }
+
+    @Test
+    fun `should apply laplacian filter`() {
+        val image = readTestImage()
+
+        image.laplacianFilter().let {
+            assertReferenceImage("laplacianFilter()", it)
+        }
+    }
+
+    @Test
+    fun `should apply edge enhancement filter`() {
+        val image = readTestImage()
+
+        image.edgeEnhancementFilter().let {
+            assertReferenceImage("edgeEnhancementFilter()", it)
+        }
+    }
+
+    @Test
+    fun `should apply motion blur filter`() {
+        val image = readTestImage()
+
+        image.motionBlurFilter().let {
+            assertReferenceImage("motionBlurFilter()", it)
+        }
+    }
+
+    @Test
+    fun `should apply high pass filter`() {
+        val image = readTestImage()
+
+        image.highPassFilter().let {
+            assertReferenceImage("highPassFilter()", it)
+        }
     }
 
     @Test
     fun `should apply gaussian blur 3 filter`() {
         val image = readTestImage()
 
-        val gaussianBlurImage = image.gaussianBlur3Filter()
-        assertReferenceImage("gaussianBlur3Filter()", gaussianBlurImage)
+        image.gaussianBlur3Filter().let {
+            assertReferenceImage("gaussianBlur3Filter()", it)
+        }
     }
 
     @Test
     fun `should apply gaussian blur 5 filter`() {
         val image = readTestImage()
 
-        val gaussianBlurImage = image.gaussianBlur5Filter()
-        assertReferenceImage("gaussianBlur5Filter()", gaussianBlurImage)
+        image.gaussianBlur5Filter().let {
+            assertReferenceImage("gaussianBlur5Filter()", it)
+        }
     }
 
     @Test
     fun `should apply gaussian blur 7 filter`() {
         val image = readTestImage()
 
-        val gaussianBlurImage = image.gaussianBlur7Filter()
-        assertReferenceImage("gaussianBlur7Filter()", gaussianBlurImage)
+        image.gaussianBlur7Filter().let {
+            assertReferenceImage("gaussianBlur7Filter()", it)
+        }
     }
 
     @Test
@@ -63,8 +117,9 @@ class ImageFilterTest : AbstractImageProcessingTest() {
         val image = readTestImage()
         val radius = 5
 
-        val blurredImage = image.gaussianBlurFilter(radius)
-        assertReferenceImage("gaussianBlur(radius=5)", blurredImage)
+        image.gaussianBlurFilter(radius).let {
+            assertReferenceImage("gaussianBlur(radius=5)", it)
+        }
     }
 
     @Test
@@ -72,8 +127,9 @@ class ImageFilterTest : AbstractImageProcessingTest() {
         val image = readTestImage()
         val radius = 3
 
-        val averageImage = image.averageFilter(radius)
-        assertReferenceImage("averageFilter(radius=3,shape=Square)", averageImage)
+        image.averageFilter(radius).let {
+            assertReferenceImage("averageFilter(radius=3,shape=Square)", it)
+        }
     }
 
     @Test
@@ -81,8 +137,9 @@ class ImageFilterTest : AbstractImageProcessingTest() {
         val image = readTestImage()
         val radius = 4
 
-        val medianImage = image.medianFilter(radius)
-        assertReferenceImage("medianFilter(radius=4)", medianImage)
+        image.medianFilter(radius).let {
+            assertReferenceImage("medianFilter(radius=4)", it)
+        }
     }
 
     @Test
@@ -90,15 +147,14 @@ class ImageFilterTest : AbstractImageProcessingTest() {
         val image = readTestImage()
         val radius = 4
 
-        val medianImage = image.slowMedianFilter(radius, Shape.Circle)
-        assertReferenceImage("slowMedianFilter(radius=4,Circle)", medianImage)
-
         for (shape in Shape.entries) {
-            val medianImage = image.slowMedianFilter(radius, shape)
-            assertReferenceImage("slowMedianFilter(radius=4,$shape)", medianImage)
+            image.slowMedianFilter(radius, shape).let {
+                assertReferenceImage("slowMedianFilter(radius=4,$shape)", it)
+            }
 
-            val medianRecursiveImage = image.slowMedianFilter(radius, shape, true)
-            assertReferenceImage("slowMedianFilter(radius=4,$shape,recursive=true)", medianRecursiveImage)
+            image.slowMedianFilter(radius, shape, true).let {
+                assertReferenceImage("slowMedianFilter(radius=4,$shape,recursive=true)", it)
+            }
         }
     }
 
@@ -107,8 +163,9 @@ class ImageFilterTest : AbstractImageProcessingTest() {
         val image = readTestImage()
         val radius = 4
 
-        val medianImage = image.medianPixelFilter(radius)
-        assertReferenceImage("medianPixelFilter(radius=4)", medianImage)
+        image.medianPixelFilter(radius).let {
+            assertReferenceImage("medianPixelFilter(radius=4)", it)
+        }
     }
 
     @Test
@@ -117,67 +174,76 @@ class ImageFilterTest : AbstractImageProcessingTest() {
         val radius = 2
         val strength = 1.5
 
-        val unsharpImage = image.unsharpMaskFilter(radius, strength)
-        assertReferenceImage("unsharpMaskFilter(radius=2,strength=1.5)", unsharpImage)
+        image.unsharpMaskFilter(radius, strength).let {
+            assertReferenceImage("unsharpMaskFilter(radius=2,strength=1.5)", it)
+        }
     }
 
     @Test
     fun `should apply sharpen filter`() {
         val image = readTestImage()
 
-        val sharpenedImage = image.sharpenFilter()
-        assertReferenceImage("sharpenFilter()", sharpenedImage)
+        image.sharpenFilter().let {
+            assertReferenceImage("sharpenFilter()", it)
+        }
     }
 
     @Test
     fun `should apply edge detection strong filter`() {
         val image = readTestImage()
 
-        val edgeImage = image.edgeDetectionStrongFilter()
-        assertReferenceImage("edgeDetectionStrongFilter()", edgeImage)
+        image.edgeDetectionStrongFilter().let {
+            assertReferenceImage("edgeDetectionStrongFilter()", it)
+        }
     }
 
     @Test
     fun `should apply edge detection cross filter`() {
         val image = readTestImage()
 
-        val edgeImage = image.edgeDetectionCrossFilter()
-        assertReferenceImage("edgeDetectionCrossFilter()", edgeImage)
+        image.edgeDetectionCrossFilter().let {
+            assertReferenceImage("edgeDetectionCrossFilter()", it)
+        }
     }
 
     @Test
     fun `should apply edge detection diagonal filter`() {
         val image = readTestImage()
 
-        val edgeImage = image.edgeDetectionDiagonalFilter()
-        assertReferenceImage("edgeDetectionDiagonalFilter()", edgeImage)
+        image.edgeDetectionDiagonalFilter().let {
+            assertReferenceImage("edgeDetectionDiagonalFilter()", it)
+        }
     }
 
     @Test
     fun `should apply sobel filter with different kernels`() {
         val image = readTestImage()
 
-        val sobelImage35 = image.sobelFilter(KernelFilter.SobelHorizontal3, KernelFilter.SobelVertical5)
-        assertReferenceImage("sobelFilter(Sobel3,Sobel5)", sobelImage35)
+        image.sobelFilter(KernelFilter.SobelHorizontal3, KernelFilter.SobelVertical5).let {
+            assertReferenceImage("sobelFilter(Sobel3,Sobel5)", it)
+        }
 
-        val sobelImage53 = image.sobelFilter(KernelFilter.SobelHorizontal5, KernelFilter.SobelVertical3)
-        assertReferenceImage("sobelFilter(Sobel5,Sobel3)", sobelImage53)
+        image.sobelFilter(KernelFilter.SobelHorizontal5, KernelFilter.SobelVertical3).let {
+            assertReferenceImage("sobelFilter(Sobel5,Sobel3)", it)
+        }
     }
 
     @Test
     fun `should apply sobel3 filter`() {
         val image = readTestImage()
 
-        val sobelImage = image.sobel3Filter()
-        assertReferenceImage("sobel3Filter()", sobelImage)
+        image.sobel3Filter().let {
+            assertReferenceImage("sobel3Filter()", it)
+        }
     }
 
     @Test
     fun `should apply sobel5 filter`() {
         val image = readTestImage()
 
-        val sobelImage = image.sobel5Filter()
-        assertReferenceImage("sobel5Filter()", sobelImage)
+        image.sobel5Filter().let {
+            assertReferenceImage("sobel5Filter()", it)
+        }
     }
 
     @Test
@@ -189,7 +255,8 @@ class ImageFilterTest : AbstractImageProcessingTest() {
             0.0, -1.0, 0.0
         )
 
-        val filteredImage = image.kernelFilter(kernel)
-        assertReferenceImage("kernelFilter(custom)", filteredImage)
+        image.kernelFilter(kernel).let {
+            assertReferenceImage("kernelFilter(custom)", it)
+        }
     }
 }

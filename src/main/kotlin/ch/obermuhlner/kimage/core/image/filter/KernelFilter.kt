@@ -106,5 +106,41 @@ class KernelFilter(
             -1.0, -1.0, -2.0, -1.0, -1.0,
             -2.0, -2.0, -4.0, -2.0, -2.0)
 
+        val Laplacian = DoubleMatrix.matrixOf(
+            3, 3,
+            0.0, -1.0, 0.0,
+            -1.0, 4.0, -1.0,
+            0.0, -1.0, 0.0)
+
+        val PrewittHorizontal = DoubleMatrix.matrixOf(
+            3, 3,
+            1.0, 0.0, -1.0,
+            1.0, 0.0, -1.0,
+            1.0, 0.0, -1.0)
+
+        val PrewittVertical = DoubleMatrix.matrixOf(
+            3, 3,
+            1.0, 1.0, 1.0,
+            0.0, 0.0, 0.0,
+            -1.0, -1.0, -1.0)
+
+        val EdgeEnhancement = DoubleMatrix.matrixOf(
+            3, 3,
+            0.0, 0.0, 0.0,
+            -1.0, 1.0, 0.0,
+            0.0, 0.0, 0.0)
+
+        val MotionBlur = DoubleMatrix.matrixOf(
+            3, 3,
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0) / 3.0
+
+        val HighPass = DoubleMatrix.matrixOf(
+            3, 3,
+            -1.0, -1.0, -1.0,
+            -1.0, 8.0, -1.0,
+            -1.0, -1.0, -1.0)
+
     }
 }

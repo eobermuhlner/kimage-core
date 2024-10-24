@@ -37,33 +37,56 @@ object ImageReader {
             throw RuntimeException("Failed to read image: $file", ex)
         } ?: throw RuntimeException("Failed to read image: $file")
 
-        val color = DoubleArray(3)
-        val matrixImage = MatrixImage(image.width, image.height)
-        if (image.type == BufferedImage.TYPE_CUSTOM) {
+        val matrixImage = if (image.type == BufferedImage.TYPE_BYTE_GRAY) {
+            val matrixImage = MatrixImage(image.width, image.height, Channel.Gray)
+            val grayMatrix = matrixImage[Channel.Gray]
+            for (y in 0 until image.height) {
+                for (x in 0 until image.width) {
+                    val gray = image.raster.getSample(x, y, 0) / 255.0
+                    grayMatrix[y, x] = gray
+                }
+            }
+            matrixImage
+        } else if (image.type == BufferedImage.TYPE_USHORT_GRAY) {
+            val matrixImage = MatrixImage(image.width, image.height, Channel.Gray)
+            val grayMatrix = matrixImage[Channel.Gray]
+            for (y in 0 until image.height) {
+                for (x in 0 until image.width) {
+                    val gray = image.raster.getSample(x, y, 0) / 65535.0
+                    grayMatrix[y, x] = gray
+                }
+            }
+            matrixImage
+        } else if (image.type == BufferedImage.TYPE_CUSTOM) {
+            val color = DoubleArray(3)
             // TODO check colorModel and convert non-RGB correctly
+            val matrixImage = MatrixImage(image.width, image.height)
             for (y in 0 until image.height) {
                 for (x in 0 until image.width) {
                     image.raster.getPixel(x, y, color)
 
                     when (image.raster.transferType) {
                         DataBuffer.TYPE_USHORT -> for (i in color.indices) {
-                            color[i] = color[i]/UShort.MAX_VALUE.toDouble()
+                            color[i] = color[i]/65535.0
                         }
                         DataBuffer.TYPE_SHORT -> for (i in color.indices) {
-                            color[i] = color[i]/Short.MAX_VALUE.toDouble()
+                            color[i] = (color[i] + 32768)/65535.0
                         }
                         DataBuffer.TYPE_INT -> for (i in color.indices) {
                             color[i] = color[i]/Int.MAX_VALUE.toDouble()
                         }
                         DataBuffer.TYPE_BYTE -> for (i in color.indices) {
-                            color[i] = color[i]/Byte.MAX_VALUE.toDouble()
+                            color[i] = color[i]/255.0
                         }
                     }
 
                     matrixImage.setPixel(x, y, color)
                 }
             }
+            matrixImage
         } else {
+            val color = DoubleArray(3)
+            val matrixImage = MatrixImage(image.width, image.height)
             for (y in 0 until image.height) {
                 for (x in 0 until image.width) {
                     val argb = image.getRGB(x, y)
@@ -74,6 +97,7 @@ object ImageReader {
                     matrixImage.setPixel(x, y, color)
                 }
             }
+            matrixImage
         }
 
         return matrixImage
@@ -234,5 +258,4 @@ object ImageReader {
             }
         }
     }
-
 }

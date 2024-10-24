@@ -14,6 +14,16 @@ fun Image.gaussianBlur5Filter(): Image = this.kernelFilter(KernelFilter.Gaussian
 
 fun Image.gaussianBlur7Filter(): Image = this.kernelFilter(KernelFilter.GaussianBlur7)
 
+fun Image.embossFilter(): Image = this.kernelFilter(KernelFilter.Emboss)
+
+fun Image.laplacianFilter(): Image = this.kernelFilter(KernelFilter.Laplacian)
+
+fun Image.edgeEnhancementFilter(): Image = this.kernelFilter(KernelFilter.EdgeEnhancement)
+
+fun Image.motionBlurFilter(): Image = this.kernelFilter(KernelFilter.MotionBlur)
+
+fun Image.highPassFilter(): Image = this.kernelFilter(KernelFilter.HighPass)
+
 fun Image.gaussianBlurFilter(radius: Int): Image = GaussianBlurFilter(radius).filter(this)
 
 fun Image.averageFilter(radius: Int, shape: Shape = Shape.Square): Image = AverageFilter(radius, shape).filter(this)

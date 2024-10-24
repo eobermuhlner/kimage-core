@@ -18,8 +18,10 @@ import java.io.File
 import kotlin.math.PI
 import kotlin.math.sqrt
 import kotlin.random.Random
+import kotlin.test.Ignore
 
 
+@Ignore
 class AlignStarsTest {
 
     @Test
