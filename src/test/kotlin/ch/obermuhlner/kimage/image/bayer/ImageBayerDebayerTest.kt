@@ -1,14 +1,11 @@
 package ch.obermuhlner.kimage.image.bayer
 
 import ch.obermuhlner.kimage.core.image.Channel
-import ch.obermuhlner.kimage.core.image.Image
-import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.bayer.bayer
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
-import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.values.asXY
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -22,7 +19,7 @@ class ImageBayerDebayerTest: AbstractImageProcessingTest() {
         val width = 50
         val height = 30
 
-        val image = createTestImage(width, height)
+        val image = createGradientTestImage(width, height)
 
         assertReferenceImage("before_bayer", image)
 
@@ -55,13 +52,5 @@ class ImageBayerDebayerTest: AbstractImageProcessingTest() {
         assertReferenceImage("after_debayer", debayeredImage)
 
         assertEquals(setOf<Pair<Int,Int>>(), debayeredImage.bayer()[Channel.Red].findBayerBadPixels())
-    }
-
-    private fun createTestImage(width: Int, height: Int): Image {
-        return MatrixImage(width, height,
-            Channel.Red to DoubleMatrix.matrixOf(height, width) { row, col -> col.toDouble() / width },
-            Channel.Green to DoubleMatrix.matrixOf(height, width) { row, col -> row.toDouble() / height },
-            Channel.Blue to DoubleMatrix.matrixOf(height, width) { row, col -> ((width - col).toDouble() / width + (height - row).toDouble() / height) / 2.0 },
-        )
     }
 }
