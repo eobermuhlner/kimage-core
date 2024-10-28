@@ -1,8 +1,11 @@
 package ch.obermuhlner.kimage.image
 
+import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
+import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
+import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.values.asXY
 import org.junit.jupiter.api.Assertions.assertEquals
 import java.io.File
@@ -63,5 +66,13 @@ abstract class AbstractImageProcessingTest {
 
     fun readTestImage(name: String = "flowers_small.png"): Image {
         return ImageReader.read(File(testInputDirectory, name))
+    }
+
+    fun createGradientTestImage(width: Int, height: Int): Image {
+        return MatrixImage(width, height,
+            Channel.Red to DoubleMatrix.matrixOf(height, width) { row, col -> col.toDouble() / width },
+            Channel.Green to DoubleMatrix.matrixOf(height, width) { row, col -> row.toDouble() / height },
+            Channel.Blue to DoubleMatrix.matrixOf(height, width) { row, col -> ((width - col).toDouble() / width + (height - row).toDouble() / height) / 2.0 },
+        )
     }
 }
