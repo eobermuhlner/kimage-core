@@ -111,7 +111,7 @@ object ImageReader {
                     height = hdu.axes[0]
                     width = hdu.axes[1]
 
-                    val matrix = FloatMatrix(width, height)
+                    val matrix = FloatMatrix(height, width)
 
                     matrices += when (hdu.bitPix) {
                         BasicHDU.BITPIX_BYTE -> {
