@@ -7,6 +7,7 @@ import ch.obermuhlner.kimage.astro.align.calculateTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
+import ch.obermuhlner.kimage.astro.color.stretchAsinh
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
@@ -19,23 +20,25 @@ import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
-import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
+import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
 
 fun main(args: Array<String>) {
+    interpolateImage("test-input/M42.tif")
+
 //    debayerImage("images/calibrate/dark/Dark_60.0s_Bin1_533MC_gain100_20230522-203021_0001.fit")
 //    debayerImage("images/calibrate/flat/Flat_110.0ms_Bin1_533MC_gain100_20240917-204051_-4.0C_0001.fit")
 //    debayerImage("images/calibrate/M11/Light_M11_180.0s_Bin1_533MC_gain100_20240827-212432_-10.0C_0001.fit")
 //    debayerImage("images/calibrate/M33/Light_M33_60.0s_Bin1_533MC_gain100_20241005-211237_-10.1C_0001.fit")
 
-    alignStarImages(
-        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212432_-10.0C_0001.tif",
-        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212734_-10.0C_0002.tif",
-        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213108_-10.1C_0003.tif",
-        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213410_-10.0C_0004.tif",
-        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213734_-10.0C_0005.tif",
-        //"images/calibrate/M11/crop_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212432_-10.0C_0001.tif",
-    )
+//    alignStarImages(
+//        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212432_-10.0C_0001.tif",
+//        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212734_-10.0C_0002.tif",
+//        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213108_-10.1C_0003.tif",
+//        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213410_-10.0C_0004.tif",
+//        "images/calibrate/M11/debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213734_-10.0C_0005.tif",
+//        //"images/calibrate/M11/crop_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-212432_-10.0C_0001.tif",
+//    )
 
 //    alignStarImages(
 //        "images/calibrate/M16/debayer_Light_M16_0001.tif",
@@ -60,6 +63,36 @@ fun main(args: Array<String>) {
 //        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213410_-10.0C_0004.tif",
 //        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213734_-10.0C_0005.tif",
 //    )
+}
+
+fun interpolateImage(imageName: String) {
+    val stretchFactor = 0.05
+
+    println(imageName)
+    val image = elapsed("Loaded $imageName") {
+        ImageReader.read(File(imageName))
+    }
+    val stretchedImage = elapsed("Stretch image") {
+        image.stretchAsinh()
+    }
+    elapsed("Write stretched image") {
+        ImageWriter.write(stretchedImage, File("stretched_M42.tif"))
+    }
+//    val fixPoints = elapsed("Calculated fixpoints") {
+//        image.findFixPoints(9, 9)
+//    }
+//    val background = elapsed("Interpolated background") {
+//        image.interpolate(fixPoints)
+//    }
+//    elapsed("Write background") {
+//        ImageWriter.write(background, File("background_M42.tif"))
+//    }
+//    val stretchedBackground = elapsed("Stretch background") {
+//        background.stretch { v -> asinhStretchFunction(v, stretchFactor) }
+//    }
+//    elapsed("Write stretched background") {
+//        ImageWriter.write(stretchedBackground, File("background_stretched_M42.tif"))
+//    }
 }
 
 fun debayerImage(imageName: String) {
