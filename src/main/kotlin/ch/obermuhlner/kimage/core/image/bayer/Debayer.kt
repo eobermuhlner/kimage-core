@@ -3,6 +3,8 @@ package ch.obermuhlner.kimage.core.image.bayer
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.PointRowCol
+import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.math.average
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
@@ -48,36 +50,36 @@ fun Image.debayer(
     red: Double = 1.0,
     green: Double = 1.0,
     blue: Double = 1.0,
-    badpixelCoords: Set<Pair<Int, Int>> = emptySet(),
+    badpixelCoords: Set<PointXY> = emptySet(),
 ): MatrixImage {
     val (width, height) = when (interpolation) {
-        DebayerInterpolation.SuperPixelHalf -> Pair(this.width / 2, this.height / 2)
-        else -> Pair(this.width, this.height)
+        DebayerInterpolation.SuperPixelHalf -> PointXY(this.width / 2, this.height / 2)
+        else -> PointXY(this.width, this.height)
     }
 
     val (rX, rY) = when (pattern) {
-        BayerPattern.RGGB -> Pair(0, 0)
-        BayerPattern.BGGR -> Pair(1, 1)
-        BayerPattern.GBRG -> Pair(0, 1)
-        BayerPattern.GRBG -> Pair(1, 0)
+        BayerPattern.RGGB -> PointXY(0, 0)
+        BayerPattern.BGGR -> PointXY(1, 1)
+        BayerPattern.GBRG -> PointXY(0, 1)
+        BayerPattern.GRBG -> PointXY(1, 0)
     }
     val (g1X, g1Y) = when (pattern) {
-        BayerPattern.RGGB -> Pair(1, 0)
-        BayerPattern.BGGR -> Pair(1, 0)
-        BayerPattern.GBRG -> Pair(0, 0)
-        BayerPattern.GRBG -> Pair(0, 0)
+        BayerPattern.RGGB -> PointXY(1, 0)
+        BayerPattern.BGGR -> PointXY(1, 0)
+        BayerPattern.GBRG -> PointXY(0, 0)
+        BayerPattern.GRBG -> PointXY(0, 0)
     }
     val (g2X, g2Y) = when (pattern) {
-        BayerPattern.RGGB -> Pair(0, 1)
-        BayerPattern.BGGR -> Pair(0, 1)
-        BayerPattern.GBRG -> Pair(1, 1)
-        BayerPattern.GRBG -> Pair(1, 1)
+        BayerPattern.RGGB -> PointXY(0, 1)
+        BayerPattern.BGGR -> PointXY(0, 1)
+        BayerPattern.GBRG -> PointXY(1, 1)
+        BayerPattern.GRBG -> PointXY(1, 1)
     }
     val (bX, bY) = when (pattern) {
-        BayerPattern.RGGB -> Pair(1, 1)
-        BayerPattern.BGGR -> Pair(0, 0)
-        BayerPattern.GBRG -> Pair(1, 0)
-        BayerPattern.GRBG -> Pair(0, 1)
+        BayerPattern.RGGB -> PointXY(1, 1)
+        BayerPattern.BGGR -> PointXY(0, 0)
+        BayerPattern.GBRG -> PointXY(1, 0)
+        BayerPattern.GRBG -> PointXY(0, 1)
     }
 
     val mosaic = if (badpixelCoords.isEmpty()) {
@@ -244,12 +246,12 @@ fun Matrix.findBayerBadPixels(
     minSigma: Double = 0.01,
     gradientThresholdFactor: Double = 10.0,
     steepCountThresholdFactor: Double = 0.75
-): Set<Pair<Int, Int>> {
+): Set<PointXY> {
     val matrixXY = this.asXY()
 
     val width = matrixXY.width
     val height = matrixXY.height
-    val result = mutableSetOf<Pair<Int, Int>>()
+    val result = mutableSetOf<PointXY>()
 
     for (y in 0 until height) {
         for (x in 0 until width) {
@@ -283,7 +285,7 @@ fun Matrix.findBayerBadPixels(
             }
 
             if (steepGradientsCount >= values.size * steepCountThresholdFactor) {
-                result.add(Pair(x, y))
+                result.add(PointXY(x, y))
             }
         }
     }
@@ -292,19 +294,19 @@ fun Matrix.findBayerBadPixels(
 }
 
 fun Matrix.cleanupBayerBadPixels(
-    badpixelCoords: Set<Pair<Int, Int>> = emptySet()
+    badpixelCoords: Set<PointXY> = emptySet()
 ): Matrix {
     val mosaic = copy()
     val mosaicBoundedXY = mosaic.asBoundedXY()
 
     for (badpixelCoord in badpixelCoords) {
-        val x = badpixelCoord.first
-        val y = badpixelCoord.second
+        val x = badpixelCoord.x
+        val y = badpixelCoord.y
 
         val surroundingValues = mutableListOf<Double>()
         for (dy in -2..2 step 2) {
             for (dx in -2..2 step 2) {
-                if ((dx != 0 && dy != 0) && mosaicBoundedXY.isInBounds(x + dx, y + dy) && !badpixelCoords.contains(Pair(x + dx, y + dy))) {
+                if ((dx != 0 && dy != 0) && mosaicBoundedXY.isInBounds(x + dx, y + dy) && !badpixelCoords.contains(PointXY(x + dx, y + dy))) {
                     surroundingValues.add(mosaicBoundedXY[x + dx, y + dy]!!)
                 }
             }

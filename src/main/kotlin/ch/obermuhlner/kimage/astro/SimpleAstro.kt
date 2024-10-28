@@ -114,13 +114,13 @@ fun debayerImage(imageName: String) {
         var stuckPixelIndex = 0
         for (stuckPixel in stuckPixels) {
             zoomMatrixRed.set(
-                bayeredColorImage[Channel.Red].crop(stuckPixel.second-2, stuckPixel.first-2, 5, 5),
+                bayeredColorImage[Channel.Red].crop(stuckPixel.y-2, stuckPixel.x-2, 5, 5),
                 5*stuckPixelIndex, 0)
             zoomMatrixGreen.set(
-                bayeredColorImage[Channel.Green].crop(stuckPixel.second-2, stuckPixel.first-2, 5, 5),
+                bayeredColorImage[Channel.Green].crop(stuckPixel.y-2, stuckPixel.x-2, 5, 5),
                 5*stuckPixelIndex, 0)
             zoomMatrixBlue.set(
-                bayeredColorImage[Channel.Blue].crop(stuckPixel.second-2, stuckPixel.first-2, 5, 5),
+                bayeredColorImage[Channel.Blue].crop(stuckPixel.y-2, stuckPixel.x-2, 5, 5),
                 5*stuckPixelIndex, 0)
             stuckPixelIndex++
         }

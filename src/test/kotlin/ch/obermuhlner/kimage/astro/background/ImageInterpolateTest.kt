@@ -2,6 +2,7 @@ package ch.obermuhlner.kimage.astro.background
 
 import ch.obermuhlner.kimage.astro.color.stretchLogarithmic
 import ch.obermuhlner.kimage.astro.color.stretchNormalize
+import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.plus
 import ch.obermuhlner.kimage.core.image.values.applyEach
@@ -16,11 +17,11 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
         val image = readTestImage()
 
         val fixPoints = listOf(
-            Pair(10, 10),
-            Pair(10, image.height-10),
-            Pair(image.width-10, 10),
-            Pair(image.width-10, image.height-10),
-            Pair(image.width/2, image.height/2)
+            PointXY(10, 10),
+            PointXY(10, image.height-10),
+            PointXY(image.width-10, 10),
+            PointXY(image.width-10, image.height-10),
+            PointXY(image.width/2, image.height/2)
         )
 
         for (i in 1 .. fixPoints.size) {

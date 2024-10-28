@@ -2,6 +2,7 @@ package ch.obermuhlner.kimage.astro.background
 
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.math.median
@@ -18,8 +19,8 @@ import kotlin.math.sqrt
 fun Image.findFixPoints(
     horizontal: Int = 3,
     vertical: Int = 3
-): List<Pair<Int, Int>> {
-    val result = mutableListOf<Pair<Int, Int>>()
+): List<PointXY> {
+    val result = mutableListOf<PointXY>()
 
     val stepX = this.width / horizontal
     val stepY = this.height / vertical
@@ -28,7 +29,7 @@ fun Image.findFixPoints(
         for (j in 0 until vertical) {
             val x = i * stepX + stepX/2
             val y = j * stepY + stepY/2
-            result.add(Pair(x, y))
+            result.add(PointXY(x, y))
         }
     }
 
@@ -36,11 +37,11 @@ fun Image.findFixPoints(
 }
 
 fun sigmaClipFixPoints(
-    fixPoints: List<Pair<Int, Int>>,
+    fixPoints: List<PointXY>,
     fixValues: List<Double>,
     sigmaThreshold: Double = 3.0,
     maxIterations: Int = 5
-): Pair<List<Pair<Int, Int>>, List<Double>> {
+): Pair<List<PointXY>, List<Double>> {
     require(fixPoints.size == fixValues.size) { "Fix points and values must have the same size" }
 
     var clippedFixPoints = fixPoints
@@ -67,11 +68,11 @@ fun sigmaClipFixPoints(
     return Pair(clippedFixPoints, clippedFixValues)
 }
 
-fun estimateMedianRadiusForInterpolate(fixPoints: List<Pair<Int, Int>>, imageWidth: Int, imageHeight: Int): Int {
+fun estimateMedianRadiusForInterpolate(fixPoints: List<PointXY>, imageWidth: Int, imageHeight: Int): Int {
     return min(imageWidth, imageHeight) / max(sqrt(fixPoints.size.toDouble()).toInt()+1, 2)
 }
 
-fun estimatePowerForInterpolate(fixPoints: List<Pair<Int, Int>>, imageWidth: Int, imageHeight: Int): Double {
+fun estimatePowerForInterpolate(fixPoints: List<PointXY>, imageWidth: Int, imageHeight: Int): Double {
     val numFixPoints = fixPoints.size
     val imageSizeFactor = (imageWidth * imageHeight).toDouble().pow(0.25) // Image size factor for large images
     val densityFactor = (imageWidth * imageHeight) / numFixPoints.toDouble() // Density factor: area per fix point
@@ -85,7 +86,7 @@ fun estimatePowerForInterpolate(fixPoints: List<Pair<Int, Int>>, imageWidth: Int
 }
 
 fun Image.interpolate(
-    fixPoints: List<Pair<Int, Int>> = findFixPoints(),
+    fixPoints: List<PointXY> = findFixPoints(),
     medianRadius: Int = estimateMedianRadiusForInterpolate(fixPoints, this.width, this.height),
     power: Double = estimatePowerForInterpolate(fixPoints, this.width, this.height),
     sigmaThreshold: Double = 3.0,
@@ -95,7 +96,7 @@ fun Image.interpolate(
         width,
         height,
         this.channels) { channel, _, _ ->
-        val fixValues = fixPoints.map { this[channel].medianAround(it.first, it.second, medianRadius) }
+        val fixValues = fixPoints.map { this[channel].medianAround(it.y, it.x, medianRadius) }
         val (bestFixPoints, bestFixValues) = sigmaClipFixPoints(fixPoints, fixValues, sigmaThreshold, maxIterations)
         this[channel].interpolate(
             bestFixPoints,
@@ -113,7 +114,7 @@ fun Matrix.medianAround(x: Int, y: Int, radius: Int = 10): Double {
 }
 
 fun Image.interpolate(
-    fixPoints: List<Pair<Int, Int>>,
+    fixPoints: List<PointXY>,
     fixValues: List<Double>,
     power: Double = 2.0,
 ): Image {
@@ -126,7 +127,7 @@ fun Image.interpolate(
 }
 
 fun Matrix.interpolate(
-    fixPoints: List<Pair<Int, Int>>,
+    fixPoints: List<PointXY>,
     fixValues: List<Double>,
     power: Double = 2.0,
     gaussianBlurRadius: Int = 0
@@ -149,7 +150,7 @@ fun Matrix.interpolate(
 private fun interpolate(
     x: Int,
     y: Int,
-    fixPoints: List<Pair<Int, Int>>,
+    fixPoints: List<PointXY>,
     fixValues: List<Double>,
     power: Double = 2.0,
     radius: Double = 100.0,

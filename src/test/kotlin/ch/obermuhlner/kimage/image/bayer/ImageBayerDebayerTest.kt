@@ -1,6 +1,7 @@
 package ch.obermuhlner.kimage.image.bayer
 
 import ch.obermuhlner.kimage.core.image.Channel
+import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.bayer.bayer
 import ch.obermuhlner.kimage.core.image.bayer.debayer
@@ -43,14 +44,14 @@ class ImageBayerDebayerTest: AbstractImageProcessingTest() {
         println(stuckPixels)
         assertEquals(
             setOf(
-                Pair(2,2),
-                Pair(5,3),
-                Pair(width-5, 2)
+                PointXY(2,2),
+                PointXY(5,3),
+                PointXY(width-5, 2)
             ), stuckPixels)
 
         val debayeredImage = bayeredImage.debayer(badpixelCoords = stuckPixels)
         assertReferenceImage("after_debayer", debayeredImage)
 
-        assertEquals(setOf<Pair<Int,Int>>(), debayeredImage.bayer()[Channel.Red].findBayerBadPixels())
+        assertEquals(setOf<PointXY>(), debayeredImage.bayer()[Channel.Red].findBayerBadPixels())
     }
 }

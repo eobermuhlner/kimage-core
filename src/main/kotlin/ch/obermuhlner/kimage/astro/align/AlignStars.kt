@@ -3,6 +3,7 @@ package ch.obermuhlner.kimage.astro.align
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
 import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
@@ -27,7 +28,7 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
 
     val matrix = image[Channel.Gray]
     val visited = Array(height) { BooleanArray(width) { false } }
-    val localMaxima = mutableListOf<Pair<Int, Int>>()
+    val localMaxima = mutableListOf<PointXY>()
 
     // Step 1: Detect local maxima
     for (y in 1 until height - 1) {
@@ -45,27 +46,27 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
                     }
                 }
                 if (isLocalMax) {
-                    localMaxima.add(Pair(x, y))
+                    localMaxima.add(PointXY(x, y))
                 }
             }
         }
     }
 
     // Step 2: Cluster local maxima
-    val clusters = mutableListOf<List<Pair<Int, Int>>>()
+    val clusters = mutableListOf<List<PointXY>>()
     val labelMap = Array(height) { IntArray(width) { -1 } }
     var currentLabel = 0
 
     for ((x, y) in localMaxima) {
         if (!visited[y][x]) {
-            val queue = ArrayDeque<Pair<Int, Int>>()
-            val cluster = mutableListOf<Pair<Int, Int>>()
-            queue.add(Pair(x, y))
+            val queue = ArrayDeque<PointXY>()
+            val cluster = mutableListOf<PointXY>()
+            queue.add(PointXY(x, y))
             visited[y][x] = true
 
             while (queue.isNotEmpty()) {
                 val (cx, cy) = queue.removeFirst()
-                cluster.add(Pair(cx, cy))
+                cluster.add(PointXY(cx, cy))
                 labelMap[cy][cx] = currentLabel
 
                 for (dy in -1..1) {
@@ -73,9 +74,9 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
                         val nx = cx + dx
                         val ny = cy + dy
                         if (nx in 0 until width && ny in 0 until height &&
-                            !visited[ny][nx] && localMaxima.contains(Pair(nx, ny))) {
+                            !visited[ny][nx] && localMaxima.contains(PointXY(nx, ny))) {
                             visited[ny][nx] = true
-                            queue.add(Pair(nx, ny))
+                            queue.add(PointXY(nx, ny))
                         }
                     }
                 }
