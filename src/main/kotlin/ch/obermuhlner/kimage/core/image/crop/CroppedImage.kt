@@ -28,14 +28,14 @@ class CroppedImage(
 
     init {
         if (strictClipping) {
-            require(offsetX >= 0) { "offsetX must be >= 0: $offsetX" }
-            require(offsetY >= 0) { "offsetY must be >= 0: $offsetY" }
-            require(offsetX < image.width) { "offsetX must be < image.width: $offsetX" }
-            require(offsetY < image.height) { "offsetY must be < image.height: $offsetY" }
-            require(width >= 0) { "width must be >= 0: $width" }
-            require(height >= 0) { "width must be >= 0: $height" }
-            require(width <= image.width-offsetX) { "width must be <= image.width - offsetX: $width" }
-            require(height <= image.height-offsetY) { "width must be <= image.height - offsetX: $height" }
+            require(offsetX >= 0) { "offsetX $offsetX must be >= 0" }
+            require(offsetY >= 0) { "offsetY $offsetY must be >= 0" }
+            require(offsetX < image.width) { "offsetX $offsetX must be < image.width ${image.width}" }
+            require(offsetY < image.height) { "offsetY $offsetY must be < image.height ${image.height}" }
+            require(width >= 0) { "width $width must be >= 0" }
+            require(height >= 0) { "width $height must be >= 0" }
+            require(width <= image.width-offsetX) { "width $width must be <= image.width - offsetX ${image.width-offsetX}" }
+            require(height <= image.height-offsetY) { "height $height must be <= image.height - offsetY ${image.height-offsetY}" }
         }
     }
 
