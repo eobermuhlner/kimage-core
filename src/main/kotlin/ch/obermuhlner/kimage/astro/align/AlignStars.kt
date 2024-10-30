@@ -7,6 +7,7 @@ import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
 import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
+import ch.obermuhlner.kimage.core.matrix.values.MatrixXY
 import java.util.ArrayDeque
 import kotlin.math.abs
 import kotlin.math.acos
@@ -381,6 +382,21 @@ fun applyTransformationToStars(stars: List<Star>, transformationMatrix: Matrix, 
         transformedStars.add(Star(xTransformed.toInt(), yTransformed.toInt(), star.brightness))
     }
     return transformedStars
+}
+
+fun createDebugImageFromTransformedStars(stars: List<Star>, transformationMatrix: Matrix, imageWidth: Int, imageHeight: Int): Image {
+    val transformedStars = applyTransformationToStars(stars, transformationMatrix, imageWidth, imageHeight)
+
+    val matrix = DoubleMatrix.matrixOf(imageHeight, imageHeight)
+    val matrixXY = MatrixXY(matrix)
+    for (star in transformedStars) {
+        matrixXY[star.x, star.y] = star.brightness
+    }
+
+    return MatrixImage(imageWidth, imageHeight,
+        Channel.Red to matrix,
+        Channel.Green to matrix,
+        Channel.Blue to matrix)
 }
 
 // Function to count the number of inliers between transformed stars and reference stars

@@ -16,7 +16,9 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-fun Image.findFixPoints(
+data class FixPointValue(val fixPoint: PointXY, val value: Double)
+
+fun Image.createFixPointGrid(
     horizontal: Int = 3,
     vertical: Int = 3
 ): List<PointXY> {
@@ -86,7 +88,7 @@ fun estimatePowerForInterpolate(fixPoints: List<PointXY>, imageWidth: Int, image
 }
 
 fun Image.interpolate(
-    fixPoints: List<PointXY> = findFixPoints(),
+    fixPoints: List<PointXY> = createFixPointGrid(),
     medianRadius: Int = estimateMedianRadiusForInterpolate(fixPoints, this.width, this.height),
     power: Double = estimatePowerForInterpolate(fixPoints, this.width, this.height),
     sigmaThreshold: Double = 3.0,

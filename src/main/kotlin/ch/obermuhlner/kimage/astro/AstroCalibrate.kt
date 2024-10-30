@@ -3,6 +3,7 @@ package ch.obermuhlner.kimage.astro
 import ch.obermuhlner.kimage.astro.align.Star
 import ch.obermuhlner.kimage.astro.align.applyTransformationToImage
 import ch.obermuhlner.kimage.astro.align.calculateTransformationMatrix
+import ch.obermuhlner.kimage.astro.align.createDebugImageFromTransformedStars
 import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
@@ -10,11 +11,14 @@ import ch.obermuhlner.kimage.astro.align.processCalibrationImages
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
+import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.debayerCleanupBadPixels
+import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
+import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.math.average
@@ -22,8 +26,11 @@ import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
 import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
 import ch.obermuhlner.kimage.core.matrix.values.values
+import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
 import kotlin.math.min
+
+// 20h29m34.8s 62d59m38.9s
 
 fun main(args: Array<String>) {
     astroCalibrate(args)
@@ -59,12 +66,14 @@ fun astroCalibrate(args: Array<String>) {
     val maxStars = 100
     val positionTolerance = 2.0
 
-
     val currentDir = File(".")
-    var bias = processCalibrationImages(currentDir.resolve(biasDirectory), "bias", debayerCalibrationFrames)
-    var flat = normalizeImage(processCalibrationImages(currentDir.resolve(flatDirectory), "flat", debayerCalibrationFrames))
-    var darkflat = processCalibrationImages(currentDir.resolve(darkflatDirectory), "darkflat", debayerCalibrationFrames)
-    var dark = processCalibrationImages(currentDir.resolve(darkDirectory), "dark", debayerCalibrationFrames)
+
+    println("### Processing calibration images ...")
+
+    var bias = elapsed("Processing bias frames") { processCalibrationImages(currentDir.resolve(biasDirectory), "bias", debayerCalibrationFrames) }
+    var flat = elapsed("Processing flat frames") { normalizeImage(processCalibrationImages(currentDir.resolve(flatDirectory), "flat", debayerCalibrationFrames)) }
+    var darkflat = elapsed("Processing darkflat frames") { processCalibrationImages(currentDir.resolve(darkflatDirectory), "darkflat", debayerCalibrationFrames) }
+    var dark = elapsed("Processing dark frames") { processCalibrationImages(currentDir.resolve(darkDirectory), "dark", debayerCalibrationFrames) }
 
     val files = currentDir.listFiles() ?: return
 
@@ -90,111 +99,137 @@ fun astroCalibrate(args: Array<String>) {
         flat -= darkflat
     }
 
-    val inputFiles = files.filter { it.extension == inputImageExtension }
+    val inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull()
 
     val minBackground = mutableMapOf<Channel, Double>()
     if (normalizeBackground) {
         println()
-        println("### Normalizing backgrounds ...")
+        elapsed("Normalizing backgrounds for ${inputFiles.size} input files") {
+            inputFiles.forEach { inputFile ->
+                val calibratedFile = currentDir.resolve(calibratedDirectory).resolve("${inputFile.nameWithoutExtension}.$outputImageExtension")
+                if (!calibratedFile.exists()) {
+                    println("Loading $inputFile")
+                    var light = elapsed("Reading light frame") { ImageReader.read(inputFile) }
+                    if (debayerLightFrames) {
+                        light = elapsed("Debayering light frame") {
+                            val badPixels = light[Channel.Red].findBayerBadPixels()
+                            println("Found ${badPixels.size} bad pixels")
+                            light.debayer(bayerPattern, badpixelCoords = badPixels)
+                        }
+                    }
 
-        inputFiles.forEach { inputFile ->
-            println("Loading $inputFile")
-            var light = ImageReader.read(inputFile)
-            if (debayerLightFrames) {
-                light = light.debayerCleanupBadPixels(bayerPattern)
-            }
-
-            for (channel in light.channels) {
-                val median = light[channel].values().median()
-                println("$channel: $median")
-                minBackground[channel] = minBackground[channel]?.let { min(it, median) } ?: median
-            }
-        }
-
-        println()
-        println("Minimum background:")
-        minBackground.forEach { (channel, median) ->
-            println("$channel: $median")
-        }
-    }
-
-    println()
-    println("### Calibrating images ...")
-
-    val calibratedFiles = inputFiles.map { inputFile ->
-        println("Loading $inputFile")
-        var light = ImageReader.read(inputFile)
-        if (debayerLightFrames) {
-            light = light.debayerCleanupBadPixels(bayerPattern)
-        }
-
-        if (bias != null) {
-            light -= bias
-        }
-        if (dark != null) {
-            light -= dark
-        }
-        if (flat != null) {
-            light /= flat
-        }
-
-        if (normalizeBackground) {
-            for (channel in light.channels) {
-                val lowestBackground = minBackground[channel]
-                if (lowestBackground != null) {
-                    val background = light[channel].values().median()
-                    val delta = background - lowestBackground
-                    light[channel].applyEach { v -> v - delta }
+                    for (channel in light.channels) {
+                        val median = light[channel].values().median()
+                        println("Background: $channel: $median")
+                        minBackground[channel] = minBackground[channel]?.let { min(it, median) } ?: median
+                    }
                 }
             }
         }
 
-        light.applyEach { v -> clamp(v, 0.0, 1.0) }
-
-        val outputFile = currentDir.resolve(calibratedDirectory).resolve("${inputFile.nameWithoutExtension}.$outputImageExtension")
-        println("Saving $outputFile")
-        ImageWriter.write(light, outputFile)
-
-        outputFile
+        println()
+        minBackground.forEach { (channel, median) ->
+            println("Minimum background $channel: $median")
+        }
     }
 
     println()
-    println("### Aligning images ...")
+    println("### Calibrating ${inputFiles.size} images ...")
+
+    val calibratedFiles = elapsed("Calibrating ${inputFiles.size} light frames") {
+        inputFiles.map { inputFile ->
+            val outputFile = currentDir.resolve(calibratedDirectory)
+                .resolve("${inputFile.nameWithoutExtension}.$outputImageExtension")
+            if (outputFile.exists()) {
+                return@map outputFile
+            }
+
+            println("Loading $inputFile")
+            var light = elapsed("Reading light frame $inputFile") { ImageReader.read(inputFile) }
+            if (debayerLightFrames) {
+                light = elapsed("Debayering light frame $inputFile") { light.debayerCleanupBadPixels(bayerPattern) }
+            }
+
+            elapsed("Calibrating light frame $inputFile") {
+                if (bias != null) {
+                    light -= bias
+                }
+                if (dark != null) {
+                    light -= dark
+                }
+                if (flat != null) {
+                    light /= flat
+                }
+
+                if (normalizeBackground) {
+                    for (channel in light.channels) {
+                        val lowestBackground = minBackground[channel]
+                        if (lowestBackground != null) {
+                            val background = light[channel].values().median()
+                            val delta = background - lowestBackground
+                            light[channel].applyEach { v -> v - delta }
+                        }
+                    }
+                }
+
+                light.applyEach { v -> clamp(v, 0.0, 1.0) }
+            }
+
+            println("Saving $outputFile")
+            elapsed("Writing calibrated light frame") { ImageWriter.write(light, outputFile) }
+
+            outputFile
+        }
+    }
+
+    println()
+    println("### Aligning ${calibratedFiles.size} images ...")
 
     var referenceImageProcessed = false
     var referenceStars: List<Star> = emptyList<Star>()
     var referenceImageWidth = 0
     var referenceImageHeight = 0
     val alignedFiles = calibratedFiles.mapNotNull { calibratedFile ->
+        val outputFile = currentDir.resolve(alignedDirectory).resolve("${calibratedFile.nameWithoutExtension}.$outputImageExtension")
+        if (outputFile.exists()) {
+            return@mapNotNull outputFile
+        }
+
         println("Loading $calibratedFile")
-        var light = ImageReader.read(calibratedFile)
+        var light = elapsed("Reading calibrated frame") { ImageReader.read(calibratedFile) }
 
         val alignedImage = if (!referenceImageProcessed) {
             referenceImageProcessed = true
-            referenceStars = findStars(light, starTheshold)
-            referenceImageWidth = light.width
-            referenceImageHeight = light.height
+            elapsed("Finding reference stars") {
+                referenceStars = findStars(light, starTheshold)
+                referenceImageWidth = light.width
+                referenceImageHeight = light.height
+            }
             light
         } else {
-            val imageStars = findStars(light, starTheshold)
-            val transform = calculateTransformationMatrix(
-                referenceStars.take(maxStars),
-                imageStars.take(maxStars),
-                referenceImageWidth,
-                referenceImageHeight,
-                positionTolerance = positionTolerance
-            )
+            val imageStars = elapsed("Finding image stars") { findStars(light, starTheshold) }
+            val transform = elapsed("Calculating transformation matrix") {
+                calculateTransformationMatrix(
+                    referenceStars.take(maxStars),
+                    imageStars.take(maxStars),
+                    referenceImageWidth,
+                    referenceImageHeight,
+                    positionTolerance = positionTolerance
+                )
+            }
             if (transform != null) {
                 println(formatTransformation(decomposeTransformationMatrix(transform)))
 
-                applyTransformationToImage(light, transform.invert()!!)
+                elapsed("Applying transformation to image") {
+                    applyTransformationToImage(light, transform)
+                    //for debugging: createDebugImageFromTransformedStars(imageStars, transform, light.width, light.height)
+                }
             } else {
                 null
             }
         }
 
         if (alignedImage != null) {
-            val outputFile = currentDir.resolve(alignedDirectory).resolve("${calibratedFile.nameWithoutExtension}.$outputImageExtension")
             println("Saving $outputFile")
             ImageWriter.write(alignedImage, outputFile)
 
@@ -205,17 +240,22 @@ fun astroCalibrate(args: Array<String>) {
     }
 
     println()
-    println("### Stacking images ...")
-
-    val alignedFileSuppliers = alignedFiles.map {
-        {
-            println("Loading $it")
-            ImageReader.read(it)
-        }
-    }
-    val stackedImage = stack(alignedFileSuppliers)
+    println("### Stacking ${alignedFiles.size} aligned images ...")
 
     val outputFile = currentDir.resolve(stackedDirectory).resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.$outputImageExtension")
-    println("Saving $outputFile")
-    ImageWriter.write(stackedImage, outputFile)
+    if (!outputFile.exists()) {
+        val alignedFileSuppliers = alignedFiles.map {
+            {
+                println("Loading $it")
+                ImageReader.read(it)
+            }
+        }
+        // FIXME do not use Max
+        val stackedImage = elapsed("Stacking images") { stack(alignedFileSuppliers, algorithm = StackAlgorithm.Max) }
+
+        println("Saving $outputFile")
+        ImageWriter.write(stackedImage, outputFile)
+    } else {
+        println("Stacked image already exists: $outputFile")
+    }
 }

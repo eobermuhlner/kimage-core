@@ -8,6 +8,7 @@ import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.stack.stack
+import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
 
 fun processCalibrationImages(
@@ -33,17 +34,23 @@ fun processCalibrationImages(
         .filter { file -> file.extension == inputImageExtension }
         .map { file ->
             {
-                var img = ImageReader.read(file)
-                if (debayer) {
-                    val badPixels = img[Channel.Red].findBayerBadPixels()
-                    img = img.debayer(bayerPattern, badpixelCoords = badPixels)
+                elapsed("Debayer $file") {
+                    var img = ImageReader.read(file)
+                    if (debayer) {
+                        val badPixels = img[Channel.Red].findBayerBadPixels()
+                        println("Found ${badPixels.size} bad pixels")
+                        img = img.debayer(bayerPattern, badpixelCoords = badPixels)
+                    }
+                    img
                 }
-                img
             }
         }
-    val stackedImage = stack(imageSuppliers)
 
-    println("Writing calibration $calibrationName image: $masterImageFile")
-    ImageWriter.write(stackedImage, masterImageFile)
-    return stackedImage
+    return elapsed("Stacking $masterImageFile") {
+        val stackedImage = stack(imageSuppliers)
+
+        ImageWriter.write(stackedImage, masterImageFile)
+
+        stackedImage
+    }
 }
