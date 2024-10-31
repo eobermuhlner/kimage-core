@@ -221,7 +221,7 @@ fun astroCalibrate(args: Array<String>) {
                 println(formatTransformation(decomposeTransformationMatrix(transform)))
 
                 elapsed("Applying transformation to image") {
-                    applyTransformationToImage(light, transform)
+                    applyTransformationToImage(light, imageStars, transform)
                     //for debugging: createDebugImageFromTransformedStars(imageStars, transform, light.width, light.height)
                 }
             } else {
@@ -258,4 +258,26 @@ fun astroCalibrate(args: Array<String>) {
     } else {
         println("Stacked image already exists: $outputFile")
     }
+
+    ////////////FIXME
+
+    println()
+    println("### Stacking ${calibratedFiles.size} aligned images ...")
+
+    val outputDebugFile = currentDir.resolve(stackedDirectory).resolve("${inputFiles[0].nameWithoutExtension}_stacked_debug_${calibratedFiles.size}.$outputImageExtension")
+    if (!outputDebugFile.exists()) {
+        val calibratedFileSuppliers = calibratedFiles.map {
+            {
+                println("Loading $it")
+                ImageReader.read(it)
+            }
+        }
+        val stackedImage = elapsed("Stacking images") { stack(calibratedFileSuppliers, algorithm = StackAlgorithm.Max) }
+
+        println("Saving $outputDebugFile")
+        ImageWriter.write(stackedImage, outputDebugFile)
+    } else {
+        println("Stacked image already exists: $outputDebugFile")
+    }
+
 }

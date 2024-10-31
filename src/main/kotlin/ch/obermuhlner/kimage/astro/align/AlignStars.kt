@@ -417,45 +417,39 @@ fun countInliers(transformedStars: List<Star>, referenceStars: List<Star>, toler
 }
 
 // Function to apply the transformation matrix to the input image and obtain transformed channels
-fun applyTransformationToImage(inputImage: Image, transformationMatrix: Matrix): Image {
-    //return applyTransformationToImageUsingSimpleTransformation(inputImage, transformationMatrix)
-    return applyTransformationToImageUsingInvertedTransformation(inputImage, transformationMatrix)
+fun applyTransformationToImage(inputImage: Image, imageStars: List<Star>, transformationMatrix: Matrix): Image {
+    return applyTransformationToImageUsingSimpleTransformation(inputImage, imageStars, transformationMatrix)
+    //return applyTransformationToImageUsingInvertedTransformation(inputImage, transformationMatrix)
 }
 
-fun applyTransformationToImageUsingSimpleTransformation(inputImage: Image, transformationMatrix: Matrix): Image {
+fun applyTransformationToImageUsingSimpleTransformation(inputImage: Image, stars: List<Star>, transformationMatrix: Matrix): Image {
     val width = inputImage.width
     val height = inputImage.height
 
-    val centerX = width / 2
-    val centerY = height / 2
+    val centerX = width / 2.0
+    val centerY = height / 2.0
 
-    // Extract the red, green, and blue channels as matrices
     val redChannel = inputImage[Channel.Red]
     val greenChannel = inputImage[Channel.Green]
     val blueChannel = inputImage[Channel.Blue]
 
-    // Create matrices for the transformed channels (assuming the same size as the reference image)
     val transformedRed = DoubleMatrix.matrixOf(height, width)
     val transformedGreen = DoubleMatrix.matrixOf(height, width)
     val transformedBlue = DoubleMatrix.matrixOf(height, width)
 
-    // Iterate over each pixel in the input image (other image coordinates)
     for (y in 0 until height) {
         for (x in 0 until width) {
-            // Create the coordinate vector for the input pixel
             val inputVector = DoubleMatrix.matrixOf(3, 1)
             inputVector[0, 0] = x.toDouble() - centerX
             inputVector[1, 0] = y.toDouble() - centerY
             inputVector[2, 0] = 1.0
 
-            // Compute the corresponding output coordinates using the transformation
             val outputVector = transformationMatrix.times(inputVector)
             val xTransformed = outputVector[0, 0] + centerX
             val yTransformed = outputVector[1, 0] + centerY
 
-            // Check if the transformed coordinates are within the bounds of the output image
-            val x0 = floor(xTransformed).toInt()
-            val y0 = floor(yTransformed).toInt()
+            val x0 = floor(xTransformed + 0.5).toInt()
+            val y0 = floor(yTransformed + 0.5).toInt()
             if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
                 transformedRed[y0, x0] = redChannel[y, x]
                 transformedGreen[y0, x0] = greenChannel[y, x]
@@ -464,9 +458,31 @@ fun applyTransformationToImageUsingSimpleTransformation(inputImage: Image, trans
         }
     }
 
+    for (star in stars) {
+        val x = star.x.toDouble()
+        val y = star.y.toDouble()
+        val vector = DoubleMatrix.matrixOf(3, 1)
+        vector[0, 0] = x - centerX
+        vector[1, 0] = y - centerY
+        vector[2, 0] = 1.0
+
+        val result = transformationMatrix.times(vector)
+        val xTransformed = result[0, 0] + centerX
+        val yTransformed = result[1, 0] + centerY
+
+        val x0 = floor(xTransformed).toInt()
+        val y0 = floor(yTransformed).toInt()
+        if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
+            transformedRed[y0, x0] = 1.0
+            transformedGreen[y0, x0] = 0.0
+            transformedBlue[y0, x0] = 0.0
+        }
+    }
+
     return MatrixImage(width, height,
-        listOf(Channel.Red, Channel.Green, Channel.Blue),
-        listOf(transformedRed, transformedGreen, transformedBlue))
+        Channel.Red to transformedRed,
+        Channel.Green to transformedGreen,
+        Channel.Blue to transformedBlue)
 }
 
 fun applyTransformationToImageUsingInvertedTransformation(inputImage: Image, transformationMatrix: Matrix): Image {
@@ -616,5 +632,5 @@ fun alignStarImage(referenceImage: Image, otherImage: Image): Image? {
     val referenceStars = findStars(referenceImage)
     val otherStars = findStars(otherImage)
     val transform = calculateTransformationMatrix(referenceStars, otherStars, referenceImage.width, referenceImage.height) ?: return null
-    return applyTransformationToImage(referenceImage, transform)
+    return applyTransformationToImage(referenceImage, otherStars, transform)
 }

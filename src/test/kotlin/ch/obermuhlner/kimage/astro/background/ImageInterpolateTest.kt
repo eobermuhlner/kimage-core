@@ -1,7 +1,6 @@
 package ch.obermuhlner.kimage.astro.background
 
 import ch.obermuhlner.kimage.astro.color.stretchLogarithmic
-import ch.obermuhlner.kimage.astro.color.stretchNormalize
 import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.plus
@@ -45,7 +44,7 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
         assertReferenceImage("orig", image)
 
         for (i in 1 .. 9) {
-            val fixPoints = image.findFixPoints(i, i)
+            val fixPoints = image.createFixPointGrid(i, i)
 
             val medianRadius = 50
             val power = 2.0
@@ -79,7 +78,7 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
         assertReferenceImage("orig", image.stretchLogarithmic(stretchFactor))
 
         for (i in 1 .. 9) {
-            val fixPoints = image.findFixPoints(i, i) 
+            val fixPoints = image.createFixPointGrid(i, i)
 
             val medianRadius = 50
             val power = 2.0
@@ -101,7 +100,7 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
 
             val withoutBackgroundImage = image - background + 0.01
             withoutBackgroundImage.applyEach { v -> clamp(v, 0.0, 1.0) }
-            assertReferenceImage("withoutBackgroundImage$i", withoutBackgroundImage.stretchNormalize().stretchLogarithmic(stretchFactor))
+            assertReferenceImage("withoutBackgroundImage$i", withoutBackgroundImage.stretchLogarithmic(stretchFactor))
         }
     }
 }

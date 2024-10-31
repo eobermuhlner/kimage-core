@@ -324,7 +324,7 @@ class AlignStarsTest {
             assertEquals(0.0, it.shear)
         }
 
-        val transformedImage = applyTransformationToImage(image, transformationMatrix)
+        val transformedImage = applyTransformationToImage(image, emptyList(), transformationMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -366,7 +366,7 @@ class AlignStarsTest {
             assertEquals(0.0, it.shear)
         }
 
-        val transformedImage = applyTransformationToImage(image, transformationMatrix)
+        val transformedImage = applyTransformationToImage(image, emptyList(), transformationMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -399,7 +399,7 @@ class AlignStarsTest {
             0.0, 0.0, 1.0
         )
 
-        val transformedImage = applyTransformationToImage(image, scalingMatrix)
+        val transformedImage = applyTransformationToImage(image, emptyList(), scalingMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -441,7 +441,7 @@ class AlignStarsTest {
             assertEquals(0.0, it.shear)
         }
 
-        val transformedImage = applyTransformationToImage(image, transformationMatrix)
+        val transformedImage = applyTransformationToImage(image, emptyList(), transformationMatrix)
         assertNotNull(transformedImage)
 
         val expected = DoubleMatrix.matrixOf(
@@ -471,7 +471,7 @@ class AlignStarsTest {
         val otherStars = findStars(img2)
         val transform = calculateTransformationMatrix(referenceStars, otherStars, img1.width, img2.height)!!
         println(formatTransformation(decomposeTransformationMatrix(transform)))
-        val actualImg = applyTransformationToImage(img1, transform)
+        val actualImg = applyTransformationToImage(img1, emptyList(), transform)
         ImageWriter.write(actualImg, File("img3"))
 
         val expectedImg = img1.crop(30, 0, img2.width, img2.height)
