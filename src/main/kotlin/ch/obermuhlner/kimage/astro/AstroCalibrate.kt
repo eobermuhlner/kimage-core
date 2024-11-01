@@ -3,7 +3,6 @@ package ch.obermuhlner.kimage.astro
 import ch.obermuhlner.kimage.astro.align.Star
 import ch.obermuhlner.kimage.astro.align.applyTransformationToImage
 import ch.obermuhlner.kimage.astro.align.calculateTransformationMatrix
-import ch.obermuhlner.kimage.astro.align.createDebugImageFromTransformedStars
 import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
@@ -18,13 +17,11 @@ import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
-import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.math.average
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
-import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
 import ch.obermuhlner.kimage.core.matrix.values.values
 import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
@@ -70,9 +67,13 @@ fun astroCalibrate(args: Array<String>) {
 
     println("### Processing calibration images ...")
 
+    println()
     var bias = elapsed("Processing bias frames") { processCalibrationImages(currentDir.resolve(biasDirectory), "bias", debayerCalibrationFrames) }
+    println()
     var flat = elapsed("Processing flat frames") { normalizeImage(processCalibrationImages(currentDir.resolve(flatDirectory), "flat", debayerCalibrationFrames)) }
+    println()
     var darkflat = elapsed("Processing darkflat frames") { processCalibrationImages(currentDir.resolve(darkflatDirectory), "darkflat", debayerCalibrationFrames) }
+    println()
     var dark = elapsed("Processing dark frames") { processCalibrationImages(currentDir.resolve(darkDirectory), "dark", debayerCalibrationFrames) }
 
     val files = currentDir.listFiles() ?: return
@@ -144,6 +145,7 @@ fun astroCalibrate(args: Array<String>) {
                 return@map outputFile
             }
 
+            println()
             println("Loading $inputFile")
             var light = elapsed("Reading light frame $inputFile") { ImageReader.read(inputFile) }
             if (debayerLightFrames) {
@@ -195,8 +197,9 @@ fun astroCalibrate(args: Array<String>) {
             return@mapNotNull outputFile
         }
 
+        println()
         println("Loading $calibratedFile")
-        var light = elapsed("Reading calibrated frame") { ImageReader.read(calibratedFile) }
+        val light = ImageReader.read(calibratedFile)
 
         val alignedImage = if (!referenceImageProcessed) {
             referenceImageProcessed = true
@@ -221,8 +224,7 @@ fun astroCalibrate(args: Array<String>) {
                 println(formatTransformation(decomposeTransformationMatrix(transform)))
 
                 elapsed("Applying transformation to image") {
-                    applyTransformationToImage(light, imageStars, transform)
-                    //for debugging: createDebugImageFromTransformedStars(imageStars, transform, light.width, light.height)
+                    applyTransformationToImage(light, transform)
                 }
             } else {
                 null
@@ -250,34 +252,11 @@ fun astroCalibrate(args: Array<String>) {
                 ImageReader.read(it)
             }
         }
-        // FIXME do not use Max
-        val stackedImage = elapsed("Stacking images") { stack(alignedFileSuppliers, algorithm = StackAlgorithm.Max) }
+        val stackedImage = elapsed("Stacking images") { stack(alignedFileSuppliers) }
 
         println("Saving $outputFile")
         ImageWriter.write(stackedImage, outputFile)
     } else {
         println("Stacked image already exists: $outputFile")
     }
-
-    ////////////FIXME
-
-    println()
-    println("### Stacking ${calibratedFiles.size} aligned images ...")
-
-    val outputDebugFile = currentDir.resolve(stackedDirectory).resolve("${inputFiles[0].nameWithoutExtension}_stacked_debug_${calibratedFiles.size}.$outputImageExtension")
-    if (!outputDebugFile.exists()) {
-        val calibratedFileSuppliers = calibratedFiles.map {
-            {
-                println("Loading $it")
-                ImageReader.read(it)
-            }
-        }
-        val stackedImage = elapsed("Stacking images") { stack(calibratedFileSuppliers, algorithm = StackAlgorithm.Max) }
-
-        println("Saving $outputDebugFile")
-        ImageWriter.write(stackedImage, outputDebugFile)
-    } else {
-        println("Stacked image already exists: $outputDebugFile")
-    }
-
 }

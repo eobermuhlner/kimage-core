@@ -221,7 +221,7 @@ fun alignStarImages(
         if (transform != null) {
             println(formatTransformation(decomposeTransformationMatrix(transform)))
 
-            val alignedOtherImage = applyTransformationToImage(otherImage, otherStars, transform)
+            val alignedOtherImage = applyTransformationToImage(otherImage, transform)
             val transformedOtherStars = applyTransformationToStars(otherStars, transform, referenceImage.width, referenceImage.height)
             writeStarAnnotationImage(referenceImage, transformedOtherStars, File("transformed_stars_$i.tif"))
 
