@@ -8,6 +8,7 @@ import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
 import ch.obermuhlner.kimage.core.matrix.linearalgebra.invert
 import ch.obermuhlner.kimage.core.matrix.values.MatrixXY
+import ch.obermuhlner.kimage.core.matrix.values.asXY
 import java.util.ArrayDeque
 import kotlin.math.abs
 import kotlin.math.acos
@@ -27,20 +28,20 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
     val height = image.height
     val width = image.width
 
-    val matrix = image[Channel.Gray]
+    val matrixXY = image[Channel.Gray].asXY()
     val visited = Array(height) { BooleanArray(width) { false } }
     val localMaxima = mutableListOf<PointXY>()
 
     // Step 1: Detect local maxima
     for (y in 1 until height - 1) {
         for (x in 1 until width - 1) {
-            val centerValue = matrix[x, y]
+            val centerValue = matrixXY[x, y]
             if (centerValue >= threshold) {
                 var isLocalMax = true
                 loop@ for (dy in -1..1) {
                     for (dx in -1..1) {
                         if (dx == 0 && dy == 0) continue
-                        if (matrix[x + dx, y + dy] > centerValue) {
+                        if (matrixXY[x + dx, y + dy] > centerValue) {
                             isLocalMax = false
                             break@loop
                         }
@@ -94,7 +95,7 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
         var totalBrightness = 0.0
 
         for ((x, y) in cluster) {
-            val brightness = matrix[x, y]
+            val brightness = matrixXY[x, y]
             sumX += x * brightness
             sumY += y * brightness
             totalBrightness += brightness
@@ -417,12 +418,11 @@ fun countInliers(transformedStars: List<Star>, referenceStars: List<Star>, toler
 }
 
 // Function to apply the transformation matrix to the input image and obtain transformed channels
-fun applyTransformationToImage(inputImage: Image, imageStars: List<Star>, transformationMatrix: Matrix): Image {
-    return applyTransformationToImageUsingSimpleTransformation(inputImage, imageStars, transformationMatrix)
-    //return applyTransformationToImageUsingInvertedTransformation(inputImage, transformationMatrix)
+fun applyTransformationToImage(inputImage: Image, transformationMatrix: Matrix): Image {
+    return applyTransformationToImageUsingInvertedTransformation(inputImage, transformationMatrix)
 }
 
-fun applyTransformationToImageUsingSimpleTransformation(inputImage: Image, stars: List<Star>, transformationMatrix: Matrix): Image {
+fun applyTransformationToImageUsingSimpleTransformation(inputImage: Image, transformationMatrix: Matrix): Image {
     val width = inputImage.width
     val height = inputImage.height
 
@@ -455,27 +455,6 @@ fun applyTransformationToImageUsingSimpleTransformation(inputImage: Image, stars
                 transformedGreen[y0, x0] = greenChannel[y, x]
                 transformedBlue[y0, x0] = blueChannel[y, x]
             }
-        }
-    }
-
-    for (star in stars) {
-        val x = star.x.toDouble()
-        val y = star.y.toDouble()
-        val vector = DoubleMatrix.matrixOf(3, 1)
-        vector[0, 0] = x - centerX
-        vector[1, 0] = y - centerY
-        vector[2, 0] = 1.0
-
-        val result = transformationMatrix.times(vector)
-        val xTransformed = result[0, 0] + centerX
-        val yTransformed = result[1, 0] + centerY
-
-        val x0 = floor(xTransformed).toInt()
-        val y0 = floor(yTransformed).toInt()
-        if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
-            transformedRed[y0, x0] = 1.0
-            transformedGreen[y0, x0] = 0.0
-            transformedBlue[y0, x0] = 0.0
         }
     }
 
@@ -632,5 +611,5 @@ fun alignStarImage(referenceImage: Image, otherImage: Image): Image? {
     val referenceStars = findStars(referenceImage)
     val otherStars = findStars(otherImage)
     val transform = calculateTransformationMatrix(referenceStars, otherStars, referenceImage.width, referenceImage.height) ?: return null
-    return applyTransformationToImage(referenceImage, otherStars, transform)
+    return applyTransformationToImage(referenceImage, transform)
 }
