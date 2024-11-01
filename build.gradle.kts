@@ -11,6 +11,8 @@ repositories {
 
 dependencies {
     implementation("gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2")
+    implementation("org.yaml:snakeyaml:2.3")
+
 
     testImplementation(kotlin("test"))
 }
