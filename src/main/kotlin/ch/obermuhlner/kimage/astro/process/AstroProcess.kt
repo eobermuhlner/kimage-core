@@ -19,6 +19,7 @@ import ch.obermuhlner.kimage.core.image.bayer.debayerCleanupBadPixels
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.image.div
+import ch.obermuhlner.kimage.core.image.filter.gaussianBlur3Filter
 import ch.obermuhlner.kimage.core.image.hdr.highDynamicRange
 import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
@@ -27,6 +28,7 @@ import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.plus
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
+import ch.obermuhlner.kimage.core.image.times
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
 import ch.obermuhlner.kimage.core.math.clamp
@@ -66,9 +68,13 @@ data class CalibrateConfig(
     var flatDirectory: String = "../flat",
     var darkflatDirectory: String = "../darkflat",
     var darkDirectory: String = "../dark",
-    var normalizeBackground: Boolean = true,
-    var backgroundOffset: Double = 0.01,
+    var normalizeBackground: NormalizeBackgroundConfig = NormalizeBackgroundConfig(),
     var calibratedOutputDirectory: String = "calibrated",
+)
+
+data class NormalizeBackgroundConfig(
+    var enabled: Boolean = true,
+    var offset: Double = 0.01,
 )
 
 data class AlignConfig(
@@ -115,12 +121,14 @@ data class WhitebalanceConfig(
 data class ColorStretchConfig(
     var enabled: Boolean = true,
     var iterations: Int = 4,
-    var sigmoidMidpoint: Double = 0.25,
-    var sigmoidFactor: Double = 6.0,
     var firstLinearMinPercentile: Double = 0.001,
     var firstLinearMaxPercentile: Double = 0.999,
+    var sigmoidMidpoint: Double = 0.25,
+    var sigmoidFactor: Double = 6.0,
     var linearMinPercentile: Double = 0.0001,
     var linearMaxPercentile: Double = 0.9999,
+    var blurEnabled: Boolean = true,
+    var blurStrength: Double = 0.1,
     var highDynamicRange: HighDynamicRangeConfig = HighDynamicRangeConfig(),
 )
 
@@ -130,7 +138,7 @@ data class HighDynamicRangeConfig(
 )
 
 data class HistogramConfig(
-    var enabled: Boolean = false,
+    var enabled: Boolean = true,
     var histogramWidth: Int = 1024,
     var histogramHeight: Int = 400,
 )
@@ -177,7 +185,8 @@ fun astroProcess(config: ProcessConfig) {
     val calibratedDirectory: String = config.calibrate.calibratedOutputDirectory
     val alignedDirectory: String = config.align.alignedOutputDirectory
     val stackedDirectory: String = config.stack.stackedOutputDirectory
-    val normalizeBackground = config.calibrate.normalizeBackground
+    val normalizeBackground = config.calibrate.normalizeBackground.enabled
+    val normalizeBackgroundOffset = config.calibrate.normalizeBackground.offset
     val starThreshold = config.align.starThreshold
     val maxStars = config.align.maxStars
     val positionTolerance = config.align.positionTolerance
@@ -300,7 +309,7 @@ fun astroProcess(config: ProcessConfig) {
                         val lowestBackground = minBackground[channel]
                         if (lowestBackground != null) {
                             val background = light[channel].values().median()
-                            val delta = background - lowestBackground - config.calibrate.backgroundOffset
+                            val delta = background - lowestBackground - normalizeBackgroundOffset
                             light[channel].applyEach { v -> v - delta}
                         }
                     }
@@ -501,6 +510,11 @@ fun astroEnhance(
             }
             step("stretch$stretchIndex-linear") {
                 it.stretchLinearPercentile(enhanceConfig.colorStretch.linearMinPercentile, enhanceConfig.colorStretch.linearMaxPercentile)
+            }
+            if (enhanceConfig.colorStretch.blurEnabled) {
+                step("stretch$stretchIndex-blur") {
+                    (it * (1.0 - enhanceConfig.colorStretch.blurStrength)) + (it.gaussianBlur3Filter() * enhanceConfig.colorStretch.blurStrength)
+                }
             }
             if (enhanceConfig.colorStretch.highDynamicRange.enabled) {
                 hdrSourceImages.add(image)
