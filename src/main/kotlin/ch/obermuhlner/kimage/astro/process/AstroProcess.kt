@@ -339,10 +339,21 @@ fun astroProcess(config: ProcessConfig) {
     println()
     println("### Aligning ${calibratedFiles.size} images ...")
 
-    var referenceImageProcessed = false
+    var referenceCalibratedFile = calibratedFiles.first()
     var referenceStars: List<Star> = emptyList<Star>()
     var referenceImageWidth = 0
     var referenceImageHeight = 0
+
+    println()
+    println("Loading reference $referenceCalibratedFile")
+    val referenceLight = ImageReader.read(referenceCalibratedFile)
+
+    elapsed("Finding reference stars") {
+        referenceStars = findStars(referenceLight, starThreshold)
+        referenceImageWidth = referenceLight.width
+        referenceImageHeight = referenceLight.height
+    }
+
     val alignedFiles = calibratedFiles.mapNotNull { calibratedFile ->
         val outputFile = currentDir.resolve(alignedDirectory).resolve("${calibratedFile.nameWithoutExtension}.$outputImageExtension")
         if (outputFile.exists()) {
@@ -353,32 +364,8 @@ fun astroProcess(config: ProcessConfig) {
         println("Loading $calibratedFile")
         val light = ImageReader.read(calibratedFile)
 
-        val alignedImage = if (!referenceImageProcessed) {
-            referenceImageProcessed = true
-            elapsed("Finding reference stars") {
-                referenceStars = findStars(light, starThreshold)
-                referenceImageWidth = light.width
-                referenceImageHeight = light.height
-            }
-            //light
-            val transform = elapsed("Calculating transformation matrix") {
-                calculateTransformationMatrix(
-                    referenceStars.take(maxStars),
-                    referenceStars.take(maxStars),
-                    referenceImageWidth,
-                    referenceImageHeight,
-                    positionTolerance = positionTolerance
-                )
-            }
-            if (transform != null) {
-                println(formatTransformation(decomposeTransformationMatrix(transform)))
-
-                elapsed("Applying transformation to image") {
-                    applyTransformationToImage(light, transform)
-                }
-            } else {
-                null
-            }
+        val alignedImage = if (calibratedFile == referenceCalibratedFile) {
+            ImageReader.read(referenceCalibratedFile)
         } else {
             val imageStars = elapsed("Finding image stars") { findStars(light, starThreshold) }
             val transform = elapsed("Calculating transformation matrix") {

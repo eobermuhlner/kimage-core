@@ -73,7 +73,7 @@ interface Matrix {
         }
     }
 
-    operator fun times(other: Matrix): Matrix {
+    fun timesSlow(other: Matrix): Matrix {
         checkColsOtherRows(other)
 
         val m = create(this.rows, other.cols)
@@ -84,6 +84,58 @@ interface Matrix {
                     sum += this[row, col] * other[col, otherCol]
                 }
                 m[row, otherCol] = sum
+            }
+        }
+        return m
+    }
+
+    operator fun times(other: Matrix): Matrix {
+        checkColsOtherRows(other)
+        if (other.cols == 1) {
+            return timesRowsVector(other)
+        }
+        if (other.rows == 1) {
+            return timesColsVector(other)
+        }
+
+        val blockSize = 64
+
+        val m = create(this.rows, other.cols)
+        for (i in 0 until rows step blockSize) {
+            for (j in 0 until other.cols step blockSize) {
+                for (k in 0 until cols step blockSize) {
+                    for (i1 in i until minOf(i + blockSize, rows)) {
+                        for (j1 in j until minOf(j + blockSize, other.cols)) {
+                            var sum = 0.0
+                            for (k1 in k until minOf(k + blockSize, cols)) {
+                                sum += this[i1, k1] * other[k1, j1]
+                            }
+                            m[i1, j1] += sum
+                        }
+                    }
+                }
+            }
+        }
+        return m
+    }
+
+    private fun timesRowsVector(other: Matrix): Matrix {
+        val m = create(this.rows, 1)
+        for (row in 0 until rows) {
+            var sum = 0.0
+            for (col in 0 until cols) {
+                sum += this[row, col] * other[col, 0]
+            }
+            m[row, 0] = sum
+        }
+        return m
+    }
+
+    private fun timesColsVector(other: Matrix): Matrix {
+        val m = create(1, other.cols)
+        for (row in 0 until rows) {
+            for (col in 0 until cols) {
+                m[row, col] = this[row, col] * other[0, col]
             }
         }
         return m

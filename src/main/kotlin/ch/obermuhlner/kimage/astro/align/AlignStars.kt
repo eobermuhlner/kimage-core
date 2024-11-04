@@ -14,6 +14,7 @@ import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.floor
+import kotlin.math.min
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -183,14 +184,18 @@ fun calculateTransformationMatrix(
     angleTolerance: Double = 0.01,
     positionTolerance: Double = 5.0,
     maxIterations: Int = 1000,
+    minInliersThresholdFactor: Double = 0.1
 ): Matrix? {
     var bestTransformation: Matrix? = null
     var bestInliers = 0
     var bestError = Double.MAX_VALUE
+    val minInliersThreshold = (min(referenceStars.count(), otherStars.count()) * minInliersThresholdFactor).toInt()
 
     val referenceTriangles = computeTriangleFeatures(referenceStars)
     val otherTriangles = computeTriangleFeatures(otherStars)
     println("Triangles: reference ${referenceTriangles.size}, other ${otherTriangles.size}")
+
+    val sortedReferenceTriangles = referenceTriangles.sortedBy { it.angles.first() }
 
     for (iteration in 1..maxIterations) {
         if (otherTriangles.isEmpty()) break
@@ -199,11 +204,27 @@ fun calculateTransformationMatrix(
         val randomIndex = Random.nextInt(otherTriangles.size)
         val otherTriangle = otherTriangles[randomIndex]
 
-        // Find matching triangles in referenceTriangles based on angle similarity and orientation
-        val matchingTriangles = referenceTriangles.filter { refTriangle ->
-            anglesAreSimilar(otherTriangle.angles, refTriangle.angles, angleTolerance) &&
-                    otherTriangle.orientation == refTriangle.orientation
+        fun findPotentialMatches(otherTriangle: TriangleFeature): List<TriangleFeature> {
+            val lowerBound = otherTriangle.angles.first() - angleTolerance
+            val upperBound = otherTriangle.angles.first() + angleTolerance
+
+            // Find the starting point using binary search.
+            val startIndex = sortedReferenceTriangles.binarySearch {
+                it.angles.first().compareTo(lowerBound)
+            }.let { if (it < 0) -it - 1 else it }
+
+            // Find the ending point using binary search.
+            val endIndex = sortedReferenceTriangles.binarySearch {
+                it.angles.first().compareTo(upperBound)
+            }.let { if (it < 0) -it - 1 else it }
+
+            // Collect all triangles that fall within this range and check their full angle similarity.
+            return sortedReferenceTriangles.subList(startIndex, endIndex).filter {
+                anglesAreSimilar(it.angles, otherTriangle.angles, angleTolerance)
+            }
         }
+
+        val matchingTriangles = findPotentialMatches(otherTriangle)
 
         if (matchingTriangles.isEmpty()) continue
 
@@ -239,6 +260,10 @@ fun calculateTransformationMatrix(
                 }
             }
         }
+    }
+
+    if (bestInliers < minInliersThreshold) {
+        return null
     }
 
     return bestTransformation
