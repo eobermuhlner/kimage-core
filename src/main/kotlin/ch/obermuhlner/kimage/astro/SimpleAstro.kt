@@ -4,10 +4,13 @@ import ch.obermuhlner.kimage.astro.align.Star
 import ch.obermuhlner.kimage.astro.align.applyTransformationToImage
 import ch.obermuhlner.kimage.astro.align.applyTransformationToStars
 import ch.obermuhlner.kimage.astro.align.calculateTransformationMatrix
+import ch.obermuhlner.kimage.astro.align.copyOnlyStars
 import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
 import ch.obermuhlner.kimage.astro.color.stretchAsinh
+import ch.obermuhlner.kimage.astro.color.stretchLinear
+import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
@@ -15,8 +18,10 @@ import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.copy
+import ch.obermuhlner.kimage.core.image.filter.medianFilter
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
+import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
@@ -24,7 +29,16 @@ import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
 
 fun main(args: Array<String>) {
-    interpolateImage("test-input/M42.tif")
+    alignStarImages(
+        "/home/ero/astro/2024-10-29 Verzasca M31 M33 Alnitak/Alnitak/astro-process/calibrated/Light_Alnitak_180.0s_Bin1_533MC_gain100_20241030-020832_-10.0C_0001.tif",
+        "/home/ero/astro/2024-10-29 Verzasca M31 M33 Alnitak/Alnitak/astro-process/calibrated/Light_Alnitak_180.0s_Bin1_533MC_gain100_20241030-024405_-10.0C_0012.tif",
+    )
+
+//    markStars("test-input/Alnitak.tif")
+
+//    multiScaleMedianTransform("test-input/Alnitak_enhanced.tif")
+
+//    interpolateImage("test-input/M42.tif")
 
 //    debayerImage("images/calibrate/dark/Dark_60.0s_Bin1_533MC_gain100_20230522-203021_0001.fit")
 //    debayerImage("images/calibrate/flat/Flat_110.0ms_Bin1_533MC_gain100_20240917-204051_-4.0C_0001.fit")
@@ -65,7 +79,63 @@ fun main(args: Array<String>) {
 //    )
 }
 
-fun interpolateImage(imageName: String) {
+private fun markStars(imageName: String) {
+    println(imageName)
+
+    val image = elapsed("Loaded $imageName") {
+        ImageReader.read(File(imageName))
+    }
+    val stars = elapsed("Find stars") {
+        val stars = findStars(image, 0.2)
+        println("Found ${stars.size} stars")
+        stars
+    }
+    elapsed("Write marked stars") {
+        writeStarAnnotationImage(image, stars, File("stars_marked.tif"))
+    }
+    val starImage = elapsed("Only stars") {
+        copyOnlyStars(image, stars)
+    }
+    elapsed("Write star image") {
+        ImageWriter.write(starImage, File("stars_only.tif"))
+    }
+    elapsed("Write starless image stretched") {
+        val starlessImage = image - starImage
+        ImageWriter.write(starlessImage.stretchLinearPercentile(0.01, 0.99), File("starless_stretched.tif"))
+    }
+}
+
+private fun multiScaleMedianTransform(imageName: String) {
+    println(imageName)
+
+    val image = elapsed("Loaded $imageName") {
+        ImageReader.read(File(imageName))
+    }
+
+    var currentImage = image
+    for (r in listOf(1, 3, 7)) {
+        elapsed("radius = $r") {
+            val medianImage = elapsed("median $r") {
+                currentImage.medianFilter(r)
+            }
+            val diffImage = elapsed("diff") {
+                currentImage - medianImage
+            }
+            val stretchedDiffImage = elapsed("stretched") {
+                diffImage.stretchLinear()
+            }
+            elapsed("write") {
+                ImageWriter.write(stretchedDiffImage, File("medianDiff${r}.tif"))
+            }
+
+            currentImage = medianImage
+        }
+    }
+
+    ImageWriter.write(currentImage.stretchLinear(), File("medianDiff-rest.tif"))
+}
+
+private fun interpolateImage(imageName: String) {
     val stretchFactor = 0.05
 
     println(imageName)
@@ -95,7 +165,7 @@ fun interpolateImage(imageName: String) {
 //    }
 }
 
-fun debayerImage(imageName: String) {
+private fun debayerImage(imageName: String) {
     println(imageName)
     val bayeredImage = ImageReader.read(File(imageName))
     val stuckPixels = bayeredImage[Channel.Red].findBayerBadPixels(gradientThresholdFactor = 10.0, steepCountThresholdFactor = 1.0)
@@ -159,15 +229,15 @@ fun debayerImage(imageName: String) {
     ImageWriter.write(debugImage, File(imageName).withNamePrefix("debug_").withExtension("tif"))
 }
 
-fun File.withExtension(extension: String): File {
+private fun File.withExtension(extension: String): File {
     return File("${this.nameWithoutExtension}.$extension")
 }
 
-fun File.withNamePrefix(prefix: String): File {
+private fun File.withNamePrefix(prefix: String): File {
     return File("$prefix${this.name}")
 }
 
-fun stackImages(vararg fileNames: String) {
+private fun stackImages(vararg fileNames: String) {
     val stacked = stack(
         fileNames.map {
             {
@@ -180,7 +250,7 @@ fun stackImages(vararg fileNames: String) {
     ImageWriter.write(stacked, File("stacked.tif"))
 }
 
-fun alignStarImages(
+private fun alignStarImages(
     vararg imageFileNames: String
 ) {
     val starTheshold = 0.2
@@ -192,14 +262,12 @@ fun alignStarImages(
 
     val referenceOutputFileName = "aligned_${referenceImageFile.nameWithoutExtension}.tif"
     val referenceOutputFile = File(referenceOutputFileName)
-    println("Writing $referenceOutputFile")
-    ImageWriter.write(referenceImage, referenceOutputFile)
 
     val referenceStars = findStars(referenceImage, starTheshold)
     println("Found ${referenceStars.size} reference stars")
     writeStarAnnotationImage(referenceImage, referenceStars, File("stars_0.tif"))
 
-    for (i in 1 until imageFileNames.size) {
+    for (i in 0 until imageFileNames.size) {
         val otherImageFileName = imageFileNames[i]
         println()
 
@@ -241,12 +309,12 @@ fun alignStarImages(
 
 }
 
-fun writeStarAnnotationImage(image: Image, stars: List<Star>, file: File) {
+private fun writeStarAnnotationImage(image: Image, stars: List<Star>, file: File) {
     val annotatedImage = image.copy()
     for (star in stars) {
-        annotatedImage[Channel.Red][star.x, star.y] = star.brightness
-        annotatedImage[Channel.Green][star.x, star.y] = 0.0
-        annotatedImage[Channel.Blue][star.x, star.y] = 0.0
+        annotatedImage[Channel.Red][star.y, star.x] = star.brightness
+        annotatedImage[Channel.Green][star.y, star.x] = 0.0
+        annotatedImage[Channel.Blue][star.y, star.x] = 0.0
     }
     ImageWriter.write(annotatedImage, file)
 }

@@ -17,20 +17,21 @@ import kotlin.math.floor
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-data class Star(val x: Int, val y: Int, val brightness: Double)
+data class Star(val x: Int, val y: Int, val brightness: Double, val fwhmX: Double, val fwhmY: Double)
 data class TriangleFeature(
     val indices: List<Int>,
     val angles: List<Double>,
     val orientation: Int
 )
 
-fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
+
+fun findStars(image: Image, threshold: Double = 0.2, channel: Channel = Channel.Gray): List<Star> {
     val height = image.height
     val width = image.width
 
-    val matrixXY = image[Channel.Gray].asXY()
+    val matrixXY = image[channel].asXY()
     val visited = Array(height) { BooleanArray(width) { false } }
-    val localMaxima = mutableListOf<PointXY>()
+    val localMaxima = mutableSetOf<PointXY>()
 
     // Step 1: Detect local maxima
     for (y in 1 until height - 1) {
@@ -88,27 +89,90 @@ fun findStars(image: Image, threshold: Double = 0.2): List<Star> {
         }
     }
 
-    // Step 3: Compute centroids
+    // Step 3: Compute centroids and FWHM
     val stars = clusters.map { cluster ->
         var sumX = 0.0
         var sumY = 0.0
         var totalBrightness = 0.0
+        var maxBrightness = 0.0
 
         for ((x, y) in cluster) {
             val brightness = matrixXY[x, y]
             sumX += x * brightness
             sumY += y * brightness
             totalBrightness += brightness
+            if (brightness > maxBrightness) {
+                maxBrightness = brightness
+            }
         }
 
         val centroidX = sumX / totalBrightness
         val centroidY = sumY / totalBrightness
         val averageBrightness = totalBrightness / cluster.size
 
-        Star(centroidX.toInt(), centroidY.toInt(), averageBrightness)
+        // Calculate FWHM in x and y directions
+        val halfMax = maxBrightness / 2.0
+
+        // FWHM in x direction
+        var fwhmX = 0.0
+        var currentX = centroidX.toInt()
+        while (currentX < width && matrixXY[currentX, centroidY.toInt()] > halfMax) {
+            currentX++
+            fwhmX++
+        }
+        currentX = centroidX.toInt()
+        while (currentX >= 0 && matrixXY[currentX, centroidY.toInt()] > halfMax) {
+            currentX--
+            fwhmX++
+        }
+
+        var fwhmY = 0.0
+        var currentY = centroidY.toInt()
+        while (currentY < height && matrixXY[centroidX.toInt(), currentY] > halfMax) {
+            currentY++
+            fwhmY++
+        }
+        currentY = centroidY.toInt()
+        while (currentY >= 0 && matrixXY[centroidX.toInt(), currentY] > halfMax) {
+            currentY--
+            fwhmY++
+        }
+
+        Star(centroidX.toInt(), centroidY.toInt(), averageBrightness, fwhmX, fwhmY)
     }
 
     return stars.sortedByDescending { it.brightness }
+}
+
+fun copyOnlyStars(image: Image, stars: List<Star>, factor: Double = 3.0): Image {
+    val width = image.width
+    val height = image.height
+
+    val starImage = MatrixImage(image.width, image.height, image.channels)
+
+    for (channel in image.channels) {
+        val matrixXY = starImage[channel].asXY()
+
+        for (star in stars) {
+            val radiusX = (star.fwhmX * factor / 2 + 0.5).toInt()
+            val radiusY = (star.fwhmY * factor / 2 + 0.5).toInt()
+            val centerX = star.x
+            val centerY = star.y
+
+            for (y in (centerY - radiusY)..(centerY + radiusY)) {
+                for (x in (centerX - radiusX)..(centerX + radiusX)) {
+                    if (x in 0 until width && y in 0 until height) {
+                        val distanceX = (x - centerX).toDouble() / radiusX
+                        val distanceY = (y - centerY).toDouble() / radiusY
+                        if (distanceX * distanceX + distanceY * distanceY <= 1.0) {
+                            matrixXY[x, y] = image[channel][y, x]
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return starImage
 }
 
 fun calculateTransformationMatrix(
@@ -380,7 +444,7 @@ fun applyTransformationToStars(stars: List<Star>, transformationMatrix: Matrix, 
         val xTransformed = result[0, 0] + centerX
         val yTransformed = result[1, 0] + centerY
 
-        transformedStars.add(Star(xTransformed.toInt(), yTransformed.toInt(), star.brightness))
+        transformedStars.add(Star(xTransformed.toInt(), yTransformed.toInt(), star.brightness, star.fwhmX, star.fwhmY))
     }
     return transformedStars
 }

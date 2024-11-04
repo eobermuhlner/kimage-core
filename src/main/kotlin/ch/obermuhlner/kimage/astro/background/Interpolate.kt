@@ -1,5 +1,6 @@
 package ch.obermuhlner.kimage.astro.background
 
+import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.image.PointXY
@@ -8,15 +9,15 @@ import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.math.median
 import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.matrix.Matrix
-import ch.obermuhlner.kimage.core.matrix.filter.gaussianBlurFilter
 import ch.obermuhlner.kimage.core.matrix.values.values
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-data class FixPointValue(val fixPoint: PointXY, val value: Double)
+data class PointXYValue(val point: PointXY, val value: Double)
 
 fun Image.createFixPointGrid(
     horizontal: Int = 3,
@@ -38,46 +39,91 @@ fun Image.createFixPointGrid(
     return result
 }
 
-fun sigmaClipFixPoints(
+fun Image.createFixPointFourCorners(
+    distance: Int
+): List<PointXY> {
+    return listOf(
+        PointXY(distance, distance),
+        PointXY(width - distance, distance),
+        PointXY(distance, height - distance),
+        PointXY(width - distance, height - distance),
+    )
+}
+
+fun Image.createFixPointEightCorners(
+    distance: Int
+): List<PointXY> {
+    val centerX = width / 2
+    val centerY = height / 2
+    return listOf(
+        PointXY(distance, distance),
+        PointXY(centerX, distance),
+        PointXY(width - distance, distance),
+        PointXY(distance, centerY),
+        PointXY(width - distance, centerY),
+        PointXY(distance, height - distance),
+        PointXY(centerX, height - distance),
+        PointXY(width - distance, height - distance),
+    )
+}
+
+fun Image.getFixPointValues(
     fixPoints: List<PointXY>,
-    fixValues: List<Double>,
+    medianRadius: Int = estimateMedianRadiusForInterpolate(fixPoints.size, this.width, this.height)
+): Map<Channel, List<PointXYValue>> {
+    val result = mutableMapOf<Channel, List<PointXYValue>>()
+    for (channel in this.channels) {
+        result[channel] = fixPoints.map { PointXYValue(it, medianAround(it.x, it.y, medianRadius)) }
+    }
+    return result
+}
+
+fun sigmaClipFixPointValues(
+    fixPointValues: Map<Channel, List<PointXYValue>>,
     sigmaThreshold: Double = 3.0,
     maxIterations: Int = 5
-): Pair<List<PointXY>, List<Double>> {
-    require(fixPoints.size == fixValues.size) { "Fix points and values must have the same size" }
+): Map<Channel, List<PointXYValue>> {
+    val result = mutableMapOf<Channel, List<PointXYValue>>()
+    for (channel in fixPointValues.keys) {
+        result[channel] = sigmaClipFixPointValues(fixPointValues[channel]!!, sigmaThreshold, maxIterations)
+    }
+    return result
+}
 
-    var clippedFixPoints = fixPoints
-    var clippedFixValues = fixValues
+fun sigmaClipFixPointValues(
+    fixPointValues: List<PointXYValue>,
+    sigmaThreshold: Double = 3.0,
+    maxIterations: Int = 5
+): List<PointXYValue> {
+    var clippedFixPointValues = fixPointValues
 
     for (iteration in 1..maxIterations) {
-        val mean = clippedFixValues.average()
-        val stdDev = clippedFixValues.stddev()
+        val values = clippedFixPointValues.map{ it.value }
+        val mean = values.average()
+        val stdDev = values.stddev()
 
         // Remove points that are more than sigmaThreshold * standard deviation away from the mean
-        val filtered = clippedFixPoints.zip(clippedFixValues).filter { (_, value) ->
-            val deviation = Math.abs(value - mean)
+        val filtered = clippedFixPointValues.filter {
+            val deviation = abs(it.value - mean)
             deviation <= sigmaThreshold * stdDev
         }
 
         // If no points were filtered out in this iteration, we stop
-        if (filtered.size == clippedFixPoints.size) break
+        if (filtered.size == clippedFixPointValues.size) break
 
-        // Update fix points and values with the filtered set
-        clippedFixPoints = filtered.map { it.first }
-        clippedFixValues = filtered.map { it.second }
+        clippedFixPointValues = filtered
     }
 
-    return Pair(clippedFixPoints, clippedFixValues)
+    return clippedFixPointValues
 }
 
-fun estimateMedianRadiusForInterpolate(fixPoints: List<PointXY>, imageWidth: Int, imageHeight: Int): Int {
-    return min(imageWidth, imageHeight) / max(sqrt(fixPoints.size.toDouble()).toInt()+1, 2)
+fun estimateMedianRadiusForInterpolate(fixPointsCount: Int, imageWidth: Int, imageHeight: Int): Int {
+    return min(imageWidth, imageHeight) / max(sqrt(fixPointsCount.toDouble()).toInt()+1, 2)
 }
 
-fun estimatePowerForInterpolate(fixPoints: List<PointXY>, imageWidth: Int, imageHeight: Int): Double {
-    val numFixPoints = fixPoints.size
+fun estimatePowerForInterpolate(fixPointsCount: Int, imageWidth: Int, imageHeight: Int): Double {
     val imageSizeFactor = (imageWidth * imageHeight).toDouble().pow(0.25) // Image size factor for large images
-    val densityFactor = (imageWidth * imageHeight) / numFixPoints.toDouble() // Density factor: area per fix point
+    val densityFactor = (imageWidth * imageHeight) / fixPointsCount.toDouble() // Density factor: area per fix point
 
     // Power increases with image size and sparsity of fix points
     val basePower = 2.0 // Base power value for moderate smoothing
@@ -85,26 +131,6 @@ fun estimatePowerForInterpolate(fixPoints: List<PointXY>, imageWidth: Int, image
     val densityAdjustment = 1.0 / (densityFactor + 1).pow(0.5) // Adjust based on fix point density
 
     return basePower + sizeAdjustment * densityAdjustment
-}
-
-fun Image.interpolate(
-    fixPoints: List<PointXY> = createFixPointGrid(),
-    medianRadius: Int = estimateMedianRadiusForInterpolate(fixPoints, this.width, this.height),
-    power: Double = estimatePowerForInterpolate(fixPoints, this.width, this.height),
-    sigmaThreshold: Double = 3.0,
-    maxIterations: Int = 5,
-): Image {
-    return MatrixImage(
-        width,
-        height,
-        this.channels) { channel, _, _ ->
-        val fixValues = fixPoints.map { this[channel].medianAround(it.y, it.x, medianRadius) }
-        val (bestFixPoints, bestFixValues) = sigmaClipFixPoints(fixPoints, fixValues, sigmaThreshold, maxIterations)
-        this[channel].interpolate(
-            bestFixPoints,
-            bestFixValues,
-            power = power)
-    }
 }
 
 fun Image.medianAround(x: Int, y: Int, radius: Int = 10): Double {
@@ -116,34 +142,28 @@ fun Matrix.medianAround(x: Int, y: Int, radius: Int = 10): Double {
 }
 
 fun Image.interpolate(
-    fixPoints: List<PointXY>,
-    fixValues: List<Double>,
-    power: Double = 2.0,
+    fixPointValues: Map<Channel, List<PointXYValue>>,
+    power: Double = estimatePowerForInterpolate(fixPointValues.size, this.width, this.height),
 ): Image {
     return MatrixImage(
         width,
         height,
         this.channels) { channel, _, _ ->
-        this[channel].interpolate(fixPoints,  fixValues, power)
+        this[channel].interpolate(
+            fixPointValues[channel]!!,
+            power)
     }
 }
-
 fun Matrix.interpolate(
-    fixPoints: List<PointXY>,
-    fixValues: List<Double>,
+    fixPointValues: List<PointXYValue>,
     power: Double = 2.0,
-    gaussianBlurRadius: Int = 0
 ): Matrix {
     val m = create()
 
     for (row in 0 until rows) {
         for (col in 0 until cols) {
-            m[row, col] = interpolate(col, row, fixPoints, fixValues, power)
+            m[row, col] = interpolate(col, row, fixPointValues, power)
         }
-    }
-
-    if (gaussianBlurRadius > 0) {
-        return m.gaussianBlurFilter(gaussianBlurRadius)
     }
 
     return m
@@ -152,25 +172,23 @@ fun Matrix.interpolate(
 private fun interpolate(
     x: Int,
     y: Int,
-    fixPoints: List<PointXY>,
-    fixValues: List<Double>,
+    fixPointValues: List<PointXYValue>,
     power: Double = 2.0,
     radius: Double = 100.0,
     epsilon: Double = 1e-10,
 ): Double {
-    require(fixPoints.size == fixValues.size) { "fixPoints and fixValues must have the same size" }
-    require(fixPoints.isNotEmpty()) { "fixPoints must not be empty" }
+    require(fixPointValues.isNotEmpty()) { "fixPoints must not be empty" }
 
-    val distances = fixPoints.map { (fixX, fixY) ->
-        val dX = (x - fixX).toDouble()
-        val dY = (y - fixY).toDouble()
+    val distances = fixPointValues.map {
+        val dX = (x - it.point.x).toDouble()
+        val dY = (y - it.point.y).toDouble()
         sqrt(dX * dX + dY * dY)
     }
 
-    val weights = DoubleArray(fixPoints.size)
+    val weights = DoubleArray(fixPointValues.size)
     var totalWeight = 0.0
 
-    for (i in fixPoints.indices) {
+    for (i in fixPointValues.indices) {
         val distance = distances[i]
         //val weight = 1.0 / (distance + epsilon).pow(power)
         val weight = exp(-(((distance + epsilon) / radius).pow(power)))
@@ -180,8 +198,8 @@ private fun interpolate(
 
     // Compute the interpolated value by weighting the k nearest fix values
     var interpolatedValue = 0.0
-    for (i in fixPoints.indices) {
-        val fixValue = fixValues[i]
+    for (i in fixPointValues.indices) {
+        val fixValue = fixPointValues[i].value
         val normalizedWeight = weights[i] / totalWeight
         interpolatedValue += fixValue * normalizedWeight
     }

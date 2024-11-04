@@ -7,7 +7,8 @@ import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
 import ch.obermuhlner.kimage.astro.align.processCalibrationImages
-import ch.obermuhlner.kimage.astro.background.createFixPointGrid
+import ch.obermuhlner.kimage.astro.background.createFixPointFourCorners
+import ch.obermuhlner.kimage.astro.background.getFixPointValues
 import ch.obermuhlner.kimage.astro.background.interpolate
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchSigmoid
@@ -25,6 +26,7 @@ import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
+import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMedianTransform
 import ch.obermuhlner.kimage.core.image.plus
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
@@ -69,7 +71,7 @@ data class CalibrateConfig(
     var darkflatDirectory: String = "../darkflat",
     var darkDirectory: String = "../dark",
     var normalizeBackground: NormalizeBackgroundConfig = NormalizeBackgroundConfig(),
-    var calibratedOutputDirectory: String = "calibrated",
+    var calibratedOutputDirectory: String = "astro-process/calibrated",
 )
 
 data class NormalizeBackgroundConfig(
@@ -81,18 +83,19 @@ data class AlignConfig(
     var starThreshold: Double = 0.2,
     var maxStars: Int = 100,
     var positionTolerance: Double = 2.0,
-    var alignedOutputDirectory: String = "aligned",
+    var alignedOutputDirectory: String = "astro-process/aligned",
 )
 
 data class StackConfig(
-    var stackedOutputDirectory: String = "stacked",
+    var stackedOutputDirectory: String = "astro-process/stacked",
 )
 
 data class EnhanceConfig(
     var outputImageExtension: String = "tif",
-    var enhancedDirectory: String = "enhanced",
+    var enhancedDirectory: String = "astro-process/enhanced",
     var debayer: DebayerConfig = DebayerConfig(enabled = false),
     var crop: CropConfig = CropConfig(),
+    var noise: NoiseConfig = NoiseConfig(),
     var background: BackgroundConfig = BackgroundConfig(),
     var whitebalance: WhitebalanceConfig = WhitebalanceConfig(),
     var colorStretch: ColorStretchConfig = ColorStretchConfig(),
@@ -107,9 +110,17 @@ data class CropConfig(
     var height: Int = -20,
 )
 
+data class NoiseConfig(
+    var enabled: Boolean = true,
+    var radius: Int = 1,
+    var threshold: Double = 0.0001
+)
+
 data class BackgroundConfig(
     var enabled: Boolean = false,
     var gridSize: Int = 2,
+    var borderDistance: Int = 100,
+    var medianRadius: Int = 50,
     var power: Double = 1.5,
     var offset: Double = 0.01,
 )
@@ -236,7 +247,7 @@ fun astroProcess(config: ProcessConfig) {
         flat -= darkflat
     }
 
-    var inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull()
+    var inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull().sorted()
     if (config.quick) {
         println()
         println("Quick mode: only processing ${config.quickCount} input file")
@@ -467,24 +478,26 @@ fun astroEnhance(
         }
     }
 
-    if (enhanceConfig.crop.enabled) {
-        step("crop") {
-            val width = if (enhanceConfig.crop.width < 0) it.width - enhanceConfig.crop.x + enhanceConfig.crop.width else enhanceConfig.crop.width
-            val height = if (enhanceConfig.crop.height < 0) it.height - enhanceConfig.crop.y + enhanceConfig.crop.height else enhanceConfig.crop.height
-            it.crop(enhanceConfig.crop.x, enhanceConfig.crop.y, width, height)
-        }
-    }
-
     if (enhanceConfig.debayer.enabled) {
         step("debayering") {
             it.debayerCleanupBadPixels(enhanceConfig.debayer.bayerPattern)
         }
     }
 
+    if (enhanceConfig.crop.enabled) {
+        step("crop") {
+            val width = if (enhanceConfig.crop.width < 0) it.width - enhanceConfig.crop.x + enhanceConfig.crop.width else enhanceConfig.crop.width
+            val height = if (enhanceConfig.crop.height < 0) it.height - enhanceConfig.crop.y + enhanceConfig.crop.height else enhanceConfig.crop.height
+            it.crop(enhanceConfig.crop.x, enhanceConfig.crop.y, width, height, false)
+        }
+    }
+
     if (enhanceConfig.background.enabled) {
         step("background") {
-            val fixPoints = image.createFixPointGrid(enhanceConfig.background.gridSize, enhanceConfig.background.gridSize)
-            val background = it.interpolate(fixPoints, power = enhanceConfig.background.power)
+            //val fixPoints = image.createFixPointGrid(enhanceConfig.background.gridSize, enhanceConfig.background.gridSize)
+            val fixPoints = image.createFixPointFourCorners(enhanceConfig.background.borderDistance)
+            val fixPointValues = it.getFixPointValues(fixPoints, enhanceConfig.background.medianRadius)
+            val background = it.interpolate(fixPointValues, power = enhanceConfig.background.power)
             it - background + enhanceConfig.background.offset
         }
     }
@@ -533,6 +546,12 @@ fun astroEnhance(
                     it.stretchLinearPercentile(enhanceConfig.colorStretch.linearMinPercentile, enhanceConfig.colorStretch.linearMaxPercentile)
                 }
             }
+        }
+    }
+
+    if (enhanceConfig.noise.enabled) {
+        step("noise reduction") {
+            it.reduceNoiseUsingMedianTransform(enhanceConfig.noise.radius, enhanceConfig.noise.threshold)
         }
     }
 

@@ -24,8 +24,13 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
         )
 
         for (i in 1 .. fixPoints.size) {
+            val fixPointValues = image.getFixPointValues(
+                fixPoints.subList(0, i),
+                estimateMedianRadiusForInterpolate(i, image.width, image.height)
+            )
+
             val background = image.interpolate(
-                fixPoints.subList(0, i)
+                fixPointValues
             ).let {
                 assertReferenceImage("interpolate$i", it)
                 it
@@ -56,9 +61,11 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
             println("medianRadius: $medianRadius")
             println("power: $power")
 
+            val fixPointValues = image.getFixPointValues(fixPoints.subList(0, i))
+
             val background = image.interpolate(
-                fixPoints,
-                power = power
+                fixPointValues,
+                power
             ).let {
                 assertReferenceImage("interpolate$i", it)
                 it
@@ -78,7 +85,7 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
         assertReferenceImage("orig", image.stretchLogarithmic(stretchFactor))
 
         for (i in 1 .. 9) {
-            val fixPoints = image.createFixPointGrid(i, i)
+            val fixPointValues = image.getFixPointValues(image.createFixPointGrid(i, i))
 
             val medianRadius = 50
             val power = 2.0
@@ -86,12 +93,12 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
             val sigmaClippingMaxIterations = 5
             //val medianRadius = estimateMedianRadiusForInterpolate(fixPoints, image.width, image.height)
             //val power = estimatePowerForInterpolate(fixPoints, image.width, image.height)
-            println("generated ${fixPoints.size} fix points")
+            println("generated ${fixPointValues.size} fix points")
             println("medianRadius: $medianRadius")
             println("power: $power")
 
             val background = image.interpolate(
-                fixPoints,
+                fixPointValues,
                 power = power
             ).let {
                 assertReferenceImage("interpolate$i", it.stretchLogarithmic(stretchFactor))
