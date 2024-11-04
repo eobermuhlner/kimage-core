@@ -59,7 +59,7 @@ class CroppedMatrix(
     }
 
     override fun toString(): String {
-        return "CroppedMatrix($rows, $cols, offset=($offsetRow, $offsetCol), $matrix)"
+        return "CroppedMatrix($rows, $cols, offset=($offsetRow, $offsetCol), $strictClipping, $matrix)"
     }
 
 }

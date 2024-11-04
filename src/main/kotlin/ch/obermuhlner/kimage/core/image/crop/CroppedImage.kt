@@ -63,7 +63,7 @@ class CroppedImage(
     }
 
     override fun getMatrix(channel: Channel): Matrix {
-        return CroppedMatrix(image.getMatrix(channel), offsetY, offsetX, height, width)
+        return CroppedMatrix(image.getMatrix(channel), offsetY, offsetX, height, width, strictClipping)
     }
 
     override fun toString(): String {
