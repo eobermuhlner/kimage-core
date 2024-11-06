@@ -169,7 +169,26 @@ fun main(args: Array<String>) {
             yaml.loadAs(input, ProcessConfig::class.java)
         }
     } else {
-        ProcessConfig()
+        ProcessConfig(
+            enhance = EnhanceConfig(
+                colorStretch = ColorStretchConfig(
+                    steps = mutableListOf(
+                        ColorStretchStepConfig(
+                            type = ColorStretchStepType.LinearPercentile
+                        ),
+                        ColorStretchStepConfig(
+                            type = ColorStretchStepType.Sigmoid
+                        ),
+                        ColorStretchStepConfig(
+                            type = ColorStretchStepType.LinearPercentile
+                        ),
+                        ColorStretchStepConfig(
+                            type = ColorStretchStepType.Blur
+                        )
+                    )
+                )
+            )
+        )
     }
 
     val command = if (args.isNotEmpty()) args[0] else "process"
@@ -179,13 +198,24 @@ fun main(args: Array<String>) {
             println(yaml.dumpAsMap(config))
             astroProcess(config)
         }
-        "config" -> println(yaml.dumpAsMap(config))
-        "stars" -> imageAnalysis(config)
-        else -> println("""
-            Commands:
-            - process
-            - config
-        """.trimIndent())
+        "config" -> {
+            println(yaml.dumpAsMap(config))
+        }
+        "init" -> {
+            configFile.writeText(yaml.dumpAsMap(config))
+        }
+        "stars" -> {
+            imageAnalysis(config)
+        }
+        else -> {
+            println("""
+                Commands:
+                - init
+                - process
+                - config
+                - stars
+            """.trimIndent())
+        }
     }
 }
 
@@ -194,11 +224,11 @@ fun imageAnalysis(config: ProcessConfig) {
     val files = currentDir.listFiles() ?: return
     val inputImageExtension: String = config.format.inputImageExtension
 
-    var inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull().sorted()
+    val inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull().sorted()
 
     for (inputFile in inputFiles) {
         var image = ImageReader.read(inputFile)
-        image = debayerImageIfConfigured(image, config.format.debayer)
+        image = debayerImageIfConfigured(image, config.format.debayer.copy(cleanupBadPixels = false))
 
         val stars = findStars(image)
 
