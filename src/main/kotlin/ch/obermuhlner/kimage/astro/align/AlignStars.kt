@@ -18,7 +18,12 @@ import kotlin.math.min
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-data class Star(val x: Int, val y: Int, val brightness: Double, val fwhmX: Double, val fwhmY: Double)
+data class Star(val x: Double, val y: Double, val brightness: Double, val fwhmX: Double, val fwhmY: Double) {
+    val intX: Int get() = (x + 0.5).toInt()
+    val intY: Int get() = (y + 0.5).toInt()
+}
+
+
 data class TriangleFeature(
     val indices: List<Int>,
     val angles: List<Double>,
@@ -139,7 +144,7 @@ fun findStars(image: Image, threshold: Double = 0.2, channel: Channel = Channel.
             fwhmY++
         }
 
-        Star(centroidX.toInt(), centroidY.toInt(), averageBrightness, fwhmX, fwhmY)
+        Star(centroidX, centroidY, averageBrightness, fwhmX, fwhmY)
     }
 
     return stars.sortedByDescending { it.brightness }
@@ -157,8 +162,8 @@ fun copyOnlyStars(image: Image, stars: List<Star>, factor: Double = 3.0): Image 
         for (star in stars) {
             val radiusX = (star.fwhmX * factor / 2 + 0.5).toInt()
             val radiusY = (star.fwhmY * factor / 2 + 0.5).toInt()
-            val centerX = star.x
-            val centerY = star.y
+            val centerX = star.intX
+            val centerY = star.intY
 
             for (y in (centerY - radiusY)..(centerY + radiusY)) {
                 for (x in (centerX - radiusX)..(centerX + radiusX)) {
@@ -181,6 +186,7 @@ fun calculateTransformationMatrix(
     otherStars: List<Star>,
     imageWidth: Int,
     imageHeight: Int,
+    brightnessToleranceFactor: Double = 0.1,
     angleTolerance: Double = 0.01,
     positionTolerance: Double = 5.0,
     maxIterations: Int = 1000,
@@ -218,9 +224,9 @@ fun calculateTransformationMatrix(
                 it.angles.first().compareTo(upperBound)
             }.let { if (it < 0) -it - 1 else it }
 
-            // Collect all triangles that fall within this range and check their full angle similarity.
             return sortedReferenceTriangles.subList(startIndex, endIndex).filter {
-                anglesAreSimilar(it.angles, otherTriangle.angles, angleTolerance)
+                anglesAreSimilar(it.angles, otherTriangle.angles, angleTolerance) &&
+                        brightnessIsSimilar(it.indices.map { index -> referenceStars[index] }, otherTriangle.indices.map { index -> otherStars[index] }, brightnessToleranceFactor)
             }
         }
 
@@ -269,8 +275,20 @@ fun calculateTransformationMatrix(
     return bestTransformation
 }
 
+private fun brightnessIsSimilar(referenceStars: List<Star>, otherStars: List<Star>, toleranceFactor: Double): Boolean {
+    for (i in referenceStars.indices) {
+        val referenceBrightness = referenceStars[i].brightness
+        val otherBrightness = otherStars[i].brightness
+        val tolerance = referenceBrightness * toleranceFactor
+        if (otherBrightness < referenceBrightness - tolerance || otherBrightness > referenceBrightness + tolerance) {
+            return false
+        }
+    }
+    return true
+}
+
 // Helper function to compute the sum of squared errors
-fun calculateSquareError(transformedStars: List<Star>, referenceStars: List<Star>): Double {
+private fun calculateSquareError(transformedStars: List<Star>, referenceStars: List<Star>): Double {
     var totalError = 0.0
 
     // Sum the squared distances between transformed stars and the closest reference stars
@@ -296,7 +314,7 @@ fun calculateSquareError(transformedStars: List<Star>, referenceStars: List<Star
 }
 
 // Function to compute triangle features from a list of stars
-fun computeTriangleFeatures(stars: List<Star>): List<TriangleFeature> {
+private fun computeTriangleFeatures(stars: List<Star>): List<TriangleFeature> {
     val n = stars.size
     val triangleFeatures = mutableListOf<TriangleFeature>()
 
@@ -328,16 +346,16 @@ fun computeTriangleFeatures(stars: List<Star>): List<TriangleFeature> {
 }
 
 // Function to compute the signed area of a triangle
-fun triangleSignedArea(p1: Star, p2: Star, p3: Star): Double {
+private fun triangleSignedArea(p1: Star, p2: Star, p3: Star): Double {
     return 0.5 * (
             p1.x * (p2.y - p3.y) +
-                    p2.x * (p3.y - p1.y) +
-                    p3.x * (p1.y - p2.y)
-            )
+            p2.x * (p3.y - p1.y) +
+            p3.x * (p1.y - p2.y)
+        )
 }
 
 // Function to compute the internal angles of a triangle formed by three stars
-fun computeTriangleAngles(starA: Star, starB: Star, starC: Star): List<Double> {
+private fun computeTriangleAngles(starA: Star, starB: Star, starC: Star): List<Double> {
     val a = distance(starB, starC)
     val b = distance(starA, starC)
     val c = distance(starA, starB)
@@ -357,7 +375,7 @@ fun distance(star1: Star, star2: Star): Double {
 }
 
 // Function to calculate the angle using the Law of Cosines
-fun lawOfCosinesAngle(side1: Double, side2: Double, oppositeSide: Double): Double {
+private fun lawOfCosinesAngle(side1: Double, side2: Double, oppositeSide: Double): Double {
     val numerator = side1 * side1 + side2 * side2 - oppositeSide * oppositeSide
     val denominator = 2 * side1 * side2
     val cosAngle = numerator / denominator
@@ -366,7 +384,7 @@ fun lawOfCosinesAngle(side1: Double, side2: Double, oppositeSide: Double): Doubl
 }
 
 // Function to check if two sets of angles are similar within a tolerance
-fun anglesAreSimilar(angles1: List<Double>, angles2: List<Double>, tolerance: Double): Boolean {
+private fun anglesAreSimilar(angles1: List<Double>, angles2: List<Double>, tolerance: Double): Boolean {
     for (i in angles1.indices) {
         if (abs(angles1[i] - angles2[i]) > tolerance) {
             return false
@@ -469,7 +487,7 @@ fun applyTransformationToStars(stars: List<Star>, transformationMatrix: Matrix, 
         val xTransformed = result[0, 0] + centerX
         val yTransformed = result[1, 0] + centerY
 
-        transformedStars.add(Star(xTransformed.toInt(), yTransformed.toInt(), star.brightness, star.fwhmX, star.fwhmY))
+        transformedStars.add(Star(xTransformed, yTransformed, star.brightness, star.fwhmX, star.fwhmY))
     }
     return transformedStars
 }
@@ -480,7 +498,7 @@ fun createDebugImageFromTransformedStars(stars: List<Star>, transformationMatrix
     val matrix = DoubleMatrix.matrixOf(imageHeight, imageHeight)
     val matrixXY = MatrixXY(matrix)
     for (star in transformedStars) {
-        matrixXY[star.x, star.y] = star.brightness
+        matrixXY[star.intX, star.intY] = star.brightness
     }
 
     return MatrixImage(imageWidth, imageHeight,
