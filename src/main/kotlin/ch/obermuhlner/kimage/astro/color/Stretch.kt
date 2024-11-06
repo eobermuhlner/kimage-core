@@ -84,12 +84,12 @@ fun Image.stretchSigmoid(midpoint: Double = 0.01, factor: Double = 10.0): Image 
     }
 }
 
-fun Image.stretchSigmoidPower(midpoint: Double = 0.01, factor: Double = 10.0): Image {
-    val r = -ln(2.0) / ln(midpoint)
-    return stretch { v ->
-        1.0/(1.0+(v.pow(r)/(1-v.pow(r))).pow(-factor)).coerceIn(0.0, 1.0)
-    }
-}
+//fun Image.stretchSigmoidPower(midpoint: Double = 0.5, factor: Double = 2.0): Image {
+//    val r = -ln(2.0) / ln(midpoint)
+//    return stretch { v ->
+//        1.0/(1.0+(v.pow(r)/(1-v.pow(r))).pow(-factor)).coerceIn(0.0, 1.0)
+//    }
+//}
 
 fun Image.stretchAsinh(factor: Double = 1.0): Image {
     return stretch { v -> (asinh(v * factor)).coerceIn(0.0, 1.0) }
