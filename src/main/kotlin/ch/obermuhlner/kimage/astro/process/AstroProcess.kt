@@ -16,11 +16,11 @@ import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
 import ch.obermuhlner.kimage.core.image.bayer.debayer
-import ch.obermuhlner.kimage.core.image.bayer.debayerCleanupBadPixels
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlur3Filter
+import ch.obermuhlner.kimage.core.image.filter.laplacianFilter
 import ch.obermuhlner.kimage.core.image.hdr.highDynamicRange
 import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
@@ -32,9 +32,11 @@ import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
 import ch.obermuhlner.kimage.core.image.times
 import ch.obermuhlner.kimage.core.image.values.applyEach
+import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
+import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.matrix.values.values
 import ch.obermuhlner.kimage.util.elapsed
 import org.yaml.snakeyaml.Yaml
@@ -60,6 +62,7 @@ data class FormatConfig(
 
 data class DebayerConfig(
     var enabled: Boolean = true,
+    var cleanupBadPixels: Boolean = true,
     var bayerPattern: BayerPattern = BayerPattern.RGGB,
 )
 
@@ -91,8 +94,7 @@ data class StackConfig(
 )
 
 data class EnhanceConfig(
-    var outputImageExtension: String = "tif",
-    var enhancedDirectory: String = "astro-process/enhanced",
+    var enhancedOutputDirectory: String = "astro-process/enhanced",
     var debayer: DebayerConfig = DebayerConfig(enabled = false),
     var crop: CropConfig = CropConfig(),
     var noise: NoiseConfig = NoiseConfig(),
@@ -131,22 +133,26 @@ data class WhitebalanceConfig(
 
 data class ColorStretchConfig(
     var enabled: Boolean = true,
-    var iterations: Int = 4,
-    var firstLinearMinPercentile: Double = 0.001,
-    var firstLinearMaxPercentile: Double = 0.999,
-    var sigmoidMidpoint: Double = 0.25,
-    var sigmoidFactor: Double = 6.0,
-    var linearMinPercentile: Double = 0.0001,
-    var linearMaxPercentile: Double = 0.9999,
-    var blurEnabled: Boolean = true,
-    var blurStrength: Double = 0.1,
-    var highDynamicRange: HighDynamicRangeConfig = HighDynamicRangeConfig(),
+    var steps: MutableList<ColorStretchStepConfig> = mutableListOf()
 )
 
-data class HighDynamicRangeConfig(
+data class ColorStretchStepConfig(
     var enabled: Boolean = true,
-    var finalStretch: Boolean = false,
+    var type: ColorStretchStepType = ColorStretchStepType.LinearPercentile,
+    var sigmoidMidpoint: Double = 0.25,
+    var sigmoidFactor: Double = 6.0,
+    var linearPercentileMin: Double = 0.0001,
+    var linearPercentileMax: Double = 0.9999,
+    var blurStrength: Double = 0.1,
+    var addToHighDynamicRange: Boolean = false,
 )
+
+enum class ColorStretchStepType {
+    LinearPercentile,
+    Sigmoid,
+    Blur,
+    HighDynamicRange
+}
 
 data class HistogramConfig(
     var enabled: Boolean = true,
@@ -174,6 +180,7 @@ fun main(args: Array<String>) {
             astroProcess(config)
         }
         "config" -> println(yaml.dumpAsMap(config))
+        "stars" -> imageAnalysis(config)
         else -> println("""
             Commands:
             - process
@@ -182,52 +189,86 @@ fun main(args: Array<String>) {
     }
 }
 
-fun astroProcess(config: ProcessConfig) {
+fun imageAnalysis(config: ProcessConfig) {
+    val currentDir = File(".")
+    val files = currentDir.listFiles() ?: return
     val inputImageExtension: String = config.format.inputImageExtension
-    val outputImageExtension: String = config.format.outputImageExtension
-    val debayerLightFrames: Boolean = config.format.debayer.enabled
-    val bayerPattern: BayerPattern = config.format.debayer.bayerPattern
 
-    val debayerCalibrationFrames: Boolean = config.calibrate.debayer.enabled
-    val biasDirectory: String = config.calibrate.biasDirectory
-    val flatDirectory: String = config.calibrate.flatDirectory
-    val darkflatDirectory: String = config.calibrate.darkflatDirectory
-    val darkDirectory: String = config.calibrate.darkDirectory
-    val calibratedDirectory: String = config.calibrate.calibratedOutputDirectory
-    val alignedDirectory: String = config.align.alignedOutputDirectory
-    val stackedDirectory: String = config.stack.stackedOutputDirectory
-    val normalizeBackground = config.calibrate.normalizeBackground.enabled
-    val normalizeBackgroundOffset = config.calibrate.normalizeBackground.offset
-    val starThreshold = config.align.starThreshold
-    val maxStars = config.align.maxStars
-    val positionTolerance = config.align.positionTolerance
+    var inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull().sorted()
 
+    for (inputFile in inputFiles) {
+        var image = ImageReader.read(inputFile)
+        image = debayerImageIfConfigured(image, config.format.debayer)
+
+        val stars = findStars(image)
+
+        val medianFwmhX = stars.map { it.fwhmX }.median()
+        val medianFwmhY = stars.map { it.fwhmY }.median()
+        val medianFwmh = stars.map { (it.fwhmX + it.fwhmY) / 2.0 }.median()
+
+        val medianValue = image.values().median()
+        val medianRed = image[Channel.Red].values().median()
+        val medianGreen = image[Channel.Green].values().median()
+        val medianBlue = image[Channel.Blue].values().median()
+
+        val laplacianImage = image.laplacianFilter()
+        val laplacianStddev = laplacianImage.values().stddev()
+
+        // Score calculation
+        val fwhmScore = 1.0 / medianFwmh  // Inverse of FWHM, sharper stars give higher score
+        val starCountScore = stars.size.toDouble()  // More stars contribute positively
+        val sharpnessScore = laplacianStddev  // Higher stddev indicates better sharpness
+        val brightnessScore = 1.0 - kotlin.math.abs(medianValue - 0.5)  // Penalize extreme brightness
+
+        val totalScore = fwhmScore * 0.4 + starCountScore * 0.2 + sharpnessScore * 0.3 + brightnessScore * 0.1
+
+        println("$inputFile : $totalScore score, ${stars.size} stars, median FWMH $medianFwmh (x $medianFwmhX, y $medianFwmhY), median value $medianValue (R $medianRed, G $medianGreen, B $medianBlue)")
+    }
+}
+
+fun astroProcess(config: ProcessConfig) {
     val currentDir = File(".")
 
     println("### Processing calibration images ...")
 
     println()
     val bias = elapsed("Processing bias frames") {
-        processCalibrationImages(currentDir.resolve(biasDirectory), "bias", debayerCalibrationFrames)
+        processCalibrationImages(
+            currentDir.resolve(config.calibrate.biasDirectory),
+            "bias",
+            config.calibrate.debayer.enabled
+        )
     }
     println()
     var flat = elapsed("Processing flat frames") {
-        processCalibrationImages(currentDir.resolve(flatDirectory), "flat", debayerCalibrationFrames).normalizeImage()
+        processCalibrationImages(
+            currentDir.resolve(config.calibrate.flatDirectory),
+            "flat",
+            config.calibrate.debayer.enabled
+        ).normalizeImage()
     }
     println()
     var darkflat = elapsed("Processing darkflat frames") {
-        processCalibrationImages(currentDir.resolve(darkflatDirectory), "darkflat", debayerCalibrationFrames)
+        processCalibrationImages(
+            currentDir.resolve(config.calibrate.darkflatDirectory),
+            "darkflat",
+            config.calibrate.debayer.enabled
+        )
     }
     println()
     var dark = elapsed("Processing dark frames") {
-        processCalibrationImages(currentDir.resolve(darkDirectory), "dark", debayerCalibrationFrames)
+        processCalibrationImages(
+            currentDir.resolve(config.calibrate.darkDirectory),
+            "dark",
+            config.calibrate.debayer.enabled
+        )
     }
 
     val files = currentDir.listFiles() ?: return
 
-    currentDir.resolve(calibratedDirectory).mkdirs()
-    currentDir.resolve(alignedDirectory).mkdirs()
-    currentDir.resolve(stackedDirectory).mkdirs()
+    currentDir.resolve(config.calibrate.calibratedOutputDirectory).mkdirs()
+    currentDir.resolve(config.align.alignedOutputDirectory).mkdirs()
+    currentDir.resolve(config.stack.stackedOutputDirectory).mkdirs()
 
     val applyBiasOnCalibration = false
 
@@ -247,7 +288,7 @@ fun astroProcess(config: ProcessConfig) {
         flat -= darkflat
     }
 
-    var inputFiles = files.filter { it.extension == inputImageExtension }.filterNotNull().sorted()
+    var inputFiles = files.filter { it.extension == config.format.inputImageExtension }.filterNotNull().sorted()
     if (config.quick) {
         println()
         println("Quick mode: only processing ${config.quickCount} input file")
@@ -255,19 +296,20 @@ fun astroProcess(config: ProcessConfig) {
     }
 
     val minBackground = mutableMapOf<Channel, Double>()
-    if (normalizeBackground) {
+    if (config.calibrate.normalizeBackground.enabled) {
         println()
         elapsed("Normalizing backgrounds for ${inputFiles.size} input files") {
             inputFiles.forEach { inputFile ->
-                val calibratedFile = currentDir.resolve(calibratedDirectory).resolve("${inputFile.nameWithoutExtension}.$outputImageExtension")
+                val calibratedFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
+                    .resolve("${inputFile.nameWithoutExtension}.${config.format.outputImageExtension}")
                 if (!calibratedFile.exists()) {
+                    println()
                     println("Loading $inputFile")
                     var light = elapsed("Reading light frame") { ImageReader.read(inputFile) }
-                    if (debayerLightFrames) {
-                        light = elapsed("Debayering light frame") {
-                            val badPixels = light[Channel.Red].findBayerBadPixels()
-                            println("Found ${badPixels.size} bad pixels")
-                            light.debayer(bayerPattern, badpixelCoords = badPixels)
+                    if (config.format.debayer.enabled) {
+                        elapsed("Debayering light frame $inputFile") {
+                            light =
+                                debayerImageIfConfigured(light, config.format.debayer.copy(cleanupBadPixels = false))
                         }
                     }
 
@@ -291,8 +333,8 @@ fun astroProcess(config: ProcessConfig) {
 
     val calibratedFiles = elapsed("Calibrating ${inputFiles.size} light frames") {
         inputFiles.map { inputFile ->
-            val outputFile = currentDir.resolve(calibratedDirectory)
-                .resolve("${inputFile.nameWithoutExtension}.$outputImageExtension")
+            val outputFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
+                .resolve("${inputFile.nameWithoutExtension}.${config.format.outputImageExtension}")
             if (outputFile.exists()) {
                 return@map outputFile
             }
@@ -300,8 +342,10 @@ fun astroProcess(config: ProcessConfig) {
             println()
             println("Loading $inputFile")
             var light = elapsed("Reading light frame $inputFile") { ImageReader.read(inputFile) }
-            if (debayerLightFrames) {
-                light = elapsed("Debayering light frame $inputFile") { light.debayerCleanupBadPixels(bayerPattern) }
+            if (config.format.debayer.enabled) {
+                light = elapsed("Debayering light frame $inputFile") {
+                    debayerImageIfConfigured(light, config.format.debayer)
+                }
             }
 
             elapsed("Calibrating light frame $inputFile") {
@@ -315,13 +359,13 @@ fun astroProcess(config: ProcessConfig) {
                     light /= flat
                 }
 
-                if (normalizeBackground) {
+                if (config.calibrate.normalizeBackground.enabled) {
                     for (channel in light.channels) {
                         val lowestBackground = minBackground[channel]
                         if (lowestBackground != null) {
                             val background = light[channel].values().median()
-                            val delta = background - lowestBackground - normalizeBackgroundOffset
-                            light[channel].applyEach { v -> v - delta}
+                            val delta = background - lowestBackground - config.calibrate.normalizeBackground.offset
+                            light[channel].applyEach { v -> v - delta }
                         }
                     }
                 }
@@ -349,13 +393,14 @@ fun astroProcess(config: ProcessConfig) {
     val referenceLight = ImageReader.read(referenceCalibratedFile)
 
     elapsed("Finding reference stars") {
-        referenceStars = findStars(referenceLight, starThreshold)
+        referenceStars = findStars(referenceLight, config.align.starThreshold)
         referenceImageWidth = referenceLight.width
         referenceImageHeight = referenceLight.height
     }
 
     val alignedFiles = calibratedFiles.mapNotNull { calibratedFile ->
-        val outputFile = currentDir.resolve(alignedDirectory).resolve("${calibratedFile.nameWithoutExtension}.$outputImageExtension")
+        val outputFile = currentDir.resolve(config.align.alignedOutputDirectory)
+            .resolve("${calibratedFile.nameWithoutExtension}.${config.format.outputImageExtension}")
         if (outputFile.exists()) {
             return@mapNotNull outputFile
         }
@@ -367,14 +412,14 @@ fun astroProcess(config: ProcessConfig) {
         val alignedImage = if (calibratedFile == referenceCalibratedFile) {
             ImageReader.read(referenceCalibratedFile)
         } else {
-            val imageStars = elapsed("Finding image stars") { findStars(light, starThreshold) }
+            val imageStars = elapsed("Finding image stars") { findStars(light, config.align.starThreshold) }
             val transform = elapsed("Calculating transformation matrix") {
                 calculateTransformationMatrix(
-                    referenceStars.take(maxStars),
-                    imageStars.take(maxStars),
+                    referenceStars.take(config.align.maxStars),
+                    imageStars.take(config.align.maxStars),
                     referenceImageWidth,
                     referenceImageHeight,
-                    positionTolerance = positionTolerance
+                    positionTolerance = config.align.positionTolerance
                 )
             }
             if (transform != null) {
@@ -401,7 +446,8 @@ fun astroProcess(config: ProcessConfig) {
     println()
     println("### Stacking ${alignedFiles.size} aligned images ...")
 
-    val outputFile = currentDir.resolve(stackedDirectory).resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.$outputImageExtension")
+    val outputFile = currentDir.resolve(config.stack.stackedOutputDirectory)
+        .resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.${config.format.outputImageExtension}")
     val stackedImage = if (!outputFile.exists()) {
         val alignedFileSuppliers = alignedFiles.map {
             {
@@ -423,26 +469,28 @@ fun astroProcess(config: ProcessConfig) {
     println("### Enhancing stacked image ...")
     println()
     elapsed("enhance") {
-        astroEnhance(config.enhance, stackedImage)
+        astroEnhance(config.format, config.enhance, stackedImage)
     }
 }
 
 fun astroEnhance(
+    formatConfig: FormatConfig,
     enhanceConfig: EnhanceConfig,
     inputFile: File,
 ) {
     println("Reading $inputFile")
     var inputImage = ImageReader.read(inputFile)
 
-    return astroEnhance(enhanceConfig, inputImage)
+    return astroEnhance(formatConfig, enhanceConfig, inputImage)
 }
 
 fun astroEnhance(
+    formatConfig: FormatConfig,
     enhanceConfig: EnhanceConfig,
     inputImage: Image,
 ) {
     val currentDir = File(".")
-    currentDir.resolve(enhanceConfig.enhancedDirectory).mkdirs()
+    currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
 
     var image = inputImage
 
@@ -450,15 +498,15 @@ fun astroEnhance(
 
     fun step(name: String, stretchFunc: (Image) -> Image) {
         elapsed(name) {
-            elapsed("  execute function") {
+            elapsed("  execute function: $name") {
                 image = stretchFunc(image)
             }
             elapsed("  write result image") {
-                ImageWriter.write(image, currentDir.resolve(enhanceConfig.enhancedDirectory).resolve("step_${stepIndex}_$name.${enhanceConfig.outputImageExtension}"))
+                ImageWriter.write(image, currentDir.resolve(enhanceConfig.enhancedOutputDirectory).resolve("step_${stepIndex}_$name.${formatConfig.outputImageExtension}"))
             }
             if (enhanceConfig.histogram.enabled) {
                 elapsed("  write histogram") {
-                    ImageWriter.write(image.histogramImage(enhanceConfig.histogram.histogramWidth, enhanceConfig.histogram.histogramHeight), currentDir.resolve(enhanceConfig.enhancedDirectory).resolve("histogram_step_${stepIndex}_$name.${enhanceConfig.outputImageExtension}"))
+                    ImageWriter.write(image.histogramImage(enhanceConfig.histogram.histogramWidth, enhanceConfig.histogram.histogramHeight), currentDir.resolve(enhanceConfig.enhancedOutputDirectory).resolve("histogram_step_${stepIndex}_$name.${formatConfig.outputImageExtension}"))
                 }
             }
             stepIndex++
@@ -467,7 +515,7 @@ fun astroEnhance(
 
     if (enhanceConfig.debayer.enabled) {
         step("debayering") {
-            it.debayerCleanupBadPixels(enhanceConfig.debayer.bayerPattern)
+            debayerImageIfConfigured(it, enhanceConfig.debayer)
         }
     }
 
@@ -498,40 +546,29 @@ fun astroEnhance(
 
 
     if (enhanceConfig.colorStretch.enabled) {
-        step("stretch-first-linear") {
-            it.stretchLinearPercentile(enhanceConfig.colorStretch.firstLinearMinPercentile, enhanceConfig.colorStretch.firstLinearMaxPercentile)
-        }
-
         val hdrSourceImages = mutableListOf<Image>()
-
-        for (stretchIndex in 1..enhanceConfig.colorStretch.iterations) {
-            step("stretch$stretchIndex-sigmoid") {
-                it.stretchSigmoid(enhanceConfig.colorStretch.sigmoidMidpoint, enhanceConfig.colorStretch.sigmoidFactor)
-            }
-            step("stretch$stretchIndex-linear") {
-                it.stretchLinearPercentile(enhanceConfig.colorStretch.linearMinPercentile, enhanceConfig.colorStretch.linearMaxPercentile)
-            }
-            if (enhanceConfig.colorStretch.blurEnabled) {
-                step("stretch$stretchIndex-blur") {
-                    (it * (1.0 - enhanceConfig.colorStretch.blurStrength)) + (it.gaussianBlur3Filter() * enhanceConfig.colorStretch.blurStrength)
+        for (colorStretchStepIndex in enhanceConfig.colorStretch.steps.indices) {
+            val colorStretchStepConfig = enhanceConfig.colorStretch.steps[colorStretchStepIndex]
+            val name = "stretch-$colorStretchStepIndex-${colorStretchStepConfig.type}"
+            step(name) {
+                val stepResultImage = when (colorStretchStepConfig.type) {
+                    ColorStretchStepType.LinearPercentile -> {
+                        it.stretchLinearPercentile(colorStretchStepConfig.linearPercentileMin, colorStretchStepConfig.linearPercentileMax)
+                    }
+                    ColorStretchStepType.Sigmoid -> {
+                        it.stretchSigmoid(colorStretchStepConfig.sigmoidMidpoint, colorStretchStepConfig.sigmoidFactor)
+                    }
+                    ColorStretchStepType.Blur -> {
+                        (it * (1.0 - colorStretchStepConfig.blurStrength)) + (it.gaussianBlur3Filter() * colorStretchStepConfig.blurStrength)
+                    }
+                    ColorStretchStepType.HighDynamicRange -> {
+                        highDynamicRange(hdrSourceImages.map { { it } })
+                    }
                 }
-            }
-            if (enhanceConfig.colorStretch.highDynamicRange.enabled) {
-                hdrSourceImages.add(image)
-            }
-        }
-
-        if (enhanceConfig.colorStretch.highDynamicRange.enabled) {
-            step("hdr") {
-                highDynamicRange(hdrSourceImages.map { { it } })
-            }
-            if (enhanceConfig.colorStretch.highDynamicRange.finalStretch) {
-                step("stretch-last-sigmoid") {
-                    it.stretchSigmoid(enhanceConfig.colorStretch.sigmoidMidpoint, enhanceConfig.colorStretch.sigmoidFactor)
+                if (colorStretchStepConfig.addToHighDynamicRange) {
+                    hdrSourceImages.add(stepResultImage)
                 }
-                step("stretch-last-linear") {
-                    it.stretchLinearPercentile(enhanceConfig.colorStretch.linearMinPercentile, enhanceConfig.colorStretch.linearMaxPercentile)
-                }
+                stepResultImage
             }
         }
     }
@@ -542,7 +579,23 @@ fun astroEnhance(
         }
     }
 
-    val enhancedFile = currentDir.resolve(enhanceConfig.enhancedDirectory).resolve("enhanced.${enhanceConfig.outputImageExtension}")
+    val enhancedFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory).resolve("enhanced.${formatConfig.outputImageExtension}")
     println("Writing $enhancedFile")
     ImageWriter.write(image, enhancedFile)
+}
+
+private fun debayerImageIfConfigured(image: Image, debayerConfig: DebayerConfig): Image {
+    return if (debayerConfig.enabled) {
+        val badPixels = if (debayerConfig.cleanupBadPixels) {
+            val mosaic = image[Channel.Red]
+            val badPixels = mosaic.findBayerBadPixels()
+            println("Found ${badPixels.size} bad pixels")
+            badPixels
+        } else {
+            emptySet()
+        }
+        image.debayer(debayerConfig.bayerPattern, badpixelCoords = badPixels)
+    } else {
+        image
+    }
 }
