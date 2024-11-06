@@ -312,9 +312,9 @@ private fun alignStarImages(
 private fun writeStarAnnotationImage(image: Image, stars: List<Star>, file: File) {
     val annotatedImage = image.copy()
     for (star in stars) {
-        annotatedImage[Channel.Red][star.y, star.x] = star.brightness
-        annotatedImage[Channel.Green][star.y, star.x] = 0.0
-        annotatedImage[Channel.Blue][star.y, star.x] = 0.0
+        annotatedImage[Channel.Red][star.intY, star.intX] = star.brightness
+        annotatedImage[Channel.Green][star.intY, star.intX] = 0.0
+        annotatedImage[Channel.Blue][star.intY, star.intX] = 0.0
     }
     ImageWriter.write(annotatedImage, file)
 }
