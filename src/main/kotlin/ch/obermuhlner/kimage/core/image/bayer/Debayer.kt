@@ -3,7 +3,6 @@ package ch.obermuhlner.kimage.core.image.bayer
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
-import ch.obermuhlner.kimage.core.image.PointRowCol
 import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.math.average
 import ch.obermuhlner.kimage.core.math.clamp
