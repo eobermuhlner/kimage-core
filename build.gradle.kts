@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.0.10"
+    application
 }
 
 group = "ch.obermuhlner.kimage"
@@ -22,4 +23,9 @@ tasks.test {
 }
 kotlin {
     jvmToolchain(17)
+}
+
+application {
+    mainClass.set("ch.obermuhlner.kimage.astro.process.AstroProcessKt")
+    applicationName = "kimage-astro-process"
 }
