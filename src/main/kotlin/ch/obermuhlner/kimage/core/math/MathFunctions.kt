@@ -73,6 +73,21 @@ fun mixCubicHermite(x00: Double, x01: Double, x10: Double, x11: Double, t: Doubl
     return a * t * t * t + b * t * t + c * t + x01
 }
 
+fun sigmoid(x: Double, midpoint: Double = 0.5, strength: Double = 2.0): Double {
+    return (1 / (1 + exp(-strength * (strength - midpoint))))
+}
+
+fun sigmoidLike(x: Double, midpoint: Double, strength: Double): Double {
+    val xCorrected = x.coerceIn(0.0, 1.0)
+    val midpointCorrected = midpoint.coerceIn(0.0, 1.0)
+    require(strength > 0) { "strength must be positive" }
+
+    val leftTerm = (xCorrected / midpointCorrected).pow(strength)
+    val rightTerm = ((1 - xCorrected) / (1 - midpointCorrected)).pow(strength)
+
+    return leftTerm / (leftTerm + rightTerm)
+}
+
 private fun <T, U> Iterator<T>.reduceAndCount(initial: U, empty: U, accumulator: (U, T) -> U): Pair<U, Int> {
     var result = initial
     var count = 0
