@@ -17,6 +17,15 @@ fun Image.histogramImage(
 ): Image {
     val result = MatrixImage(histogramWidth, histogramHeight)
 
+    for (gridX in 1 .. 9) {
+        val x = result.width * gridX / 10
+        for (y in 0 until result.height) {
+            result[Channel.Red][y, x] = 0.3
+            result[Channel.Green][y, x] = 0.3
+            result[Channel.Blue][y, x] = 0.3
+        }
+    }
+
     val channelHistograms = mutableMapOf<Channel, Histogram>()
     var maxCount = 0
     for (channel in channels) {
