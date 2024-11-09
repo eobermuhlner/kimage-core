@@ -5,8 +5,8 @@ import ch.obermuhlner.kimage.core.image.copy
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.math.Histogram
+import ch.obermuhlner.kimage.core.math.sigmoidLike
 import kotlin.math.asinh
-import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 
@@ -78,28 +78,27 @@ fun Image.stretchExponentialMedian(
     return stretch { v -> (v.pow(exp)).coerceIn(0.0, 1.0) }
 }
 
-fun Image.stretchSigmoid(midpoint: Double = 0.01, factor: Double = 10.0): Image {
+fun Image.stretchSigmoid(midpoint: Double = 0.01, strength: Double = 10.0): Image {
     return stretch { v ->
-        (1 / (1 + exp(-factor * (v - midpoint)))).coerceIn(0.0, 1.0)
+        sigmoidLike(v, midpoint, strength).coerceIn(0.0, 1.0)
     }
 }
 
-//fun Image.stretchSigmoidPower(midpoint: Double = 0.5, factor: Double = 2.0): Image {
-//    val r = -ln(2.0) / ln(midpoint)
-//    return stretch { v ->
-//        1.0/(1.0+(v.pow(r)/(1-v.pow(r))).pow(-factor)).coerceIn(0.0, 1.0)
-//    }
-//}
+fun Image.stretchSigmoidLike(midpoint: Double = 0.5, strength: Double = 2.0): Image {
+    return stretch { v ->
+        sigmoidLike(v, midpoint, strength).coerceIn(0.0, 1.0)
+    }
+}
 
-fun Image.stretchAsinh(factor: Double = 1.0): Image {
-    return stretch { v -> (asinh(v * factor)).coerceIn(0.0, 1.0) }
+fun Image.stretchAsinh(strength: Double = 1.0): Image {
+    return stretch { v -> (asinh(v * strength)).coerceIn(0.0, 1.0) }
 }
 
 fun Image.stretchAsinhPercentile(
     minPercentile: Double = 0.001,
     maxPercentile: Double = 0.999,
     histogram: Histogram = histogram()
-    ): Image {
+): Image {
     val minValue = histogram.estimatePercentile(minPercentile)
     val maxValue = histogram.estimatePercentile(maxPercentile)
     return stretchAsinh(1.0 / (maxValue - minValue))
