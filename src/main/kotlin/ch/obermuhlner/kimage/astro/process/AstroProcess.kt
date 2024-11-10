@@ -652,7 +652,8 @@ class AstroProcess(val config: ProcessConfig) {
         println("### Enhancing stacked image ...")
         println()
         elapsed("enhance") {
-            astroEnhance(config.format, config.enhance, stackedImage, dirty)
+            val referenceName = inputFiles[0].nameWithoutExtension
+            astroEnhance(config.format, config.enhance, stackedImage, dirty, referenceName)
         }
     }
 
@@ -664,14 +665,15 @@ class AstroProcess(val config: ProcessConfig) {
         println("Reading $inputFile")
         var inputImage = ImageReader.read(inputFile)
 
-        return astroEnhance(formatConfig, enhanceConfig, inputImage, true)
+        return astroEnhance(formatConfig, enhanceConfig, inputImage, true, inputFile.nameWithoutExtension)
     }
 
     fun astroEnhance(
         formatConfig: FormatConfig,
         enhanceConfig: EnhanceConfig,
         inputImage: Image,
-        alreadyDirty: Boolean
+        alreadyDirty: Boolean,
+        referenceName: String
     ) {
         val currentDir = File(".")
         currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
@@ -824,7 +826,7 @@ class AstroProcess(val config: ProcessConfig) {
 
         for (finalOutputImageExtension in enhanceConfig.finalFormat.outputImageExtensions) {
             val enhancedFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                .resolve("enhanced.$finalOutputImageExtension")
+                .resolve("$referenceName.$finalOutputImageExtension")
             println("Writing $enhancedFile")
             ImageWriter.write(image, enhancedFile)
         }
