@@ -12,22 +12,34 @@ import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
 
 fun processCalibrationImages(
-    imageDirectory: File,
     calibrationName: String,
+    baseDirectory: File,
+    dirty: Boolean,
+    calibrationImageDirectoryPath: String,
+    searchParentDirectories: Boolean,
     debayer: Boolean,
     bayerPattern: BayerPattern = BayerPattern.RGGB,
     inputImageExtension: String = "fit",
     outputImageExtension: String = "tif",
-): Image? {
+): Pair<Image?, Boolean> {
+    val imageDirectory = if (searchParentDirectories) {
+        generateSequence(baseDirectory.absoluteFile) { it.parentFile }
+            .map { it.resolve(calibrationImageDirectoryPath) }
+            .find { it.exists() && it.isDirectory }
+    } else {
+        baseDirectory.resolve(calibrationImageDirectoryPath)
+    }
+    if (imageDirectory == null) return Pair(null, dirty)
+
     val masterFileName = "master_$calibrationName.$outputImageExtension"
     val masterImageFile = imageDirectory.resolve(masterFileName)
     if (masterImageFile.isFile) {
         println("Loading calibration $calibrationName image: $masterImageFile")
-        return ImageReader.read(masterImageFile)
+        return Pair(ImageReader.read(masterImageFile), dirty)
     }
 
     val imageDirectoryFiles = imageDirectory.listFiles()
-    if (imageDirectoryFiles == null || imageDirectoryFiles.isEmpty()) return null
+    if (imageDirectoryFiles == null || imageDirectoryFiles.isEmpty()) return Pair(null, dirty)
 
     val imageSuppliers =
         imageDirectoryFiles
@@ -51,6 +63,6 @@ fun processCalibrationImages(
 
         ImageWriter.write(stackedImage, masterImageFile)
 
-        stackedImage
+        Pair(stackedImage, true)
     }
 }

@@ -80,10 +80,11 @@ data class DebayerConfig(
 data class CalibrateConfig(
     var inputImageExtension: String = "fit",
     var debayer: DebayerConfig = DebayerConfig(),
-    var biasDirectory: String = "../bias",
-    var flatDirectory: String = "../flat",
-    var darkflatDirectory: String = "../darkflat",
-    var darkDirectory: String = "../dark",
+    var biasDirectory: String = "bias",
+    var flatDirectory: String = "flat",
+    var darkflatDirectory: String = "darkflat",
+    var darkDirectory: String = "dark",
+    var searchParentDirectories: Boolean = true,
     var normalizeBackground: NormalizeBackgroundConfig = NormalizeBackgroundConfig(),
     var calibratedOutputDirectory: String = "astro-process/calibrated",
 )
@@ -360,41 +361,63 @@ class AstroProcess(val config: ProcessConfig) {
 
     fun astroProcess() {
         val currentDir = File(".")
+        var dirty = false
 
         println("### Processing calibration images ...")
 
         println()
-        val bias = elapsed("Processing bias frames") {
+        val (bias, dirtyBias) = elapsed("Processing bias frames") {
             processCalibrationImages(
-                currentDir.resolve(config.calibrate.biasDirectory),
                 "bias",
+                currentDir,
+                dirty,
+                config.calibrate.biasDirectory,
+                config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             )
         }
+        dirty = dirty || dirtyBias
+
         println()
-        var flat = elapsed("Processing flat frames") {
+        var (flat, dirtyFlat) = elapsed("Processing flat frames") {
             processCalibrationImages(
-                currentDir.resolve(config.calibrate.flatDirectory),
                 "flat",
+                currentDir,
+                dirty,
+                config.calibrate.flatDirectory,
+                config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
-            ).normalizeImage()
+            ).let {
+                Pair(it.first.normalizeImage(),it.second)
+            }
         }
+        dirty = dirty || dirtyFlat
+
         println()
-        var darkflat = elapsed("Processing darkflat frames") {
+        var (darkflat, dirtyDarkFlat) = elapsed("Processing darkflat frames") {
             processCalibrationImages(
-                currentDir.resolve(config.calibrate.darkflatDirectory),
                 "darkflat",
+                currentDir,
+                dirty,
+                config.calibrate.darkflatDirectory,
+                config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             )
         }
+        dirty = dirty || dirtyDarkFlat
+
         println()
-        var dark = elapsed("Processing dark frames") {
+        var (dark, dirtyDark) = elapsed("Processing dark frames") {
             processCalibrationImages(
-                currentDir.resolve(config.calibrate.darkDirectory),
                 "dark",
+                currentDir,
+                dirty,
+                config.calibrate.darkDirectory,
+                config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             )
         }
+        dirty = dirty || dirtyDark
 
         val files = currentDir.listFiles() ?: return
 
@@ -466,13 +489,17 @@ class AstroProcess(val config: ProcessConfig) {
         println()
         println("### Calibrating ${inputFiles.size} images ...")
 
+        var dirtyCalibrated = false
+        val dirtyCalibratedFiles = mutableSetOf<File>()
         val calibratedFiles = elapsed("Calibrating ${inputFiles.size} light frames") {
             inputFiles.map { inputFile ->
                 val outputFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
                     .resolve("${inputFile.nameWithoutExtension}.${config.format.outputImageExtension}")
-                if (outputFile.exists()) {
+                if (outputFile.exists() && !dirty) {
                     return@map outputFile
                 }
+                dirtyCalibrated = true
+                dirtyCalibratedFiles.add(outputFile)
 
                 println()
                 println("Loading $inputFile")
@@ -533,61 +560,67 @@ class AstroProcess(val config: ProcessConfig) {
             referenceImageHeight = referenceLight.height
         }
 
-        val alignedFiles = calibratedFiles.mapNotNull { calibratedFile ->
-            val outputFile = currentDir.resolve(config.align.alignedOutputDirectory)
-                .resolve("${calibratedFile.nameWithoutExtension}.${config.format.outputImageExtension}")
-            if (outputFile.exists()) {
-                return@mapNotNull outputFile
-            }
-
-            println()
-            println("Loading $calibratedFile")
-            val light = ImageReader.read(calibratedFile)
-
-            val alignedImage = if (calibratedFile == referenceCalibratedFile) {
-                ImageReader.read(referenceCalibratedFile)
-            } else {
-                val imageStars = elapsed("Finding image stars") { findStars(light, config.align.starThreshold) }
-                val transform = elapsed("Calculating transformation matrix") {
-                    calculateTransformationMatrix(
-                        referenceStars.take(config.align.maxStars),
-                        imageStars.take(config.align.maxStars),
-                        referenceImageWidth,
-                        referenceImageHeight,
-                        positionTolerance = config.align.positionTolerance
-                    )
+        var dirtyAligned = false
+        val alignedFiles = calibratedFiles
+            .mapNotNull { calibratedFile ->
+                val outputFile = currentDir.resolve(config.align.alignedOutputDirectory)
+                    .resolve("${calibratedFile.nameWithoutExtension}.${config.format.outputImageExtension}")
+                if (outputFile.exists() && !dirty && !dirtyCalibratedFiles.contains(calibratedFile)) {
+                    return@mapNotNull outputFile
                 }
-                if (transform != null) {
-                    println(formatTransformation(decomposeTransformationMatrix(transform)))
+                dirtyAligned = true
 
-                    elapsed("Applying transformation to image") {
-                        applyTransformationToImage(light, transform)
+                println()
+                println("Loading $calibratedFile")
+                val light = ImageReader.read(calibratedFile)
+
+                val alignedImage = if (calibratedFile == referenceCalibratedFile) {
+                    ImageReader.read(referenceCalibratedFile)
+                } else {
+                    val imageStars = elapsed("Finding image stars") { findStars(light, config.align.starThreshold) }
+                    val transform = elapsed("Calculating transformation matrix") {
+                        calculateTransformationMatrix(
+                            referenceStars.take(config.align.maxStars),
+                            imageStars.take(config.align.maxStars),
+                            referenceImageWidth,
+                            referenceImageHeight,
+                            positionTolerance = config.align.positionTolerance
+                        )
                     }
+                    if (transform != null) {
+                        println(formatTransformation(decomposeTransformationMatrix(transform)))
+
+                        elapsed("Applying transformation to image") {
+                            applyTransformationToImage(light, transform)
+                        }
+                    } else {
+                        null
+                    }
+                }
+
+                if (alignedImage != null) {
+                    println("Saving $outputFile")
+                    ImageWriter.write(alignedImage, outputFile)
+
+                    outputFile
                 } else {
                     null
                 }
             }
-
-            if (alignedImage != null) {
-                println("Saving $outputFile")
-                ImageWriter.write(alignedImage, outputFile)
-
-                outputFile
-            } else {
-                null
-            }
-        }
+        dirty = dirty || dirtyCalibrated || dirtyAligned
 
         println()
         println("### Stacking ${alignedFiles.size} aligned images ...")
 
+        var dirtyStacked = false
         val outputStackedFile = currentDir
             .resolve(config.stack.stackedOutputDirectory)
             .resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.${config.format.outputImageExtension}")
-        val stackedImage = if (!outputStackedFile.exists()) {
+        val stackedImage = if (!outputStackedFile.exists() || dirty) {
             val outputStackedMaxFile = currentDir
                 .resolve(config.stack.stackedOutputDirectory)
                 .resolve("${inputFiles[0].nameWithoutExtension}_stacked-max_${alignedFiles.size}.${config.format.outputImageExtension}")
+            dirtyStacked = true
             var stackedMaxImage: Image? = null
 
             val alignedFileSuppliers = alignedFiles.map {
@@ -613,12 +646,13 @@ class AstroProcess(val config: ProcessConfig) {
             println("Stacked image already exists: $outputStackedFile")
             ImageReader.read(outputStackedFile)
         }
+        dirty = dirty || dirtyStacked
 
         println()
         println("### Enhancing stacked image ...")
         println()
         elapsed("enhance") {
-            astroEnhance(config.format, config.enhance, stackedImage)
+            astroEnhance(config.format, config.enhance, stackedImage, dirty)
         }
     }
 
@@ -630,19 +664,20 @@ class AstroProcess(val config: ProcessConfig) {
         println("Reading $inputFile")
         var inputImage = ImageReader.read(inputFile)
 
-        return astroEnhance(formatConfig, enhanceConfig, inputImage)
+        return astroEnhance(formatConfig, enhanceConfig, inputImage, true)
     }
 
     fun astroEnhance(
         formatConfig: FormatConfig,
         enhanceConfig: EnhanceConfig,
         inputImage: Image,
+        alreadyDirty: Boolean
     ) {
         val currentDir = File(".")
         currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
 
         var image = inputImage
-        var dirty = false
+        var dirty = alreadyDirty
 
         var stepIndex = 1
 
