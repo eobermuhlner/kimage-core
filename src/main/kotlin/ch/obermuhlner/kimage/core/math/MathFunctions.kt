@@ -401,6 +401,8 @@ fun DoubleArray.weightedAverage(weightFunction: (i: Int, value: Double) -> Doubl
     return result
 }
 
+fun Double.toRadians(): Double = this * (PI / 180.0)
+
 private class ArrayFloatIterator(private val array: FloatArray, private val offset: Int, private val length: Int) : FloatIterator() {
     private var index = offset
     override fun hasNext() = index < offset + length

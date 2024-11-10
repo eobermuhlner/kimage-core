@@ -24,7 +24,7 @@ fun Image.stretchLinearPercentile(
     return stretchLinear(minValue, maxValue)
 }
 
-private fun Image.histogram(): Histogram {
+fun Image.histogram(): Histogram {
     val histogram = Histogram()
     this.channels.forEach { channel -> histogram.add(this[channel]) }
     return histogram

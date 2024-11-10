@@ -12,6 +12,7 @@ import ch.obermuhlner.kimage.astro.background.createFixPointFourCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointGrid
 import ch.obermuhlner.kimage.astro.background.getFixPointValues
 import ch.obermuhlner.kimage.astro.background.interpolate
+import ch.obermuhlner.kimage.astro.color.histogram
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.core.image.Channel
@@ -39,6 +40,8 @@ import ch.obermuhlner.kimage.core.image.stack.max
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
 import ch.obermuhlner.kimage.core.image.times
+import ch.obermuhlner.kimage.core.image.transform.rotateLeft
+import ch.obermuhlner.kimage.core.image.transform.rotateRight
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
@@ -48,11 +51,15 @@ import ch.obermuhlner.kimage.core.math.Histogram
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
 import ch.obermuhlner.kimage.core.math.stddev
+import ch.obermuhlner.kimage.core.math.toRadians
+import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.values.values
 import ch.obermuhlner.kimage.util.elapsed
 import org.yaml.snakeyaml.Yaml
 import java.io.File
+import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.sin
 
 data class ProcessConfig(
     var quick: Boolean = false,
@@ -108,7 +115,8 @@ data class StackConfig(
 data class EnhanceConfig(
     var enhancedOutputDirectory: String = "astro-process/enhanced",
     var debayer: DebayerConfig = DebayerConfig(enabled = false),
-    var crop: CropConfig = CropConfig(),
+    var rotate: RotateConfig = RotateConfig(),
+    var crop: RectangleConfig = RectangleConfig(),
     var noise: NoiseConfig = NoiseConfig(),
     var background: BackgroundConfig = BackgroundConfig(),
     var whitebalance: WhitebalanceConfig = WhitebalanceConfig(),
@@ -117,12 +125,16 @@ data class EnhanceConfig(
     var finalFormat: FinalFormatConfig = FinalFormatConfig()
 )
 
-data class CropConfig(
-    var enabled: Boolean = true,
-    var x: Int = 20,
-    var y: Int = 20,
-    var width: Int = -20,
-    var height: Int = -20,
+data class RotateConfig(
+    var angle: Double = 0.0,
+)
+
+data class RectangleConfig(
+    var enabled: Boolean = false,
+    var x: Int = 0,
+    var y: Int = 0,
+    var width: Int = 0,
+    var height: Int = 0,
 )
 
 enum class Thresholding {
@@ -186,6 +198,7 @@ enum class WhitebalanceType {
 
 data class ColorStretchConfig(
     var enabled: Boolean = true,
+    var measure: RectangleConfig = RectangleConfig(),
     var steps: MutableList<ColorStretchStepConfig> = mutableListOf()
 )
 
@@ -738,6 +751,28 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
 
+        if (enhanceConfig.rotate.angle != 0.0) {
+            step("rotate") {
+                when(enhanceConfig.rotate.angle) {
+                    90.0,-270.0 -> it.rotateRight()
+                    180.0, -180.0 -> it.rotateRight().rotateRight()
+                    -90.0, 270.0 -> it.rotateLeft()
+                    else -> {
+                        val angleRad = enhanceConfig.rotate.angle.toRadians()
+                        val cosA = cos(angleRad)
+                        val sinA = sin(angleRad)
+
+                        val transformationMatrix = DoubleMatrix.matrixOf(3, 3,
+                            cosA, -sinA, 0.0,
+                            sinA, cosA, 0.0,
+                            0.0, 0.0, 1.0
+                        )
+                        applyTransformationToImage(it, transformationMatrix )
+                    }
+                }
+            }
+        }
+
         if (enhanceConfig.crop.enabled) {
             step("crop") {
                 val width =
@@ -776,10 +811,23 @@ class AstroProcess(val config: ProcessConfig) {
                 step(name) {
                     val stepResultImage = when (colorStretchStepConfig.type) {
                         ColorStretchStepType.LinearPercentile -> {
-                            it.stretchLinearPercentile(
-                                colorStretchStepConfig.linearPercentileMin,
-                                colorStretchStepConfig.linearPercentileMax
-                            )
+                            if (enhanceConfig.colorStretch.measure.enabled) {
+                                it.stretchLinearPercentile(
+                                    colorStretchStepConfig.linearPercentileMin,
+                                    colorStretchStepConfig.linearPercentileMax,
+                                    it.crop(
+                                        enhanceConfig.colorStretch.measure.x,
+                                        enhanceConfig.colorStretch.measure.y,
+                                        enhanceConfig.colorStretch.measure.width,
+                                        enhanceConfig.colorStretch.measure.height,
+                                    ).histogram()
+                                )
+                            } else {
+                                it.stretchLinearPercentile(
+                                    colorStretchStepConfig.linearPercentileMin,
+                                    colorStretchStepConfig.linearPercentileMax
+                                )
+                            }
                         }
 
                         ColorStretchStepType.Sigmoid -> {
