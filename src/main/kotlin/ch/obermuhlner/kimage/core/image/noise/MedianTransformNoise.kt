@@ -3,6 +3,10 @@ package ch.obermuhlner.kimage.core.image.noise
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.filter.slowMedianFilter
+import ch.obermuhlner.kimage.core.image.minus
+import ch.obermuhlner.kimage.core.image.plus
+import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.math.sigmoid
 import ch.obermuhlner.kimage.core.math.sigmoidLike
 import ch.obermuhlner.kimage.core.matrix.filter.slowMedianFilter
@@ -39,7 +43,28 @@ fun thresholdSigmoidLike(v: Double, threshold: Double, midpoint: Double = 0.5, s
     }
 }
 
-fun Image.reduceNoiseUsingMultiScaleMedianTransform(
+fun Image.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(
+    thresholds: List<Double>,
+    thresholding: (v: Double, threshold: Double) -> Double = { v, threshold -> thresholdSigmoid(v, threshold) },
+): Image {
+    var resultImage = this
+
+    for (radius in thresholds.indices) {
+        val threshold = thresholds[radius]
+        val medianImage = resultImage.slowMedianFilter(radius + 1)
+        val diffImage = resultImage - medianImage
+
+        diffImage.applyEach { v ->
+            thresholding(v, threshold)
+        }
+
+        resultImage = medianImage + diffImage
+    }
+
+    return resultImage
+}
+
+fun Image.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(
     thresholds: List<Double>,
     thresholding: (v: Double, threshold: Double) -> Double = { v, threshold -> thresholdSigmoid(v, threshold) },
 ): Image {

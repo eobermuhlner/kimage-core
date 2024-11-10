@@ -29,8 +29,13 @@ import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
-import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTransform
+import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels
+import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel
+import ch.obermuhlner.kimage.core.image.noise.thresholdHard
+import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoid
+import ch.obermuhlner.kimage.core.image.noise.thresholdSoft
 import ch.obermuhlner.kimage.core.image.plus
+import ch.obermuhlner.kimage.core.image.stack.max
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
 import ch.obermuhlner.kimage.core.image.times
@@ -119,8 +124,22 @@ data class CropConfig(
     var height: Int = -20,
 )
 
+enum class Thresholding {
+    Hard,
+    Soft,
+    Sigmoid,
+    SigmoidLike
+}
+
+enum class NoiseReductionAlgorithm {
+    MultiScaleMedianOverAllChannels,
+    MultiScaleMedianOverGrayChannel,
+}
+
 data class NoiseConfig(
     var enabled: Boolean = true,
+    var algorithm: NoiseReductionAlgorithm = NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels,
+    var thresholding: Thresholding = Thresholding.Soft,
     var thresholds: MutableList<Double> = mutableListOf(0.0001)
 )
 
@@ -151,7 +170,7 @@ data class WhitebalanceConfig(
     var type: WhitebalanceType = WhitebalanceType.Global,
     var fixPoints: FixPointsConfig = FixPointsConfig(),
     var localMedianRadius: Int = 50,
-    var valueRangeMin: Double = 0.2,
+    var valueRangeMin: Double = 0.0,
     var valueRangeMax: Double = 0.9,
     var customRed: Double = 1.0,
     var customGreen: Double = 1.0,
@@ -214,6 +233,16 @@ enhance:
     y: 100
     width: -100
     height: -100
+  whitebalance:
+    enabled: true
+    type: Local
+    fixPoints:
+      type: FourCorners
+      borderDistance: 100
+      customPoints: []
+    localMedianRadius: 50
+    valueRangeMin: 0.2
+    valueRangeMax: 0.9
   colorStretch:
     enabled: true
     steps:
@@ -244,6 +273,7 @@ enhance:
       sigmoidFactor: 1.5
   noise:
     enabled: true
+    thresholding: Soft
     thresholds:
       - 0.01
       - 0.001
@@ -555,16 +585,29 @@ class AstroProcess(val config: ProcessConfig) {
             .resolve(config.stack.stackedOutputDirectory)
             .resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.${config.format.outputImageExtension}")
         val stackedImage = if (!outputStackedFile.exists()) {
+            val outputStackedMaxFile = currentDir
+                .resolve(config.stack.stackedOutputDirectory)
+                .resolve("${inputFiles[0].nameWithoutExtension}_stacked-max_${alignedFiles.size}.${config.format.outputImageExtension}")
+            var stackedMaxImage: Image? = null
+
             val alignedFileSuppliers = alignedFiles.map {
                 {
                     println("Loading $it")
-                    ImageReader.read(it)
+                    val image = ImageReader.read(it)
+                    stackedMaxImage = stackedMaxImage?.let { max(it, image) } ?: image
+                    image
                 }
             }
             val stackedImage = elapsed("Stacking images") { stack(alignedFileSuppliers) }
 
             println("Saving $outputStackedFile")
             ImageWriter.write(stackedImage, outputStackedFile)
+
+            stackedMaxImage?.let {
+                println("Saving $outputStackedMaxFile")
+                ImageWriter.write(it, outputStackedMaxFile)
+            }
+
             stackedImage
         } else {
             println("Stacked image already exists: $outputStackedFile")
@@ -717,17 +760,30 @@ class AstroProcess(val config: ProcessConfig) {
                             highDynamicRange(hdrSourceImages.map { { it } })
                         }
                     }
-                    if (colorStretchStepConfig.addToHighDynamicRange) {
-                        hdrSourceImages.add(stepResultImage)
-                    }
                     stepResultImage
+                }
+                if (colorStretchStepConfig.addToHighDynamicRange) {
+                    hdrSourceImages.add(image)
                 }
             }
         }
 
         if (enhanceConfig.noise.enabled) {
             step("noise reduction") {
-                it.reduceNoiseUsingMultiScaleMedianTransform(enhanceConfig.noise.thresholds)
+                val thresholdingFunc: (Double, Double) -> Double = when(enhanceConfig.noise.thresholding) {
+                    Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
+                    Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
+                    Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
+                    Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoid(v, threshold) }
+                }
+                when(enhanceConfig.noise.algorithm) {
+                    NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
+                        it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(enhanceConfig.noise.thresholds, thresholdingFunc)
+                    }
+                    NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
+                        it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(enhanceConfig.noise.thresholds, thresholdingFunc)
+                    }
+                }
             }
         }
 
