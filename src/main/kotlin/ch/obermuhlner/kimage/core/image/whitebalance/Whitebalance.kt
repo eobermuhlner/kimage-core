@@ -30,9 +30,9 @@ fun Image.applyWhitebalanceLocal(fixPoints: List<PointXY>, medianRadius: Int) {
     val blueValues = mutableListOf<Double>()
     val squareSize = medianRadius+1+medianRadius
     fixPoints.forEach {
-        redValues.addAll(redMatrix.crop(it.y-medianRadius, it.x+medianRadius, squareSize, squareSize).values())
-        greenValues.addAll(greenMatrix.crop(it.y-medianRadius, it.x+medianRadius, squareSize, squareSize).values())
-        blueValues.addAll(blueMatrix.crop(it.y-medianRadius, it.x+medianRadius, squareSize, squareSize).values())
+        redValues.addAll(redMatrix.crop(it.y-medianRadius, it.x-medianRadius, squareSize, squareSize).values())
+        greenValues.addAll(greenMatrix.crop(it.y-medianRadius, it.x-medianRadius, squareSize, squareSize).values())
+        blueValues.addAll(blueMatrix.crop(it.y-medianRadius, it.x-medianRadius, squareSize, squareSize).values())
     }
 
     val redMedian = redValues.medianInplace()

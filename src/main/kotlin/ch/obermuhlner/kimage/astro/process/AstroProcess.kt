@@ -124,19 +124,45 @@ data class StackConfig(
 )
 
 data class EnhanceConfig(
-    var debayer: DebayerConfig = DebayerConfig(enabled = false),
-    var rotate: RotateConfig = RotateConfig(),
-    var crop: RectangleConfig = RectangleConfig(),
-    var noise: NoiseConfig = NoiseConfig(),
-    var background: BackgroundConfig = BackgroundConfig(),
-    var whitebalance: WhitebalanceConfig = WhitebalanceConfig(),
-    var colorStretch: ColorStretchConfig = ColorStretchConfig(),
+    var measure: RectangleConfig = RectangleConfig(),
+    var regionOfInterest: RectangleConfig = RectangleConfig(),
+    var steps: MutableList<ColorStretchStepConfig> = mutableListOf(),
     var histogram: HistogramConfig = HistogramConfig(),
     var enhancedOutputDirectory: String = "astro-process/enhanced",
 )
 
+data class ColorStretchStepConfig(
+    var enabled: Boolean = true,
+    var type: ColorStretchStepType = ColorStretchStepType.LinearPercentile,
+    var debayer: DebayerConfig = DebayerConfig(),
+    var crop: RectangleConfig = RectangleConfig(),
+    var rotate: RotateConfig = RotateConfig(),
+    var reduceNoise: ReduceNoiseConfig = ReduceNoiseConfig(),
+    var whitebalance: WhitebalanceConfig = WhitebalanceConfig(),
+    var removeBackground: RemoveBackgroundConfig = RemoveBackgroundConfig(),
+    var sigmoid: SigmoidConfig = SigmoidConfig(),
+    var linearPercentile: LinearPercentileConfig = LinearPercentileConfig(),
+    var blur: BlurConfig = BlurConfig(),
+    var unsharpMask: UnsharpMaskConfig = UnsharpMaskConfig(),
+    var addToHighDynamicRange: Boolean = false,
+)
+
+enum class ColorStretchStepType {
+    Debayer,
+    Crop,
+    Rotate,
+    Whitebalance,
+    RemoveBackground,
+    LinearPercentile,
+    Sigmoid,
+    Blur,
+    Sharpen,
+    UnsharpMask,
+    ReduceNoise,
+    HighDynamicRange
+}
+
 data class RotateConfig(
-    var enabled: Boolean = false,
     var angle: Double = 0.0,
 )
 
@@ -160,15 +186,13 @@ enum class NoiseReductionAlgorithm {
     MultiScaleMedianOverGrayChannel,
 }
 
-data class NoiseConfig(
-    var enabled: Boolean = true,
+data class ReduceNoiseConfig(
     var algorithm: NoiseReductionAlgorithm = NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels,
     var thresholding: Thresholding = Thresholding.Soft,
     var thresholds: MutableList<Double> = mutableListOf(0.0001)
 )
 
-data class BackgroundConfig(
-    var enabled: Boolean = false,
+data class RemoveBackgroundConfig(
     var fixPoints: FixPointsConfig = FixPointsConfig(),
     var medianRadius: Int = 50,
     var power: Double = 1.5,
@@ -207,38 +231,24 @@ enum class WhitebalanceType {
     Custom
 }
 
-data class ColorStretchConfig(
-    var enabled: Boolean = true,
-    var measure: RectangleConfig = RectangleConfig(),
-    var regionOfInterest: RectangleConfig = RectangleConfig(),
-    var steps: MutableList<ColorStretchStepConfig> = mutableListOf()
+data class SigmoidConfig(
+    var midpoint: Double = 0.5,
+    var strength: Double = 1.0,
 )
 
-data class ColorStretchStepConfig(
-    var enabled: Boolean = true,
-    var type: ColorStretchStepType = ColorStretchStepType.LinearPercentile,
-    var sigmoidMidpoint: Double = 0.1,
-    var sigmoidFactor: Double = 10.0,
-    var linearPercentileMin: Double = 0.0001,
-    var linearPercentileMax: Double = 0.9999,
-    var blurStrength: Double = 0.1,
-    var reduceNoiseAlgorithm: NoiseReductionAlgorithm = NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels,
-    var reduceNoiseThresholding: Thresholding = Thresholding.Soft,
-    var reduceNoiseThresholds: MutableList<Double> = mutableListOf(0.0001),
-    var unsharpMaskRadius: Int = 1,
-    var unsharpMaskStrength: Double = 1.0,
-    var addToHighDynamicRange: Boolean = false,
+data class LinearPercentileConfig(
+    var minPercentile: Double = 0.0001,
+    var maxPercentile: Double = 0.9999,
 )
 
-enum class ColorStretchStepType {
-    LinearPercentile,
-    Sigmoid,
-    Blur,
-    Sharpen,
-    UnsharpMask,
-    ReduceNoise,
-    HighDynamicRange
-}
+data class BlurConfig(
+    var strength: Double = 0.1,
+)
+
+data class UnsharpMaskConfig(
+    var radius: Int = 1,
+    var strength: Double = 1.0,
+)
 
 data class HistogramConfig(
     var enabled: Boolean = true,
@@ -271,59 +281,63 @@ format:
   inputImageExtension: fit
   outputImageExtension: tif
 enhance:
-  rotate:
-    enabled: false
-    angle: 0
-  crop:
-    enabled: true
-    x: 100
-    y: 100
-    width: -100
-    height: -100
-  whitebalance:
-    enabled: true
-    type: Local
-    fixPoints:
-      type: FourCorners
-      borderDistance: 100
-      customPoints: []
-    localMedianRadius: 50
-    valueRangeMin: 0.2
-    valueRangeMax: 0.9
-  colorStretch:
-    enabled: true
-    steps:
-    - type: LinearPercentile
-      addToHighDynamicRange: true
-    - type: Blur
-      blurStrength: 0.1
-    - type: Sigmoid
-      sigmoidMidpoint: 0.01
-      sigmoidFactor: 1.1
-    - type: LinearPercentile
-      addToHighDynamicRange: true
-    - type: Sigmoid
-      sigmoidMidpoint: 0.3
-      sigmoidFactor: 1.1
-      addToHighDynamicRange: true
-    - type: Sigmoid
-      sigmoidMidpoint: 0.4
-      sigmoidFactor: 1.1
-      addToHighDynamicRange: true
-    - type: Sigmoid
-      sigmoidMidpoint: 0.4
-      sigmoidFactor: 1.1
-      addToHighDynamicRange: true
-    - type: HighDynamicRange
-    - type: Sigmoid
-      sigmoidMidpoint: 0.4
-      sigmoidFactor: 1.5
-  noise:
-    enabled: true
-    thresholding: Soft
-    thresholds:
-      - 0.01
-      - 0.001
+  steps:
+  - type: Rotate
+    rotate:
+      angle: 0
+  - type: Crop
+    crop:
+      x: 100
+      y: 100
+      width: -100
+      height: -100
+  - type: Whitebalance
+    whitebalance:
+      enabled: true
+      type: Local
+      fixPoints:
+        type: FourCorners
+        borderDistance: 100
+      localMedianRadius: 50
+      valueRangeMin: 0.2
+      valueRangeMax: 0.9    
+  - type: LinearPercentile
+    addToHighDynamicRange: true
+  - type: Blur
+    blur:
+      strength: 0.1
+  - type: Sigmoid
+    sigmoid:
+      midpoint: 0.01
+      strength: 1.1
+  - type: LinearPercentile
+    addToHighDynamicRange: true
+  - type: Sigmoid
+    sigmoid:
+      midpoint: 0.3
+      strength: 1.1
+    addToHighDynamicRange: true
+  - type: Sigmoid
+    sigmoid:
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - type: Sigmoid
+    sigmoid:
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - type: HighDynamicRange
+  - type: Sigmoid
+    sigmoid:
+      midpoint: 0.4
+      strength: 1.5
+  - type: ReduceNoise
+    reduceNoise:
+      thresholding: Soft
+      thresholds:
+        - 0.01
+        - 0.001
 """.trimIndent()
 
 fun main(args: Array<String>) {
@@ -810,162 +824,158 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
 
-        if (enhanceConfig.debayer.enabled) {
-            step("debayering") {
-                debayerImageIfConfigured(it, enhanceConfig.debayer)
-            }
-        }
-
-        if (enhanceConfig.rotate.enabled && enhanceConfig.rotate.angle != 0.0) {
-            step("rotate") {
-                when(enhanceConfig.rotate.angle) {
-                    90.0,-270.0 -> it.rotateRight()
-                    180.0, -180.0 -> it.rotateRight().rotateRight()
-                    -90.0, 270.0 -> it.rotateLeft()
-                    else -> {
-                        val angleRad = enhanceConfig.rotate.angle.toRadians()
-                        val cosA = cos(angleRad)
-                        val sinA = sin(angleRad)
-
-                        val transformationMatrix = DoubleMatrix.matrixOf(3, 3,
-                            cosA, -sinA, 0.0,
-                            sinA, cosA, 0.0,
-                            0.0, 0.0, 1.0
-                        )
-                        applyTransformationToImage(it, transformationMatrix )
+        val hdrSourceImages = mutableListOf<Image>()
+        for (colorStretchStepIndex in enhanceConfig.steps.indices) {
+            val colorStretchStepConfig = enhanceConfig.steps[colorStretchStepIndex]
+            val name = "${colorStretchStepConfig.type}"
+            step(name) {
+                val stepResultImage = when (colorStretchStepConfig.type) {
+                    ColorStretchStepType.Debayer -> {
+                        val badPixels = if (colorStretchStepConfig.debayer.cleanupBadPixels) {
+                            val mosaic = image[Channel.Red]
+                            val badPixels = mosaic.findBayerBadPixels()
+                            println("Found ${badPixels.size} bad pixels")
+                            badPixels
+                        } else {
+                            emptySet()
+                        }
+                        it.debayer(colorStretchStepConfig.debayer.bayerPattern, badpixelCoords = badPixels)
                     }
-                }
-            }
-        }
 
-        if (enhanceConfig.crop.enabled) {
-            step("crop") {
-                val width =
-                    if (enhanceConfig.crop.width < 0) it.width - enhanceConfig.crop.x + enhanceConfig.crop.width else enhanceConfig.crop.width
-                val height =
-                    if (enhanceConfig.crop.height < 0) it.height - enhanceConfig.crop.y + enhanceConfig.crop.height else enhanceConfig.crop.height
-                it.crop(enhanceConfig.crop.x, enhanceConfig.crop.y, width, height, false)
-            }
-        }
+                    ColorStretchStepType.Crop -> {
+                        val width =
+                            if (colorStretchStepConfig.crop.width < 0) it.width - colorStretchStepConfig.crop.x + colorStretchStepConfig.crop.width else colorStretchStepConfig.crop.width
+                        val height =
+                            if (colorStretchStepConfig.crop.height < 0) it.height - colorStretchStepConfig.crop.y + colorStretchStepConfig.crop.height else colorStretchStepConfig.crop.height
+                        it.crop(
+                            colorStretchStepConfig.crop.x,
+                            colorStretchStepConfig.crop.y,
+                            width,
+                            height
+                        )
+                    }
 
-        if (enhanceConfig.background.enabled) {
-            step("background") {
-                val fixPoints = getFixPoints(it, enhanceConfig.background.fixPoints)
-                val fixPointValues = it.getFixPointValues(fixPoints, enhanceConfig.background.medianRadius)
-                val background = it.interpolate(fixPointValues, power = enhanceConfig.background.power)
-                it - background + enhanceConfig.background.offset
-            }
-        }
+                    ColorStretchStepType.Rotate -> {
+                        when(colorStretchStepConfig.rotate.angle) {
+                            90.0,-270.0 -> it.rotateRight()
+                            180.0, -180.0 -> it.rotateRight().rotateRight()
+                            -90.0, 270.0 -> it.rotateLeft()
+                            else -> {
+                                val angleRad = colorStretchStepConfig.rotate.angle.toRadians()
+                                val cosA = cos(angleRad)
+                                val sinA = sin(angleRad)
 
-        if (enhanceConfig.whitebalance.enabled) {
-            step("whitebalance") {
-                when(enhanceConfig.whitebalance.type) {
-                    WhitebalanceType.Global -> it.applyWhitebalanceGlobal(enhanceConfig.whitebalance.valueRangeMin, enhanceConfig.whitebalance.valueRangeMax)
-                    WhitebalanceType.Local -> it.applyWhitebalanceLocal(getFixPoints(it, enhanceConfig.whitebalance.fixPoints), enhanceConfig.whitebalance.localMedianRadius)
-                    WhitebalanceType.Custom -> it.applyWhitebalance(enhanceConfig.whitebalance.customRed, enhanceConfig.whitebalance.customGreen, enhanceConfig.whitebalance.customBlue)
-                }
-                it
-            }
-        }
-
-        if (enhanceConfig.colorStretch.enabled) {
-            val hdrSourceImages = mutableListOf<Image>()
-            for (colorStretchStepIndex in enhanceConfig.colorStretch.steps.indices) {
-                val colorStretchStepConfig = enhanceConfig.colorStretch.steps[colorStretchStepIndex]
-                val name = "stretch-$colorStretchStepIndex-${colorStretchStepConfig.type}"
-                step(name) {
-                    val stepResultImage = when (colorStretchStepConfig.type) {
-                        ColorStretchStepType.LinearPercentile -> {
-                            if (enhanceConfig.colorStretch.measure.enabled) {
-                                it.stretchLinearPercentile(
-                                    colorStretchStepConfig.linearPercentileMin,
-                                    colorStretchStepConfig.linearPercentileMax,
-                                    it.crop(
-                                        enhanceConfig.colorStretch.measure.x,
-                                        enhanceConfig.colorStretch.measure.y,
-                                        enhanceConfig.colorStretch.measure.width,
-                                        enhanceConfig.colorStretch.measure.height,
-                                    ).histogram()
+                                val transformationMatrix = DoubleMatrix.matrixOf(3, 3,
+                                    cosA, -sinA, 0.0,
+                                    sinA, cosA, 0.0,
+                                    0.0, 0.0, 1.0
                                 )
-                            } else {
-                                it.stretchLinearPercentile(
-                                    colorStretchStepConfig.linearPercentileMin,
-                                    colorStretchStepConfig.linearPercentileMax
-                                )
+                                applyTransformationToImage(it, transformationMatrix )
                             }
                         }
+                    }
 
-                        ColorStretchStepType.Sigmoid -> {
-                            it.stretchSigmoidLike(
-                                colorStretchStepConfig.sigmoidMidpoint,
-                                colorStretchStepConfig.sigmoidFactor
+                    ColorStretchStepType.LinearPercentile -> {
+                        if (enhanceConfig.measure.enabled) {
+                            it.stretchLinearPercentile(
+                                colorStretchStepConfig.linearPercentile.minPercentile,
+                                colorStretchStepConfig.linearPercentile.maxPercentile,
+                                it.crop(
+                                    enhanceConfig.measure.x,
+                                    enhanceConfig.measure.y,
+                                    enhanceConfig.measure.width,
+                                    enhanceConfig.measure.height,
+                                ).histogram()
+                            )
+                        } else {
+                            it.stretchLinearPercentile(
+                                colorStretchStepConfig.linearPercentile.minPercentile,
+                                colorStretchStepConfig.linearPercentile.maxPercentile
                             )
                         }
+                    }
 
-                        ColorStretchStepType.Blur -> {
-                            (it * (1.0 - colorStretchStepConfig.blurStrength)) + (it.gaussianBlur3Filter() * colorStretchStepConfig.blurStrength)
+                    ColorStretchStepType.RemoveBackground -> {
+                        val fixPoints = getFixPoints(it, colorStretchStepConfig.removeBackground.fixPoints)
+                        val fixPointValues = it.getFixPointValues(fixPoints, colorStretchStepConfig.removeBackground.medianRadius)
+                        val background = it.interpolate(fixPointValues, power = colorStretchStepConfig.removeBackground.power)
+                        it - background + colorStretchStepConfig.removeBackground.offset
+                    }
+
+                    ColorStretchStepType.Whitebalance -> {
+                        when(colorStretchStepConfig.whitebalance.type) {
+                            WhitebalanceType.Global -> it.applyWhitebalanceGlobal(
+                                colorStretchStepConfig.whitebalance.valueRangeMin,
+                                colorStretchStepConfig.whitebalance.valueRangeMax
+                            )
+                            WhitebalanceType.Local -> it.applyWhitebalanceLocal(
+                                getFixPoints(it, colorStretchStepConfig.whitebalance.fixPoints),
+                                colorStretchStepConfig.whitebalance.localMedianRadius
+                            )
+                            WhitebalanceType.Custom -> it.applyWhitebalance(
+                                colorStretchStepConfig.whitebalance.customRed,
+                                colorStretchStepConfig.whitebalance.customGreen,
+                                colorStretchStepConfig.whitebalance.customBlue
+                            )
                         }
+                        it
+                    }
 
-                        ColorStretchStepType.Sharpen -> {
-                            it.sharpenFilter()
+                    ColorStretchStepType.Sigmoid -> {
+                        it.stretchSigmoidLike(
+                            colorStretchStepConfig.sigmoid.midpoint,
+                            colorStretchStepConfig.sigmoid.strength
+                        )
+                    }
+
+                    ColorStretchStepType.Blur -> {
+                        (it * (1.0 - colorStretchStepConfig.blur.strength)) + (it.gaussianBlur3Filter() * colorStretchStepConfig.blur.strength)
+                    }
+
+                    ColorStretchStepType.Sharpen -> {
+                        it.sharpenFilter()
+                    }
+
+                    ColorStretchStepType.UnsharpMask -> {
+                        it.unsharpMaskFilter(colorStretchStepConfig.unsharpMask.radius, colorStretchStepConfig.unsharpMask.strength)
+                    }
+
+                    ColorStretchStepType.ReduceNoise -> {
+                        val thresholdingFunc: (Double, Double) -> Double = when(colorStretchStepConfig.reduceNoise.thresholding) {
+                            Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
+                            Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
+                            Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
+                            Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
                         }
-
-                        ColorStretchStepType.UnsharpMask -> {
-                            it.unsharpMaskFilter(colorStretchStepConfig.unsharpMaskRadius, colorStretchStepConfig.unsharpMaskStrength)
-                        }
-
-                        ColorStretchStepType.ReduceNoise -> {
-                            val thresholdingFunc: (Double, Double) -> Double = when(colorStretchStepConfig.reduceNoiseThresholding) {
-                                Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
-                                Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
-                                Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
-                                Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
+                        when(colorStretchStepConfig.reduceNoise.algorithm) {
+                            NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
+                                it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(colorStretchStepConfig.reduceNoise.thresholds, thresholdingFunc)
                             }
-                            when(colorStretchStepConfig.reduceNoiseAlgorithm) {
-                                NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
-                                    it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(colorStretchStepConfig.reduceNoiseThresholds, thresholdingFunc)
-                                }
-                                NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
-                                    it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(colorStretchStepConfig.reduceNoiseThresholds, thresholdingFunc)
-                                }
+                            NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
+                                it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(colorStretchStepConfig.reduceNoise.thresholds, thresholdingFunc)
                             }
-                        }
-
-                        ColorStretchStepType.HighDynamicRange -> {
-                            highDynamicRange(hdrSourceImages.map { { it } })
                         }
                     }
-                    if (enhanceConfig.colorStretch.regionOfInterest.enabled) {
-                        val roiImage = stepResultImage.crop(enhanceConfig.colorStretch.regionOfInterest.x, enhanceConfig.colorStretch.regionOfInterest.y, enhanceConfig.colorStretch.regionOfInterest.width, enhanceConfig.colorStretch.regionOfInterest.height)
-                        val roiImageFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                            .resolve("region_step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
-                        ImageWriter.write(roiImage, roiImageFile)
+
+                    ColorStretchStepType.HighDynamicRange -> {
+                        highDynamicRange(hdrSourceImages.map { { it } })
                     }
-                    stepResultImage
                 }
-                if (colorStretchStepConfig.addToHighDynamicRange) {
-                    hdrSourceImages.add(image)
+                if (enhanceConfig.regionOfInterest.enabled) {
+                    val roiImage = stepResultImage.crop(
+                        enhanceConfig.regionOfInterest.x,
+                        enhanceConfig.regionOfInterest.y,
+                        enhanceConfig.regionOfInterest.width,
+                        enhanceConfig.regionOfInterest.height
+                    )
+                    val roiImageFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
+                        .resolve("region_step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
+                    ImageWriter.write(roiImage, roiImageFile)
                 }
+                stepResultImage
             }
-        }
-
-        // TODO remove
-        if (enhanceConfig.noise.enabled) {
-            step("noise reduction") {
-                val thresholdingFunc: (Double, Double) -> Double = when(enhanceConfig.noise.thresholding) {
-                    Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
-                    Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
-                    Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
-                    Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
-                }
-                when(enhanceConfig.noise.algorithm) {
-                    NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
-                        it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(enhanceConfig.noise.thresholds, thresholdingFunc)
-                    }
-                    NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
-                        it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(enhanceConfig.noise.thresholds, thresholdingFunc)
-                    }
-                }
+            if (colorStretchStepConfig.addToHighDynamicRange) {
+                hdrSourceImages.add(image)
             }
         }
 
