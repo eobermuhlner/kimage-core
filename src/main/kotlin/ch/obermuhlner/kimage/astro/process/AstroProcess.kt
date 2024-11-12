@@ -25,6 +25,8 @@ import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlur3Filter
 import ch.obermuhlner.kimage.core.image.filter.laplacianFilter
+import ch.obermuhlner.kimage.core.image.filter.sharpenFilter
+import ch.obermuhlner.kimage.core.image.filter.unsharpMaskFilter
 import ch.obermuhlner.kimage.core.image.hdr.highDynamicRange
 import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
@@ -34,6 +36,7 @@ import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTr
 import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel
 import ch.obermuhlner.kimage.core.image.noise.thresholdHard
 import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoid
+import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoidLike
 import ch.obermuhlner.kimage.core.image.noise.thresholdSoft
 import ch.obermuhlner.kimage.core.image.plus
 import ch.obermuhlner.kimage.core.image.stack.max
@@ -69,13 +72,21 @@ data class ProcessConfig(
     var align: AlignConfig = AlignConfig(),
     var stack: StackConfig = StackConfig(),
     var enhance: EnhanceConfig = EnhanceConfig(),
+    var output: OutputFormatConfig = OutputFormatConfig()
 )
 
 data class FormatConfig(
     var inputImageExtension: String = "fit",
     var inputDirectory: String = ".",
+    var filenameTokens: FilenameTokensConfig = FilenameTokensConfig(),
     var debayer: DebayerConfig = DebayerConfig(),
     var outputImageExtension: String = "tif",
+)
+
+data class FilenameTokensConfig(
+    var enabled: Boolean = false,
+    var separator: String = "_",
+    var names: MutableList<String> = mutableListOf()
 )
 
 data class DebayerConfig(
@@ -113,7 +124,6 @@ data class StackConfig(
 )
 
 data class EnhanceConfig(
-    var enhancedOutputDirectory: String = "astro-process/enhanced",
     var debayer: DebayerConfig = DebayerConfig(enabled = false),
     var rotate: RotateConfig = RotateConfig(),
     var crop: RectangleConfig = RectangleConfig(),
@@ -122,10 +132,11 @@ data class EnhanceConfig(
     var whitebalance: WhitebalanceConfig = WhitebalanceConfig(),
     var colorStretch: ColorStretchConfig = ColorStretchConfig(),
     var histogram: HistogramConfig = HistogramConfig(),
-    var finalFormat: FinalFormatConfig = FinalFormatConfig()
+    var enhancedOutputDirectory: String = "astro-process/enhanced",
 )
 
 data class RotateConfig(
+    var enabled: Boolean = false,
     var angle: Double = 0.0,
 )
 
@@ -199,6 +210,7 @@ enum class WhitebalanceType {
 data class ColorStretchConfig(
     var enabled: Boolean = true,
     var measure: RectangleConfig = RectangleConfig(),
+    var regionOfInterest: RectangleConfig = RectangleConfig(),
     var steps: MutableList<ColorStretchStepConfig> = mutableListOf()
 )
 
@@ -210,6 +222,11 @@ data class ColorStretchStepConfig(
     var linearPercentileMin: Double = 0.0001,
     var linearPercentileMax: Double = 0.9999,
     var blurStrength: Double = 0.1,
+    var reduceNoiseAlgorithm: NoiseReductionAlgorithm = NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels,
+    var reduceNoiseThresholding: Thresholding = Thresholding.Soft,
+    var reduceNoiseThresholds: MutableList<Double> = mutableListOf(0.0001),
+    var unsharpMaskRadius: Int = 1,
+    var unsharpMaskStrength: Double = 1.0,
     var addToHighDynamicRange: Boolean = false,
 )
 
@@ -217,6 +234,9 @@ enum class ColorStretchStepType {
     LinearPercentile,
     Sigmoid,
     Blur,
+    Sharpen,
+    UnsharpMask,
+    ReduceNoise,
     HighDynamicRange
 }
 
@@ -227,9 +247,19 @@ data class HistogramConfig(
     var printPercentiles: Boolean = false,
 )
 
-data class FinalFormatConfig(
-    var outputImageExtensions: MutableList<String> = mutableListOf("tif", "jpg", "png")
+data class OutputFormatConfig(
+    var outputName: String = "{${InfoTokens.firstInput.name}}_{${InfoTokens.calibration.name}}_{${InfoTokens.stackedCount.name}}x",
+    var outputImageExtensions: MutableList<String> = mutableListOf("tif", "jpg", "png"),
+    var outputDirectory: String = "astro-process/output",
 )
+
+enum class InfoTokens {
+    parentDir,
+    firstInput,
+    inputCount,
+    stackedCount,
+    calibration,
+}
 
 val defaultAstroProcessConfigText = """
 quick: false
@@ -241,6 +271,9 @@ format:
   inputImageExtension: fit
   outputImageExtension: tif
 enhance:
+  rotate:
+    enabled: false
+    angle: 0
   crop:
     enabled: true
     x: 100
@@ -373,8 +406,13 @@ class AstroProcess(val config: ProcessConfig) {
     }
 
     fun astroProcess() {
-        val currentDir = File(".")
+        val infoTokens = mutableMapOf<String, String>()
         var dirty = false
+        val currentDir = File(".")
+
+        currentDir.absoluteFile.parentFile?.let {
+            infoTokens[InfoTokens.parentDir.name] = it.name
+        }
 
         println("### Processing calibration images ...")
 
@@ -388,6 +426,9 @@ class AstroProcess(val config: ProcessConfig) {
                 config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             )
+        }
+        if (bias != null) {
+            infoTokens.merge(InfoTokens.calibration.name, "bias") { old, new -> "$old,$new" }
         }
         dirty = dirty || dirtyBias
 
@@ -404,6 +445,9 @@ class AstroProcess(val config: ProcessConfig) {
                 Pair(it.first.normalizeImage(),it.second)
             }
         }
+        if (flat != null) {
+            infoTokens.merge(InfoTokens.calibration.name, "flat") { old, new -> "$old,$new" }
+        }
         dirty = dirty || dirtyFlat
 
         println()
@@ -417,6 +461,9 @@ class AstroProcess(val config: ProcessConfig) {
                 config.calibrate.debayer.enabled
             )
         }
+        if (darkflat != null) {
+            infoTokens.merge(InfoTokens.calibration.name, "darkflat") { old, new -> "$old,$new" }
+        }
         dirty = dirty || dirtyDarkFlat
 
         println()
@@ -429,6 +476,9 @@ class AstroProcess(val config: ProcessConfig) {
                 config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             )
+        }
+        if (dark != null) {
+            infoTokens.merge(InfoTokens.calibration.name, "dark") { old, new -> "$old,$new" }
         }
         dirty = dirty || dirtyDark
 
@@ -461,6 +511,18 @@ class AstroProcess(val config: ProcessConfig) {
             println()
             println("Quick mode: only processing ${config.quickCount} input file")
             inputFiles = inputFiles.take(config.quickCount)
+        }
+
+        infoTokens[InfoTokens.inputCount.name] = inputFiles.size.toString()
+        inputFiles[0].let {
+            infoTokens[InfoTokens.firstInput.name] = it.nameWithoutExtension
+            if (config.format.filenameTokens.enabled) {
+                val tokens = it.nameWithoutExtension.split(config.format.filenameTokens.separator)
+                require(tokens.size == config.format.filenameTokens.names.size) { "Wrong number of tokens in filename '${it.nameWithoutExtension}', expected ${config.format.filenameTokens.names.size} but found ${tokens.size}" }
+                for (i in tokens.indices) {
+                    infoTokens[config.format.filenameTokens.names[i]] = tokens[i]
+                }
+            }
         }
 
         val minBackground = mutableMapOf<Channel, Double>()
@@ -624,6 +686,7 @@ class AstroProcess(val config: ProcessConfig) {
 
         println()
         println("### Stacking ${alignedFiles.size} aligned images ...")
+        infoTokens[InfoTokens.stackedCount.name] = alignedFiles.size.toString()
 
         var dirtyStacked = false
         val outputStackedFile = currentDir
@@ -665,28 +728,30 @@ class AstroProcess(val config: ProcessConfig) {
         println("### Enhancing stacked image ...")
         println()
         elapsed("enhance") {
-            val referenceName = inputFiles[0].nameWithoutExtension
-            astroEnhance(config.format, config.enhance, stackedImage, dirty, referenceName)
+            astroEnhance(config.format, config.enhance, config.output, stackedImage, dirty, infoTokens)
         }
     }
 
     fun astroEnhance(
         formatConfig: FormatConfig,
         enhanceConfig: EnhanceConfig,
+        outputConfig: OutputFormatConfig,
         inputFile: File,
     ) {
         println("Reading $inputFile")
-        var inputImage = ImageReader.read(inputFile)
+        val inputImage = ImageReader.read(inputFile)
 
-        return astroEnhance(formatConfig, enhanceConfig, inputImage, true, inputFile.nameWithoutExtension)
+        val infoTokens = mutableMapOf(InfoTokens.firstInput.name to inputFile.nameWithoutExtension)
+        return astroEnhance(formatConfig, enhanceConfig, outputConfig, inputImage, true, infoTokens)
     }
 
     fun astroEnhance(
         formatConfig: FormatConfig,
         enhanceConfig: EnhanceConfig,
+        outputConfig: OutputFormatConfig,
         inputImage: Image,
         alreadyDirty: Boolean,
-        referenceName: String
+        infoTokens: MutableMap<String, String>,
     ) {
         val currentDir = File(".")
         currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
@@ -751,7 +816,7 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
 
-        if (enhanceConfig.rotate.angle != 0.0) {
+        if (enhanceConfig.rotate.enabled && enhanceConfig.rotate.angle != 0.0) {
             step("rotate") {
                 when(enhanceConfig.rotate.angle) {
                     90.0,-270.0 -> it.rotateRight()
@@ -841,9 +906,40 @@ class AstroProcess(val config: ProcessConfig) {
                             (it * (1.0 - colorStretchStepConfig.blurStrength)) + (it.gaussianBlur3Filter() * colorStretchStepConfig.blurStrength)
                         }
 
+                        ColorStretchStepType.Sharpen -> {
+                            it.sharpenFilter()
+                        }
+
+                        ColorStretchStepType.UnsharpMask -> {
+                            it.unsharpMaskFilter(colorStretchStepConfig.unsharpMaskRadius, colorStretchStepConfig.unsharpMaskStrength)
+                        }
+
+                        ColorStretchStepType.ReduceNoise -> {
+                            val thresholdingFunc: (Double, Double) -> Double = when(colorStretchStepConfig.reduceNoiseThresholding) {
+                                Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
+                                Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
+                                Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
+                                Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
+                            }
+                            when(colorStretchStepConfig.reduceNoiseAlgorithm) {
+                                NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
+                                    it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(colorStretchStepConfig.reduceNoiseThresholds, thresholdingFunc)
+                                }
+                                NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
+                                    it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(colorStretchStepConfig.reduceNoiseThresholds, thresholdingFunc)
+                                }
+                            }
+                        }
+
                         ColorStretchStepType.HighDynamicRange -> {
                             highDynamicRange(hdrSourceImages.map { { it } })
                         }
+                    }
+                    if (enhanceConfig.colorStretch.regionOfInterest.enabled) {
+                        val roiImage = stepResultImage.crop(enhanceConfig.colorStretch.regionOfInterest.x, enhanceConfig.colorStretch.regionOfInterest.y, enhanceConfig.colorStretch.regionOfInterest.width, enhanceConfig.colorStretch.regionOfInterest.height)
+                        val roiImageFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
+                            .resolve("region_step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
+                        ImageWriter.write(roiImage, roiImageFile)
                     }
                     stepResultImage
                 }
@@ -853,13 +949,14 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
 
+        // TODO remove
         if (enhanceConfig.noise.enabled) {
             step("noise reduction") {
                 val thresholdingFunc: (Double, Double) -> Double = when(enhanceConfig.noise.thresholding) {
                     Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
                     Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
                     Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
-                    Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoid(v, threshold) }
+                    Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
                 }
                 when(enhanceConfig.noise.algorithm) {
                     NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
@@ -872,9 +969,20 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
 
-        for (finalOutputImageExtension in enhanceConfig.finalFormat.outputImageExtensions) {
-            val enhancedFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                .resolve("$referenceName.$finalOutputImageExtension")
+        currentDir.resolve(outputConfig.outputDirectory).mkdirs()
+
+        println()
+        for (key in infoTokens.keys.sorted()) {
+            println("  $key : ${infoTokens[key]}")
+        }
+        val outputNamePatternRegex = Regex("\\{(\\w+)}")
+        val outputName = outputConfig.outputName.replace(outputNamePatternRegex) { match ->
+            val key = match.groupValues[1]
+            infoTokens[key] ?: ""
+        }
+        for (finalOutputImageExtension in outputConfig.outputImageExtensions) {
+            val enhancedFile = currentDir.resolve(outputConfig.outputDirectory)
+                .resolve("$outputName.$finalOutputImageExtension")
             println("Writing $enhancedFile")
             ImageWriter.write(image, enhancedFile)
         }
