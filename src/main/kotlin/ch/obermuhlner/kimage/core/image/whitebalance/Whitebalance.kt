@@ -3,10 +3,17 @@ package ch.obermuhlner.kimage.core.image.whitebalance
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.PointXY
+import ch.obermuhlner.kimage.core.image.copy
 import ch.obermuhlner.kimage.core.math.median
 import ch.obermuhlner.kimage.core.math.medianInplace
 import ch.obermuhlner.kimage.core.matrix.values.values
 import kotlin.math.max
+
+fun Image.whitebalanceGlobal(valueRangeMin: Double = 0.0, valueRangeMax: Double = 1.0): Image {
+    val result = this.copy()
+    applyWhitebalanceGlobal(valueRangeMin, valueRangeMax)
+    return result
+}
 
 fun Image.applyWhitebalanceGlobal(valueRangeMin: Double = 0.0, valueRangeMax: Double = 1.0) {
     val redMatrix = this[Channel.Red]
@@ -18,6 +25,12 @@ fun Image.applyWhitebalanceGlobal(valueRangeMin: Double = 0.0, valueRangeMax: Do
     val blueMedian = blueMatrix.values().filter { it in valueRangeMin..valueRangeMax }.median()
 
     applyWhitebalance(redMedian, greenMedian, blueMedian)
+}
+
+fun Image.whitebalanceLocal(fixPoints: List<PointXY>, medianRadius: Int): Image {
+    val result = this.copy()
+    applyWhitebalanceLocal(fixPoints, medianRadius)
+    return result
 }
 
 fun Image.applyWhitebalanceLocal(fixPoints: List<PointXY>, medianRadius: Int) {
@@ -40,6 +53,12 @@ fun Image.applyWhitebalanceLocal(fixPoints: List<PointXY>, medianRadius: Int) {
     val blueMedian = blueValues.medianInplace()
 
     applyWhitebalance(redMedian, greenMedian, blueMedian)
+}
+
+fun Image.whitebalance(redMedian: Double, greenMedian: Double, blueMedian: Double): Image {
+    val result = this.copy()
+    result.applyWhitebalance(redMedian, greenMedian, blueMedian)
+    return result
 }
 
 fun Image.applyWhitebalance(redMedian: Double, greenMedian: Double, blueMedian: Double) {
