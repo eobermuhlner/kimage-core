@@ -50,6 +50,7 @@ import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceGlobal
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceLocal
+import ch.obermuhlner.kimage.core.image.whitebalance.whitebalanceGlobal
 import ch.obermuhlner.kimage.core.math.Histogram
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
@@ -203,7 +204,12 @@ data class FixPointsConfig(
     var type: FixPointType = FixPointType.FourCorners,
     var borderDistance: Int = 100,
     var gridSize: Int = 2,
-    var customPoints: MutableList<PointXY> = mutableListOf()
+    var customPoints: MutableList<PointXYConfig> = mutableListOf()
+)
+
+data class PointXYConfig(
+    var x: Int = 0,
+    var y: Int = 0,
 )
 
 enum class FixPointType {
@@ -1019,7 +1025,7 @@ class AstroProcess(val config: ProcessConfig) {
             FixPointType.Grid -> image.createFixPointGrid(fixPointsConfig.gridSize)
             FixPointType.FourCorners -> image.createFixPointFourCorners(fixPointsConfig.borderDistance)
             FixPointType.EightCorners -> image.createFixPointEightCorners(fixPointsConfig.borderDistance)
-            FixPointType.Custom -> fixPointsConfig.customPoints
+            FixPointType.Custom -> fixPointsConfig.customPoints.map { PointXY(it.x, it.y)}
         }
     }
 }
