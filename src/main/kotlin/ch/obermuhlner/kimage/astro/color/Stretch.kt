@@ -5,7 +5,10 @@ import ch.obermuhlner.kimage.core.image.copy
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.math.Histogram
+import ch.obermuhlner.kimage.core.math.median
+import ch.obermuhlner.kimage.core.math.sigmaClip
 import ch.obermuhlner.kimage.core.math.sigmoidLike
+import ch.obermuhlner.kimage.core.math.stddev
 import kotlin.math.asinh
 import kotlin.math.ln
 import kotlin.math.pow
@@ -28,6 +31,18 @@ fun Image.histogram(): Histogram {
     val histogram = Histogram()
     this.channels.forEach { channel -> histogram.add(this[channel]) }
     return histogram
+}
+
+fun Image.stretchLinearSigmaClipped(
+    minKappa: Double = -1.0,
+    maxKappa: Double = 3.0,
+): Image {
+    val sigmaClipped = this.values().toList().toDoubleArray().sigmaClip()
+    val median = sigmaClipped.median()
+    val sigma = sigmaClipped.stddev()
+    val minValue = median + minKappa * sigma
+    val maxValue = median + maxKappa * sigma
+    return stretchLinear(minValue, maxValue)
 }
 
 fun Image.stretchLinear(
