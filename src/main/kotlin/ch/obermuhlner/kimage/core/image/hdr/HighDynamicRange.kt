@@ -20,7 +20,7 @@ fun highDynamicRange(
     exposureWeight: Double = 1.0,
     multiDimensionalFloatArraySupplier: (Int, Int, Int) -> MultiDimensionalFloatArray = { dim1, dim2, dim3 -> HugeMultiDimensionalFloatArray(dim1, dim2, dim3) },
 ): Image {
-    var baseImage = imageSuppliers[0]()
+    val baseImage = imageSuppliers[0]()
     val channels = baseImage.channels
 
     val weightChannelIndex = channels.size
