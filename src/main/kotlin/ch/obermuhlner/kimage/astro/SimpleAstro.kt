@@ -24,15 +24,24 @@ import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.minus
 import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import ch.obermuhlner.kimage.core.image.stack.stack
+import ch.obermuhlner.kimage.core.image.values.values
+import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceGlobal
+import ch.obermuhlner.kimage.core.math.median
+import ch.obermuhlner.kimage.core.math.sigmaClip
+import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.util.elapsed
 import java.io.File
 
 fun main(args: Array<String>) {
-    alignStarImages(
+    gridLinearPercentile(
         "/home/ero/astro/2024-10-29 Verzasca M31 M33 Alnitak/Alnitak/astro-process/calibrated/Light_Alnitak_180.0s_Bin1_533MC_gain100_20241030-020832_-10.0C_0001.tif",
-        "/home/ero/astro/2024-10-29 Verzasca M31 M33 Alnitak/Alnitak/astro-process/calibrated/Light_Alnitak_180.0s_Bin1_533MC_gain100_20241030-024405_-10.0C_0012.tif",
     )
+
+//    alignStarImages(
+//        "/home/ero/astro/2024-10-29 Verzasca M31 M33 Alnitak/Alnitak/astro-process/calibrated/Light_Alnitak_180.0s_Bin1_533MC_gain100_20241030-020832_-10.0C_0001.tif",
+//        "/home/ero/astro/2024-10-29 Verzasca M31 M33 Alnitak/Alnitak/astro-process/calibrated/Light_Alnitak_180.0s_Bin1_533MC_gain100_20241030-024405_-10.0C_0012.tif",
+//    )
 
 //    markStars("test-input/Alnitak.tif")
 
@@ -77,6 +86,47 @@ fun main(args: Array<String>) {
 //        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213410_-10.0C_0004.tif",
 //        "aligned_debayer_Light_M11_180.0s_Bin1_533MC_gain100_20240827-213734_-10.0C_0005.tif",
 //    )
+}
+
+private fun gridLinearPercentile(imageName: String) {
+    println(imageName)
+
+    val image = elapsed("Loaded $imageName") {
+        ImageReader.read(File(imageName))
+    }
+    elapsed("applyWhitebalanceGlobal") {
+        image.applyWhitebalanceGlobal()
+    }
+    /*
+    val histogram = elapsed("Fill histogram") {
+        image.histogram()
+    }
+    elapsed("stretchLinearPercentile") {
+        image.stretchLinearPercentile(0.001, 0.98, histogram).let {
+            ImageWriter.write(it, File("stretch_percentile.tif"))
+        }
+    }
+    elapsed("stretchLinear SigmaKappa") {
+        val median = histogram.estimateMedian()
+        val sigma = image.values().stddev()
+        val minValue = median + -1 * sigma
+        val maxValue = median + 4 * sigma
+        image.stretchLinear(minValue, maxValue).let {
+            ImageWriter.write(it, File("stretch_sigmakappa.tif"))
+        }
+    }
+    */
+    elapsed("stretchLinear sigmaClipped") {
+        val sigmaClipped = image.values().toList().toDoubleArray().sigmaClip()
+        val median = sigmaClipped.median()
+        val sigma = sigmaClipped.stddev()
+        val minValue = median + -1 * sigma
+        val maxValue = median + 3 * sigma
+        image.stretchLinear(minValue, maxValue).let {
+            ImageWriter.write(it, File("stretch_sigmaClipped.tif"))
+        }
+    }
+
 }
 
 private fun markStars(imageName: String) {
