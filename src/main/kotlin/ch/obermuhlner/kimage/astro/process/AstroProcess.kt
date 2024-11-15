@@ -50,7 +50,6 @@ import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceGlobal
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceLocal
-import ch.obermuhlner.kimage.core.image.whitebalance.whitebalanceGlobal
 import ch.obermuhlner.kimage.core.math.Histogram
 import ch.obermuhlner.kimage.core.math.clamp
 import ch.obermuhlner.kimage.core.math.median
@@ -127,28 +126,46 @@ data class StackConfig(
 data class EnhanceConfig(
     var measure: RectangleConfig = RectangleConfig(),
     var regionOfInterest: RectangleConfig = RectangleConfig(),
-    var steps: MutableList<ColorStretchStepConfig> = mutableListOf(),
+    var steps: MutableList<EnhanceStepConfig> = mutableListOf(),
     var histogram: HistogramConfig = HistogramConfig(),
     var enhancedOutputDirectory: String = "astro-process/enhanced",
 )
 
-data class ColorStretchStepConfig(
+data class EnhanceStepConfig(
     var enabled: Boolean = true,
-    var type: ColorStretchStepType = ColorStretchStepType.LinearPercentile,
-    var debayer: DebayerConfig = DebayerConfig(),
-    var crop: RectangleConfig = RectangleConfig(),
-    var rotate: RotateConfig = RotateConfig(),
-    var reduceNoise: ReduceNoiseConfig = ReduceNoiseConfig(),
-    var whitebalance: WhitebalanceConfig = WhitebalanceConfig(),
-    var removeBackground: RemoveBackgroundConfig = RemoveBackgroundConfig(),
-    var sigmoid: SigmoidConfig = SigmoidConfig(),
-    var linearPercentile: LinearPercentileConfig = LinearPercentileConfig(),
-    var blur: BlurConfig = BlurConfig(),
-    var unsharpMask: UnsharpMaskConfig = UnsharpMaskConfig(),
+    var debayer: DebayerConfig? = null,
+    var crop: RectangleConfig? = null,
+    var rotate: RotateConfig? = null,
+    var reduceNoise: ReduceNoiseConfig? = null,
+    var whitebalance: WhitebalanceConfig? = null,
+    var removeBackground: RemoveBackgroundConfig? = null,
+    var sigmoid: SigmoidConfig? = null,
+    var linearPercentile: LinearPercentileConfig? = null,
+    var blur: BlurConfig? = null,
+    var sharpen: SharpenConfig? = null,
+    var unsharpMask: UnsharpMaskConfig? = null,
+    var highDynamicRange: HighDynamicRangeConfig? = null,
     var addToHighDynamicRange: Boolean = false,
-)
+) {
+    val type: EnhanceStepType
+        get() = when {
+            debayer != null -> EnhanceStepType.Debayer
+            crop != null -> EnhanceStepType.Crop
+            rotate != null -> EnhanceStepType.Rotate
+            reduceNoise != null -> EnhanceStepType.ReduceNoise
+            whitebalance != null -> EnhanceStepType.Whitebalance
+            removeBackground != null -> EnhanceStepType.RemoveBackground
+            sigmoid != null -> EnhanceStepType.Sigmoid
+            linearPercentile != null -> EnhanceStepType.LinearPercentile
+            blur != null -> EnhanceStepType.Blur
+            sharpen != null -> EnhanceStepType.Sharpen
+            unsharpMask != null -> EnhanceStepType.UnsharpMask
+            highDynamicRange != null -> EnhanceStepType.HighDynamicRange
+            else -> throw IllegalArgumentException("No enhancement step configuration found")
+        }
+}
 
-enum class ColorStretchStepType {
+enum class EnhanceStepType {
     Debayer,
     Crop,
     Rotate,
@@ -162,6 +179,17 @@ enum class ColorStretchStepType {
     ReduceNoise,
     HighDynamicRange
 }
+
+data class HighDynamicRangeConfig(
+    var saturationBlurRadius: Int = 3,
+    var contrastWeight: Double = 0.2,
+    var saturationWeight: Double = 0.1,
+    var exposureWeight: Double = 1.0,
+)
+
+data class SharpenConfig(
+    var strength: Double = 0.5,
+)
 
 data class RotateConfig(
     var angle: Double = 0.0,
@@ -288,17 +316,14 @@ format:
   outputImageExtension: tif
 enhance:
   steps:
-  - type: Rotate
-    rotate:
+  - rotate:
       angle: 0
-  - type: Crop
-    crop:
+  - crop:
       x: 100
       y: 100
       width: -100
       height: -100
-  - type: Whitebalance
-    whitebalance:
+  - whitebalance:
       enabled: true
       type: Local
       fixPoints:
@@ -307,39 +332,39 @@ enhance:
       localMedianRadius: 50
       valueRangeMin: 0.2
       valueRangeMax: 0.9    
-  - type: LinearPercentile
+  - linearPercentile:
+      minPercentile: 0.0001
+      maxPercentile: 0.9999
     addToHighDynamicRange: true
-  - type: Blur
-    blur:
+  - blur:
       strength: 0.1
-  - type: Sigmoid
-    sigmoid:
+  - sigmoid:
       midpoint: 0.01
       strength: 1.1
-  - type: LinearPercentile
+  - linearPercentile:
+      minPercentile: 0.0001
+      maxPercentile: 0.9999
     addToHighDynamicRange: true
-  - type: Sigmoid
-    sigmoid:
+  - sigmoid:
       midpoint: 0.3
       strength: 1.1
     addToHighDynamicRange: true
-  - type: Sigmoid
-    sigmoid:
+  - sigmoid:
       midpoint: 0.4
       strength: 1.1
     addToHighDynamicRange: true
-  - type: Sigmoid
-    sigmoid:
+  - sigmoid:
       midpoint: 0.4
       strength: 1.1
     addToHighDynamicRange: true
-  - type: HighDynamicRange
-  - type: Sigmoid
-    sigmoid:
+  - highDynamicRange:
+      contrastWeight: 0.2
+      saturationWeight: 0.1
+      exposureWeight: 1.0
+  - sigmoid:
       midpoint: 0.4
       strength: 1.5
-  - type: ReduceNoise
-    reduceNoise:
+  - reduceNoise:
       thresholding: Soft
       thresholds:
         - 0.01
@@ -831,13 +856,13 @@ class AstroProcess(val config: ProcessConfig) {
         }
 
         val hdrSourceImages = mutableListOf<Image>()
-        for (colorStretchStepIndex in enhanceConfig.steps.indices) {
-            val colorStretchStepConfig = enhanceConfig.steps[colorStretchStepIndex]
-            val name = "${colorStretchStepConfig.type}"
-            step(name) {
-                val stepResultImage = when (colorStretchStepConfig.type) {
-                    ColorStretchStepType.Debayer -> {
-                        val badPixels = if (colorStretchStepConfig.debayer.cleanupBadPixels) {
+        for (enhanceStepIndex in enhanceConfig.steps.indices) {
+            val enhanceStepConfig = enhanceConfig.steps[enhanceStepIndex]
+            val type = enhanceStepConfig.type
+            step(type.name) {
+                val stepResultImage = when(type) {
+                    EnhanceStepType.Debayer -> {
+                        val badPixels = if (enhanceStepConfig.debayer!!.cleanupBadPixels) {
                             val mosaic = image[Channel.Red]
                             val badPixels = mosaic.findBayerBadPixels()
                             println("Found ${badPixels.size} bad pixels")
@@ -845,29 +870,29 @@ class AstroProcess(val config: ProcessConfig) {
                         } else {
                             emptySet()
                         }
-                        it.debayer(colorStretchStepConfig.debayer.bayerPattern, badpixelCoords = badPixels)
+                        it.debayer(enhanceStepConfig.debayer!!.bayerPattern, badpixelCoords = badPixels)
                     }
 
-                    ColorStretchStepType.Crop -> {
+                    EnhanceStepType.Crop -> {
                         val width =
-                            if (colorStretchStepConfig.crop.width < 0) it.width - colorStretchStepConfig.crop.x + colorStretchStepConfig.crop.width else colorStretchStepConfig.crop.width
+                            if (enhanceStepConfig.crop!!.width < 0) it.width - enhanceStepConfig.crop!!.x + enhanceStepConfig.crop!!.width else enhanceStepConfig.crop!!.width
                         val height =
-                            if (colorStretchStepConfig.crop.height < 0) it.height - colorStretchStepConfig.crop.y + colorStretchStepConfig.crop.height else colorStretchStepConfig.crop.height
+                            if (enhanceStepConfig.crop!!.height < 0) it.height - enhanceStepConfig.crop!!.y + enhanceStepConfig.crop!!.height else enhanceStepConfig.crop!!.height
                         it.crop(
-                            colorStretchStepConfig.crop.x,
-                            colorStretchStepConfig.crop.y,
+                            enhanceStepConfig.crop!!.x,
+                            enhanceStepConfig.crop!!.y,
                             width,
                             height
                         )
                     }
 
-                    ColorStretchStepType.Rotate -> {
-                        when(colorStretchStepConfig.rotate.angle) {
+                    EnhanceStepType.Rotate -> {
+                        when(enhanceStepConfig.rotate!!.angle) {
                             90.0,-270.0 -> it.rotateRight()
                             180.0, -180.0 -> it.rotateRight().rotateRight()
                             -90.0, 270.0 -> it.rotateLeft()
                             else -> {
-                                val angleRad = colorStretchStepConfig.rotate.angle.toRadians()
+                                val angleRad = enhanceStepConfig.rotate!!.angle.toRadians()
                                 val cosA = cos(angleRad)
                                 val sinA = sin(angleRad)
 
@@ -881,11 +906,11 @@ class AstroProcess(val config: ProcessConfig) {
                         }
                     }
 
-                    ColorStretchStepType.LinearPercentile -> {
+                    EnhanceStepType.LinearPercentile -> {
                         if (enhanceConfig.measure.enabled) {
                             it.stretchLinearPercentile(
-                                colorStretchStepConfig.linearPercentile.minPercentile,
-                                colorStretchStepConfig.linearPercentile.maxPercentile,
+                                enhanceStepConfig.linearPercentile!!.minPercentile,
+                                enhanceStepConfig.linearPercentile!!.maxPercentile,
                                 it.crop(
                                     enhanceConfig.measure.x,
                                     enhanceConfig.measure.y,
@@ -895,77 +920,79 @@ class AstroProcess(val config: ProcessConfig) {
                             )
                         } else {
                             it.stretchLinearPercentile(
-                                colorStretchStepConfig.linearPercentile.minPercentile,
-                                colorStretchStepConfig.linearPercentile.maxPercentile
+                                enhanceStepConfig.linearPercentile!!.minPercentile,
+                                enhanceStepConfig.linearPercentile!!.maxPercentile
                             )
                         }
                     }
 
-                    ColorStretchStepType.RemoveBackground -> {
-                        val fixPoints = getFixPoints(it, colorStretchStepConfig.removeBackground.fixPoints)
-                        val fixPointValues = it.getFixPointValues(fixPoints, colorStretchStepConfig.removeBackground.medianRadius)
-                        val background = it.interpolate(fixPointValues, power = colorStretchStepConfig.removeBackground.power)
-                        it - background + colorStretchStepConfig.removeBackground.offset
+                    EnhanceStepType.RemoveBackground -> {
+                        val fixPoints = getFixPoints(it, enhanceStepConfig.removeBackground!!.fixPoints)
+                        val fixPointValues = it.getFixPointValues(fixPoints, enhanceStepConfig.removeBackground!!.medianRadius)
+                        val background = it.interpolate(fixPointValues, power = enhanceStepConfig.removeBackground!!.power)
+                        it - background + enhanceStepConfig.removeBackground!!.offset
                     }
 
-                    ColorStretchStepType.Whitebalance -> {
-                        when(colorStretchStepConfig.whitebalance.type) {
+                    EnhanceStepType.Whitebalance -> {
+                        when(enhanceStepConfig.whitebalance!!.type) {
                             WhitebalanceType.Global -> it.applyWhitebalanceGlobal(
-                                colorStretchStepConfig.whitebalance.valueRangeMin,
-                                colorStretchStepConfig.whitebalance.valueRangeMax
+                                enhanceStepConfig.whitebalance!!.valueRangeMin,
+                                enhanceStepConfig.whitebalance!!.valueRangeMax
                             )
                             WhitebalanceType.Local -> it.applyWhitebalanceLocal(
-                                getFixPoints(it, colorStretchStepConfig.whitebalance.fixPoints),
-                                colorStretchStepConfig.whitebalance.localMedianRadius
+                                getFixPoints(it, enhanceStepConfig.whitebalance!!.fixPoints),
+                                enhanceStepConfig.whitebalance!!.localMedianRadius
                             )
                             WhitebalanceType.Custom -> it.applyWhitebalance(
-                                colorStretchStepConfig.whitebalance.customRed,
-                                colorStretchStepConfig.whitebalance.customGreen,
-                                colorStretchStepConfig.whitebalance.customBlue
+                                enhanceStepConfig.whitebalance!!.customRed,
+                                enhanceStepConfig.whitebalance!!.customGreen,
+                                enhanceStepConfig.whitebalance!!.customBlue
                             )
                         }
                         it
                     }
 
-                    ColorStretchStepType.Sigmoid -> {
+                    EnhanceStepType.Sigmoid -> {
                         it.stretchSigmoidLike(
-                            colorStretchStepConfig.sigmoid.midpoint,
-                            colorStretchStepConfig.sigmoid.strength
+                            enhanceStepConfig.sigmoid!!.midpoint,
+                            enhanceStepConfig.sigmoid!!.strength
                         )
                     }
 
-                    ColorStretchStepType.Blur -> {
-                        (it * (1.0 - colorStretchStepConfig.blur.strength)) + (it.gaussianBlur3Filter() * colorStretchStepConfig.blur.strength)
+                    EnhanceStepType.Blur -> {
+                        (it * (1.0 - enhanceStepConfig.blur!!.strength)) + (it.gaussianBlur3Filter() * enhanceStepConfig.blur!!.strength)
                     }
 
-                    ColorStretchStepType.Sharpen -> {
-                        it.sharpenFilter()
+                    EnhanceStepType.Sharpen -> {
+                        it.sharpenFilter() * enhanceStepConfig.sharpen!!.strength + it * (1.0 - enhanceStepConfig.sharpen!!.strength)
                     }
 
-                    ColorStretchStepType.UnsharpMask -> {
-                        it.unsharpMaskFilter(colorStretchStepConfig.unsharpMask.radius, colorStretchStepConfig.unsharpMask.strength)
+                    EnhanceStepType.UnsharpMask -> {
+                        it.unsharpMaskFilter(enhanceStepConfig.unsharpMask!!.radius, enhanceStepConfig.unsharpMask!!.strength)
                     }
 
-                    ColorStretchStepType.ReduceNoise -> {
-                        val thresholdingFunc: (Double, Double) -> Double = when(colorStretchStepConfig.reduceNoise.thresholding) {
+                    EnhanceStepType.ReduceNoise -> {
+                        val thresholdingFunc: (Double, Double) -> Double = when(enhanceStepConfig.reduceNoise!!.thresholding) {
                             Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
                             Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
                             Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
                             Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
                         }
-                        when(colorStretchStepConfig.reduceNoise.algorithm) {
+                        when(enhanceStepConfig.reduceNoise!!.algorithm) {
                             NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
-                                it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(colorStretchStepConfig.reduceNoise.thresholds, thresholdingFunc)
+                                it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(enhanceStepConfig.reduceNoise!!.thresholds, thresholdingFunc)
                             }
                             NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
-                                it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(colorStretchStepConfig.reduceNoise.thresholds, thresholdingFunc)
+                                it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(enhanceStepConfig.reduceNoise!!.thresholds, thresholdingFunc)
                             }
                         }
                     }
 
-                    ColorStretchStepType.HighDynamicRange -> {
+                    EnhanceStepType.HighDynamicRange -> {
                         highDynamicRange(hdrSourceImages.map { { it } })
                     }
+
+                    else -> it
                 }
                 if (enhanceConfig.regionOfInterest.enabled) {
                     val roiImage = stepResultImage.crop(
@@ -975,12 +1002,12 @@ class AstroProcess(val config: ProcessConfig) {
                         enhanceConfig.regionOfInterest.height
                     )
                     val roiImageFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                        .resolve("region_step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
+                        .resolve("region_step_${stepIndex}_${type.name}.${formatConfig.outputImageExtension}")
                     ImageWriter.write(roiImage, roiImageFile)
                 }
                 stepResultImage
             }
-            if (colorStretchStepConfig.addToHighDynamicRange) {
+            if (enhanceStepConfig.addToHighDynamicRange) {
                 hdrSourceImages.add(image)
             }
         }
@@ -991,16 +1018,20 @@ class AstroProcess(val config: ProcessConfig) {
         for (key in infoTokens.keys.sorted()) {
             println("  $key : ${infoTokens[key]}")
         }
-        val outputNamePatternRegex = Regex("\\{(\\w+)}")
-        val outputName = outputConfig.outputName.replace(outputNamePatternRegex) { match ->
-            val key = match.groupValues[1]
-            infoTokens[key] ?: ""
-        }
+        val outputName = outputConfig.outputName.replaceTokens(infoTokens)
         for (finalOutputImageExtension in outputConfig.outputImageExtensions) {
             val enhancedFile = currentDir.resolve(outputConfig.outputDirectory)
                 .resolve("$outputName.$finalOutputImageExtension")
             println("Writing $enhancedFile")
             ImageWriter.write(image, enhancedFile)
+        }
+    }
+
+    private fun String.replaceTokens(tokenValues: Map<String, String>): String {
+        val tokenRegex = Regex("\\{(\\w+)}")
+        return this.replace(tokenRegex) { match ->
+            val key = match.groupValues[1]
+            tokenValues[key] ?: ""
         }
     }
 
