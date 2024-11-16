@@ -7,6 +7,8 @@ import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
 import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
 import ch.obermuhlner.kimage.astro.align.processCalibrationImages
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.Marker
 import ch.obermuhlner.kimage.astro.background.createFixPointEightCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointFourCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointGrid
@@ -18,6 +20,7 @@ import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.PointXY
+import ch.obermuhlner.kimage.core.image.awt.graphics
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
@@ -72,9 +75,106 @@ data class ProcessConfig(
     var align: AlignConfig = AlignConfig(),
     var stack: StackConfig = StackConfig(),
     var enhance: EnhanceConfig = EnhanceConfig(),
-    var output: OutputFormatConfig = OutputFormatConfig()
+    var annotate: AnnotateConfig = AnnotateConfig(),
+    var output: OutputFormatConfig = OutputFormatConfig(),
 )
 
+data class AnnotateConfig(
+    var enabled: Boolean = false,
+    var decorate: DecorationConfig = DecorationConfig(),
+    var draw: DrawConfig = DrawConfig(),
+    var annotatedOutputDirectory: String = "astro-process/annotated",
+)
+
+data class DecorationConfig(
+    var enabled: Boolean = false,
+    var title: String = "",
+    var subTitle: String = "",
+    var markers: MutableList<MarkerConfig> = mutableListOf()
+)
+
+data class MarkerConfig(
+    var name: String = "",
+    var x: Int = 0,
+    var y: Int = 0,
+    var size: Int = 100,
+    var info1: String = "",
+    var info2: String = "",
+)
+
+data class DrawConfig(
+    var enabled: Boolean = false,
+    var margin: MarginConfig = MarginConfig(),
+    var steps: MutableList<DrawStepConfig> = mutableListOf(),
+)
+
+data class DrawStepConfig(
+    var color: DrawStepColorConfig? = null,
+    var stroke: DrawStepStrokeConfig? = null,
+    var fontSize: DrawStepFontSizeConfig? = null,
+    var line: DrawStepLineConfig? = null,
+    var rectangle: DrawStepRectangleConfig? = null,
+    var text: DrawStepTextConfig? = null,
+) {
+    val type: DrawStepType
+        get() = when {
+            color != null -> DrawStepType.Color
+            stroke != null -> DrawStepType.Stroke
+            fontSize != null -> DrawStepType.FontSize
+            line != null -> DrawStepType.Line
+            rectangle != null -> DrawStepType.Rectangle
+            text != null -> DrawStepType.Text
+            else -> throw IllegalArgumentException("No annotate step configuration found")
+        }
+}
+
+enum class DrawStepType {
+    Color,
+    Stroke,
+    FontSize,
+    Line,
+    Rectangle,
+    Text,
+}
+
+data class DrawStepColorConfig(
+    var color: String = "ffffff",
+)
+
+data class DrawStepStrokeConfig(
+    var width: Float = 1.0f,
+)
+
+data class DrawStepFontSizeConfig(
+    var size: Float = 1.0f,
+)
+
+data class DrawStepLineConfig(
+    var x1: Int = 0,
+    var y1: Int = 0,
+    var x2: Int = 0,
+    var y2: Int = 0,
+)
+
+data class DrawStepRectangleConfig(
+    var x: Int = 0,
+    var y: Int = 0,
+    var width: Int = 0,
+    var height: Int = 0,
+)
+
+data class DrawStepTextConfig(
+    var x: Int = 0,
+    var y: Int = 0,
+    var text: String = ""
+)
+
+data class MarginConfig(
+    var top: Int = 0,
+    var left: Int = 0,
+    var bottom: Int = 0,
+    var right: Int = 0,
+)
 data class FormatConfig(
     var inputImageExtension: String = "fit",
     var inputDirectory: String = ".",
@@ -389,7 +489,7 @@ fun main(args: Array<String>) {
     when(command) {
         "process" -> {
             println(yaml.dumpAsMap(config))
-            AstroProcess(config).astroProcess()
+            AstroProcess(config).processAstro()
         }
         "config" -> {
             println(yaml.dumpAsMap(config))
@@ -450,7 +550,7 @@ class AstroProcess(val config: ProcessConfig) {
         }
     }
 
-    fun astroProcess() {
+    fun processAstro() {
         val infoTokens = mutableMapOf<String, String>()
         var dirty = false
         val currentDir = File(".")
@@ -665,7 +765,7 @@ class AstroProcess(val config: ProcessConfig) {
         println()
         println("### Aligning ${calibratedFiles.size} images ...")
 
-        var referenceCalibratedFile = calibratedFiles.first()
+        val referenceCalibratedFile = calibratedFiles.first()
         var referenceStars: List<Star> = emptyList<Star>()
         var referenceImageWidth = 0
         var referenceImageHeight = 0
@@ -772,32 +872,27 @@ class AstroProcess(val config: ProcessConfig) {
         println()
         println("### Enhancing stacked image ...")
         println()
-        elapsed("enhance") {
-            astroEnhance(config.format, config.enhance, config.output, stackedImage, dirty, infoTokens)
+        val enhancedImage = elapsed("enhance") {
+            processEnhance(stackedImage, dirty, config.format, config.enhance)
         }
+
+        println()
+        println("### Writing output images ...")
+        println()
+        processOutput(enhancedImage, infoTokens, config.output)
+
+        println()
+        println("### Annotating image ...")
+        println()
+        processAnnotate(enhancedImage, infoTokens, config.annotate, config.output)
     }
 
-    fun astroEnhance(
-        formatConfig: FormatConfig,
-        enhanceConfig: EnhanceConfig,
-        outputConfig: OutputFormatConfig,
-        inputFile: File,
-    ) {
-        println("Reading $inputFile")
-        val inputImage = ImageReader.read(inputFile)
-
-        val infoTokens = mutableMapOf(InfoTokens.firstInput.name to inputFile.nameWithoutExtension)
-        return astroEnhance(formatConfig, enhanceConfig, outputConfig, inputImage, true, infoTokens)
-    }
-
-    fun astroEnhance(
-        formatConfig: FormatConfig,
-        enhanceConfig: EnhanceConfig,
-        outputConfig: OutputFormatConfig,
+    fun processEnhance(
         inputImage: Image,
         alreadyDirty: Boolean,
-        infoTokens: MutableMap<String, String>,
-    ) {
+        formatConfig: FormatConfig,
+        enhanceConfig: EnhanceConfig,
+    ): Image {
         val currentDir = File(".")
         currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
 
@@ -860,7 +955,7 @@ class AstroProcess(val config: ProcessConfig) {
             val enhanceStepConfig = enhanceConfig.steps[enhanceStepIndex]
             val type = enhanceStepConfig.type
             step(type.name) {
-                val stepResultImage = when(type) {
+                val stepResultImage = when (type) {
                     EnhanceStepType.Debayer -> {
                         val badPixels = if (enhanceStepConfig.debayer!!.cleanupBadPixels) {
                             val mosaic = image[Channel.Red]
@@ -887,8 +982,8 @@ class AstroProcess(val config: ProcessConfig) {
                     }
 
                     EnhanceStepType.Rotate -> {
-                        when(enhanceStepConfig.rotate!!.angle) {
-                            90.0,-270.0 -> it.rotateRight()
+                        when (enhanceStepConfig.rotate!!.angle) {
+                            90.0, -270.0 -> it.rotateRight()
                             180.0, -180.0 -> it.rotateRight().rotateRight()
                             -90.0, 270.0 -> it.rotateLeft()
                             else -> {
@@ -896,12 +991,13 @@ class AstroProcess(val config: ProcessConfig) {
                                 val cosA = cos(angleRad)
                                 val sinA = sin(angleRad)
 
-                                val transformationMatrix = DoubleMatrix.matrixOf(3, 3,
+                                val transformationMatrix = DoubleMatrix.matrixOf(
+                                    3, 3,
                                     cosA, -sinA, 0.0,
                                     sinA, cosA, 0.0,
                                     0.0, 0.0, 1.0
                                 )
-                                applyTransformationToImage(it, transformationMatrix )
+                                applyTransformationToImage(it, transformationMatrix)
                             }
                         }
                     }
@@ -934,15 +1030,17 @@ class AstroProcess(val config: ProcessConfig) {
                     }
 
                     EnhanceStepType.Whitebalance -> {
-                        when(enhanceStepConfig.whitebalance!!.type) {
+                        when (enhanceStepConfig.whitebalance!!.type) {
                             WhitebalanceType.Global -> it.applyWhitebalanceGlobal(
                                 enhanceStepConfig.whitebalance!!.valueRangeMin,
                                 enhanceStepConfig.whitebalance!!.valueRangeMax
                             )
+
                             WhitebalanceType.Local -> it.applyWhitebalanceLocal(
                                 getFixPoints(it, enhanceStepConfig.whitebalance!!.fixPoints),
                                 enhanceStepConfig.whitebalance!!.localMedianRadius
                             )
+
                             WhitebalanceType.Custom -> it.applyWhitebalance(
                                 enhanceStepConfig.whitebalance!!.customRed,
                                 enhanceStepConfig.whitebalance!!.customGreen,
@@ -972,16 +1070,17 @@ class AstroProcess(val config: ProcessConfig) {
                     }
 
                     EnhanceStepType.ReduceNoise -> {
-                        val thresholdingFunc: (Double, Double) -> Double = when(enhanceStepConfig.reduceNoise!!.thresholding) {
+                        val thresholdingFunc: (Double, Double) -> Double = when (enhanceStepConfig.reduceNoise!!.thresholding) {
                             Thresholding.Hard -> { v, threshold -> thresholdHard(v, threshold) }
                             Thresholding.Soft -> { v, threshold -> thresholdSoft(v, threshold) }
                             Thresholding.Sigmoid -> { v, threshold -> thresholdSigmoid(v, threshold) }
-                            Thresholding.SigmoidLike ->  { v, threshold -> thresholdSigmoidLike(v, threshold) }
+                            Thresholding.SigmoidLike -> { v, threshold -> thresholdSigmoidLike(v, threshold) }
                         }
-                        when(enhanceStepConfig.reduceNoise!!.algorithm) {
+                        when (enhanceStepConfig.reduceNoise!!.algorithm) {
                             NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
                                 it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(enhanceStepConfig.reduceNoise!!.thresholds, thresholdingFunc)
                             }
+
                             NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
                                 it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(enhanceStepConfig.reduceNoise!!.thresholds, thresholdingFunc)
                             }
@@ -1011,13 +1110,18 @@ class AstroProcess(val config: ProcessConfig) {
                 hdrSourceImages.add(image)
             }
         }
+        return image
+    }
+
+    private fun processOutput(
+        image: Image,
+        infoTokens: Map<String, String>,
+        outputConfig: OutputFormatConfig
+    ): Image {
+        val currentDir = File(".")
 
         currentDir.resolve(outputConfig.outputDirectory).mkdirs()
 
-        println()
-        for (key in infoTokens.keys.sorted()) {
-            println("  $key : ${infoTokens[key]}")
-        }
         val outputName = outputConfig.outputName.replaceTokens(infoTokens)
         for (finalOutputImageExtension in outputConfig.outputImageExtensions) {
             val enhancedFile = currentDir.resolve(outputConfig.outputDirectory)
@@ -1025,6 +1129,103 @@ class AstroProcess(val config: ProcessConfig) {
             println("Writing $enhancedFile")
             ImageWriter.write(image, enhancedFile)
         }
+
+        return image
+    }
+
+    fun processAnnotate(
+        inputImage: Image,
+        infoTokens: Map<String, String>,
+        annotateConfig: AnnotateConfig,
+        outputConfig: OutputFormatConfig
+    ): Image {
+        if (!annotateConfig.enabled) return inputImage
+
+        val currentDir = File(".")
+
+        val annotateOutputDir = currentDir.resolve(annotateConfig.annotatedOutputDirectory)
+        annotateOutputDir.mkdirs()
+
+        var annotatedImage = inputImage
+
+        annotatedImage = if (annotateConfig.decorate.enabled) {
+            val annotateZoom = AnnotateZoom()
+            annotateZoom.title = annotateConfig.decorate.title.replaceTokens(infoTokens)
+            annotateZoom.subTitle = annotateConfig.decorate.subTitle.replaceTokens(infoTokens)
+            for (markerConfig in annotateConfig.decorate.markers) {
+                annotateZoom.addMarker(Marker(
+                    markerConfig.name,
+                    markerConfig.x,
+                    markerConfig.y,
+                    markerConfig.size,
+                    markerConfig.info1,
+                    markerConfig.info2
+                ))
+            }
+            annotateZoom.annotate(annotatedImage)
+        } else {
+            annotatedImage
+        }
+
+        annotatedImage = if (annotateConfig.draw.enabled) {
+            val drawConfig = annotateConfig.draw
+            graphics(
+                annotatedImage,
+                drawConfig.margin.top,
+                drawConfig.margin.left,
+                drawConfig.margin.bottom,
+                drawConfig.margin.right
+            ) { graphics2D, width, height, _, _ ->
+                for (drawStepIndex in drawConfig.steps.indices) {
+                    val drawStepConfig = drawConfig.steps[drawStepIndex]
+
+                    when (drawStepConfig.type) {
+                        DrawStepType.Color -> {
+                            val colorConfig = drawStepConfig.color!!
+                            graphics2D.color = java.awt.Color(colorConfig.color.toInt(16))
+                        }
+
+                        DrawStepType.Stroke -> {
+                            val strokeConfig = drawStepConfig.stroke!!
+                            graphics2D.stroke = java.awt.BasicStroke(strokeConfig.width)
+                        }
+
+                        DrawStepType.FontSize -> {
+                            val fontSizeConfig = drawStepConfig.fontSize!!
+                            graphics2D.font = graphics2D.font.deriveFont(fontSizeConfig.size)
+                        }
+
+                        DrawStepType.Line -> {
+                            val lineConfig = drawStepConfig.line!!
+                            graphics2D.drawLine(lineConfig.x1, lineConfig.y1, lineConfig.x2, lineConfig.x2)
+                        }
+
+                        DrawStepType.Rectangle -> {
+                            val rectangleConfig = drawStepConfig.rectangle!!
+                            graphics2D.drawRect(rectangleConfig.x, rectangleConfig.y, rectangleConfig.width, rectangleConfig.height)
+                        }
+
+                        DrawStepType.Text -> {
+                            val textConfig = drawStepConfig.text!!
+                            val text = textConfig.text.replaceTokens(infoTokens)
+                            graphics2D.drawString(text, textConfig.x, textConfig.y)
+                        }
+                    }
+                }
+            }
+        } else {
+            annotatedImage
+        }
+
+        val outputName = outputConfig.outputName.replaceTokens(infoTokens)
+        for (finalOutputImageExtension in outputConfig.outputImageExtensions) {
+            val annotatedFile = currentDir.resolve(annotateConfig.annotatedOutputDirectory)
+                .resolve("$outputName.$finalOutputImageExtension")
+            println("Writing $annotatedFile")
+            ImageWriter.write(annotatedImage, annotatedFile)
+        }
+
+        return annotatedImage
     }
 
     private fun String.replaceTokens(tokenValues: Map<String, String>): String {
