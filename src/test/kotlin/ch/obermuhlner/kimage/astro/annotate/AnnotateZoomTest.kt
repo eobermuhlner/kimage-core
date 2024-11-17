@@ -4,7 +4,6 @@ import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.Marker
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerLabelStyle
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerStyle
-import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerStyle.Rectangle
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import org.junit.jupiter.api.Test
 
@@ -21,7 +20,7 @@ class AnnotateZoomTest : AbstractImageProcessingTest() {
         val image = readTestImage("flowers.bmp")
         val annotateZoom = AnnotateZoom()
         annotateZoom.title = "Title"
-        annotateZoom.subTitle = "Subtitle"
+        annotateZoom.subtitle = "Subtitle"
         annotateZoom.addMarker(Marker(
             "marker1",
             50,
@@ -39,7 +38,7 @@ class AnnotateZoomTest : AbstractImageProcessingTest() {
         for (colorTheme in ColorTheme.entries) {
             val annotateZoom = AnnotateZoom()
             annotateZoom.title = "Title"
-            annotateZoom.subTitle = "Subtitle"
+            annotateZoom.subtitle = "Subtitle"
             annotateZoom.setColorTheme(colorTheme)
             annotateZoom.addMarker(Marker(
                 "marker1",
@@ -61,7 +60,7 @@ class AnnotateZoomTest : AbstractImageProcessingTest() {
             for (markerLabelStyle in MarkerLabelStyle.entries) {
                 val annotateZoom = AnnotateZoom()
                 annotateZoom.title = "Title"
-                annotateZoom.subTitle = "Subtitle"
+                annotateZoom.subtitle = "Subtitle"
                 annotateZoom.markerStyle = markerStyle
                 annotateZoom.markerLabelStyle = markerLabelStyle
                 annotateZoom.addMarker(Marker(

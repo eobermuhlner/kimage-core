@@ -1158,7 +1158,7 @@ class AstroProcess(val config: ProcessConfig) {
         annotatedImage = if (annotateConfig.decorate.enabled) {
             val annotateZoom = AnnotateZoom()
             annotateZoom.title = annotateConfig.decorate.title.replaceTokens(infoTokens)
-            annotateZoom.subTitle = annotateConfig.decorate.subTitle.replaceTokens(infoTokens)
+            annotateZoom.subtitle = annotateConfig.decorate.subTitle.replaceTokens(infoTokens)
             annotateZoom.setColorTheme(annotateConfig.decorate.colorTheme)
             annotateZoom.markerStyle = annotateConfig.decorate.markerStyle
             annotateZoom.markerLabelStyle = annotateConfig.decorate.markerLabelStyle

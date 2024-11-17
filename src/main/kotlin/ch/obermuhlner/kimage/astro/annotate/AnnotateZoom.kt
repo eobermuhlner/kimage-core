@@ -51,7 +51,7 @@ class AnnotateZoom {
     var magnitude: Optional<Double> = Optional.empty()
     var minObjectSize: Int = 50
     var title: String = ""
-    var subTitle: String = ""
+    var subtitle: String = ""
     var whiteList: Optional<List<String>> = Optional.empty()
     var blackList: Optional<List<String>> = Optional.empty()
     var ignoreClipped: Boolean = true
@@ -67,14 +67,16 @@ class AnnotateZoom {
     var thumbnailLabelFontSizeFactor: Double = 1.2
     var thumbnailInfoFontSizeFactor: Double = 1.0
     var thumbnailIndexFontSizeFactor: Double = 0.8
-    var markerRectColor: String = "008800"
-    var markerIndexColor: String = "00cc00"
-    var thumbnailRectColor: String = "ffffff"
-    var thumbnailLabelColor: String = "88ff88"
-    var thumbnailInfoColor: String = "cccccc"
-    var thumbnailIndexColor: String = "00cc00"
-    var brightnessGraphColor: String = "88cc88"
-    var shadowColor: String = "000000"
+    var titleColor: String = ""
+    var subtitleColor: String = ""
+    var markerRectColor: String = ""
+    var markerIndexColor: String = ""
+    var thumbnailRectColor: String = ""
+    var thumbnailLabelColor: String = ""
+    var thumbnailInfoColor: String = ""
+    var thumbnailIndexColor: String = ""
+    var brightnessGraphColor: String = ""
+    var shadowColor: String = ""
 
     var titleFontSize = baseFontSize * titleFontSizeFactor
     var markerIndexFontSize = baseFontSize * markerIndexFontSizeFactor
@@ -82,11 +84,11 @@ class AnnotateZoom {
     var thumbnailInfoFontSize = baseFontSize * thumbnailInfoFontSizeFactor
     var thumbnailIndexFontSize = baseFontSize * thumbnailIndexFontSizeFactor
 
-    var gridColor = "444444"
+    var gridColor = ""
     var gridStrokeSize = baseStrokeSize * 0.5
 
     var brightnessGraphStrokeSize = baseStrokeSize * 0.5
-    var brightnessGraphGridColor = "444444"
+    var brightnessGraphGridColor = ""
     var brightnessGraphGridStrokeSize = brightnessGraphStrokeSize
 
     val shadowOffsets: MutableList<PointXY> = mutableListOf(
@@ -97,14 +99,20 @@ class AnnotateZoom {
     )
     val markers = mutableListOf<Marker>()
 
+    init {
+        setColorTheme(ColorTheme.White)
+    }
+
     fun setColorTheme(colorTheme: ColorTheme) {
         when(colorTheme) {
             White -> {
+                titleColor = "ffffff"
+                subtitleColor = "cccccc"
                 markerRectColor = "cccccc"
                 markerIndexColor = "aaaaaa"
                 thumbnailRectColor = "aaaaaa"
                 thumbnailLabelColor = "cccccc"
-                thumbnailInfoColor = "cccccc"
+                thumbnailInfoColor = "aaaaaa"
                 thumbnailIndexColor = "aaaaaa"
                 brightnessGraphColor = "aaaaaa"
                 gridColor = "888888"
@@ -112,48 +120,57 @@ class AnnotateZoom {
                 shadowColor = "000000"
             }
             Cyan -> {
-                markerRectColor = "44ffff"
-                markerIndexColor = "22cccc"
+                titleColor = "ccffff"
+                subtitleColor = "88aaaa"
+                markerRectColor = "88ffff"
+                markerIndexColor = "aacccc"
                 thumbnailRectColor = "88ffff"
                 thumbnailLabelColor = "aaffff"
-                thumbnailInfoColor = "88cccc"
-                thumbnailIndexColor = "88cccc"
+                thumbnailInfoColor = "88aaaa"
+                thumbnailIndexColor = "aacccc"
                 brightnessGraphColor = "00cccc"
                 gridColor = "226666"
                 brightnessGraphGridColor = "226666"
-                shadowColor = "006666"
+                //shadowColor = "006666"
+                shadowColor = "00aaaa"
             }
             Red -> {
-                markerRectColor = "ff4444"
-                markerIndexColor = "cc2222"
+                titleColor = "ffcccc"
+                subtitleColor = "aa8888"
+                markerRectColor = "ff8888"
+                markerIndexColor = "aa8888"
                 thumbnailRectColor = "ff8888"
                 thumbnailLabelColor = "ffaaaa"
                 thumbnailInfoColor = "cc8888"
-                thumbnailIndexColor = "cc8888"
+                thumbnailIndexColor = "aa8888"
                 brightnessGraphColor = "cc0000"
                 gridColor = "662222"
                 brightnessGraphGridColor = "662222"
                 shadowColor = "660000"
             }
             Green -> {
-                markerRectColor = "44ff44"
-                markerIndexColor = "22cc22"
+                titleColor = "ccffcc"
+                subtitleColor = "88aa88"
+                markerRectColor = "88ff88"
+                markerIndexColor = "88aa88"
                 thumbnailRectColor = "88ff88"
                 thumbnailLabelColor = "aaffaa"
                 thumbnailInfoColor = "88cc88"
-                thumbnailIndexColor = "88cc88"
+                thumbnailIndexColor = "88aa88"
                 brightnessGraphColor = "00cc00"
                 gridColor = "226622"
                 brightnessGraphGridColor = "226622"
                 shadowColor = "006600"
             }
             Blue -> {
-                markerRectColor = "4444ff"
-                markerIndexColor = "2222cc"
+                titleColor = "ccccff"
+                subtitleColor = "8888aa"
+                markerRectColor = "8888ff"
+                markerIndexColor = "8888aa"
                 thumbnailRectColor = "8888ff"
                 thumbnailLabelColor = "aaaaff"
                 thumbnailInfoColor = "8888cc"
-                thumbnailIndexColor = "8888cc"
+                thumbnailIndexColor = "8888aa"
                 brightnessGraphColor = "0000cc"
                 gridColor = "222266"
                 brightnessGraphGridColor = "222266"
@@ -209,7 +226,7 @@ class AnnotateZoom {
         } else {
             title
         }
-        subTitle = subTitle.ifBlank { "${formatDegreesToHMS(centerRa)} ${formatDegreesToDMS(centerDec)}" }
+        subtitle = subtitle.ifBlank { "${formatDegreesToHMS(centerRa)} ${formatDegreesToDMS(centerDec)}" }
 
         filteredNGCs.forEach { ngc ->
             val (x, y) = wcsConverter.convertRADecToXY(ngc.ra, ngc.dec)
@@ -281,14 +298,14 @@ class AnnotateZoom {
             val thumbnailIndexFont = graphics.font.deriveFont(thumbnailIndexFontSize.toFloat())
 
             val shadowColor = java.awt.Color(shadowColor.toInt(16))
-            fun Graphics2D.drawShadowString(text: String, x: Int, y: Int) {
+            fun Graphics2D.drawShadow(drawFunc: (dx: Int, dy: Int) -> Unit) {
                 val color = this.color
                 this.color = shadowColor
                 for (shadowOffset in shadowOffsets) {
-                    this.drawString(text, x+shadowOffset.x, y+shadowOffset.y)
+                    drawFunc(shadowOffset.x, shadowOffset.y)
                 }
                 this.color = color
-                this.drawString(text, x, y)
+                drawFunc(0, 0)
             }
 
 //            graphics.clipRect(offsetX, offsetY, inputImage.width, inputImage.height)
@@ -334,12 +351,12 @@ class AnnotateZoom {
 
             for (marker in markers) {
                 if (ignoreClipped) {
-                    if (marker.x - marker.size /2 < 0 || marker.x + marker.size /2 > inputImage.width || marker.y - marker.size /2 < 0 || marker.y + marker.size /2 > inputImage.height) {
+                    if (marker.x - marker.size / 2 < 0 || marker.x + marker.size / 2 > inputImage.width || marker.y - marker.size / 2 < 0 || marker.y + marker.size / 2 > inputImage.height) {
                         continue
                     }
                 }
 
-                val inputCrop = inputImage.cropCenter(marker.size /2, marker.x, marker.y, false).scaleTo(thumbnailSize, thumbnailSize, scaling = Scaling.Nearest)
+                val inputCrop = inputImage.cropCenter(marker.size / 2, marker.x, marker.y, false).scaleTo(thumbnailSize, thumbnailSize, scaling = Scaling.Nearest)
                 val crop = toBufferedImage(inputCrop)
                 if (thumbnailX + thumbnailSize > width) {
                     thumbnailX = thumbnailStartX
@@ -354,36 +371,54 @@ class AnnotateZoom {
                 }
                 when (markerStyle) {
                     MarkerStyle.Square -> {
-                        graphics.drawShadowString(markerLabel, offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2 - graphics.fontMetrics.descent)
+                        graphics.drawShadow { dx, dy ->
+                            graphics.drawString(markerLabel, offsetX + marker.x - marker.size / 2 + dx, offsetY + marker.y - marker.size / 2 - graphics.fontMetrics.descent + dy)
+                        }
                     }
+
                     else -> {
                         val stringWidth = graphics.fontMetrics.stringWidth(markerLabel)
-                        graphics.drawShadowString(markerLabel, offsetX+marker.x - stringWidth/2, offsetY+marker.y -marker.size /2 - graphics.fontMetrics.descent)
+                        graphics.drawShadow { dx, dy ->
+                            graphics.drawString(markerLabel, offsetX + marker.x - stringWidth / 2 + dx, offsetY + marker.y - marker.size / 2 - graphics.fontMetrics.descent + dy)
+                        }
                     }
                 }
 
                 graphics.color = java.awt.Color(markerRectColor.toInt(16))
                 when (markerStyle) {
                     MarkerStyle.Square -> {
-                        graphics.drawRect(offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2, marker.size, marker.size)
+                        graphics.drawShadow { dx, dy ->
+                            graphics.drawRect(offsetX + marker.x - marker.size / 2 + dx, offsetY + marker.y - marker.size / 2 + dy, marker.size, marker.size)
+                        }
+
                     }
+
                     MarkerStyle.Rectangle -> {
                         val backupTransform = graphics.transform
-                        graphics.translate(offsetX+marker.x, offsetY+marker.y)
+                        graphics.translate(offsetX + marker.x, offsetY + marker.y)
                         graphics.rotate(Math.toRadians(marker.posAngle))
-                        graphics.drawRect(-marker.majAx/2, -marker.minAx/2, marker.majAx, marker.minAx)
+                        graphics.drawShadow { dx, dy ->
+                            graphics.drawRect(-marker.majAx / 2 + dx, -marker.minAx / 2, marker.majAx, marker.minAx + dy)
+                        }
                         graphics.transform = backupTransform
                     }
+
                     MarkerStyle.Circle -> {
-                        graphics.drawOval(offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2, marker.size, marker.size)
+                        graphics.drawShadow { dx, dy ->
+                            graphics.drawOval(offsetX + marker.x - marker.size / 2 + dx, offsetY + marker.y - marker.size / 2, marker.size, marker.size + dy)
+                        }
                     }
+
                     MarkerStyle.Oval -> {
-                        val backupTransform = graphics.transform
-                        graphics.translate(offsetX+marker.x, offsetY+marker.y)
-                        graphics.rotate(Math.toRadians(marker.posAngle))
-                        graphics.drawOval(-marker.majAx/2, -marker.minAx/2, marker.majAx, marker.minAx)
-                        graphics.transform = backupTransform
+                        graphics.drawShadow { dx, dy ->
+                            val backupTransform = graphics.transform
+                            graphics.translate(offsetX + marker.x, offsetY + marker.y)
+                            graphics.rotate(Math.toRadians(marker.posAngle))
+                            graphics.drawOval(-marker.majAx / 2 + dx, -marker.minAx / 2, marker.majAx, marker.minAx + dy)
+                            graphics.transform = backupTransform
+                        }
                     }
+
                     MarkerStyle.None -> {}
                 }
 
@@ -391,18 +426,26 @@ class AnnotateZoom {
 
                 graphics.color = java.awt.Color(thumbnailLabelColor.toInt(16))
                 setAdaptiveFont(graphics, thumbnailLabelFont, marker.name, thumbnailSize)
-                graphics.drawShadowString(marker.name, thumbnailX, thumbnailY - thumbnailInfoFontHeight - thumbnailInfoFontHeight - graphics.fontMetrics.descent)
+                graphics.drawShadow { dx, dy ->
+                    graphics.drawString(marker.name, thumbnailX + dx, thumbnailY - thumbnailInfoFontHeight - thumbnailInfoFontHeight - graphics.fontMetrics.descent + dy)
+                }
 
                 graphics.color = java.awt.Color(thumbnailInfoColor.toInt(16))
                 setAdaptiveFont(graphics, thumbnailInfoFont, marker.info1, thumbnailSize)
-                graphics.drawShadowString(marker.info1, thumbnailX, thumbnailY - graphics.fontMetrics.height - graphics.fontMetrics.descent)
+                graphics.drawShadow { dx, dy ->
+                    graphics.drawString(marker.info1, thumbnailX + dx, thumbnailY - graphics.fontMetrics.height - graphics.fontMetrics.descent + dy)
+                }
                 setAdaptiveFont(graphics, thumbnailInfoFont, marker.info2, thumbnailSize)
-                graphics.drawShadowString(marker.info2, thumbnailX, thumbnailY - graphics.fontMetrics.descent)
+                graphics.drawShadow { dx, dy ->
+                    graphics.drawString(marker.info2, thumbnailX + dx, thumbnailY - graphics.fontMetrics.descent + dy)
+                }
 
                 if (markerLabelStyle == MarkerLabelStyle.Index) {
                     graphics.color = java.awt.Color(thumbnailIndexColor.toInt(16))
-                    setAdaptiveFont(graphics, thumbnailIndexFont, markerLabel, thumbnailSize/4)
-                    graphics.drawShadowString(markerLabel, thumbnailX + baseStrokeSize.roundToInt(), thumbnailY + baseStrokeSize.roundToInt() + graphics.fontMetrics.height)
+                    setAdaptiveFont(graphics, thumbnailIndexFont, markerLabel, thumbnailSize / 4)
+                    graphics.drawShadow { dx, dy ->
+                        graphics.drawString(markerLabel, thumbnailX + baseStrokeSize.roundToInt() + dx, thumbnailY + baseStrokeSize.roundToInt() + graphics.fontMetrics.height + dy)
+                    }
                 }
 
                 graphics.color = java.awt.Color(thumbnailRectColor.toInt(16))
@@ -420,30 +463,32 @@ class AnnotateZoom {
                     val gridStepsX = 10
                     val gridStepsY = 4
                     for (step in 1 until gridStepsX) {
-                        graphics.drawLine(graphX+crop.width*step/gridStepsX, graphY, graphX+crop.width*step/gridStepsX, graphY+brightnessGraphSize)
+                        graphics.drawLine(graphX + crop.width * step / gridStepsX, graphY, graphX + crop.width * step / gridStepsX, graphY + brightnessGraphSize)
                     }
                     for (step in 1 until gridStepsY) {
-                        graphics.drawLine(graphX, graphY+brightnessGraphSize*step/gridStepsY, graphX+crop.width, graphY+brightnessGraphSize*step/gridStepsY)
+                        graphics.drawLine(graphX, graphY + brightnessGraphSize * step / gridStepsY, graphX + crop.width, graphY + brightnessGraphSize * step / gridStepsY)
                     }
 
                     for (channel in listOf(Channel.Red, Channel.Green, Channel.Blue)) {
                         val inputCropChannel = inputCrop[channel]
 
                         //graphics.color = java.awt.Color(brightnessGraphColor.toInt(16))
-                        graphics.color = java.awt.Color(when (channel) {
-                            Channel.Red -> "ff4444".toInt(16)
-                            Channel.Green -> "44ff44".toInt(16)
-                            Channel.Blue -> "4444ff".toInt(16)
-                            else -> "888888".toInt(16)
-                        })
+                        graphics.color = java.awt.Color(
+                            when (channel) {
+                                Channel.Red -> "ff4444".toInt(16)
+                                Channel.Green -> "44ff44".toInt(16)
+                                Channel.Blue -> "4444ff".toInt(16)
+                                else -> "888888".toInt(16)
+                            }
+                        )
                         graphics.stroke = java.awt.BasicStroke(brightnessGraphStrokeSize.toFloat())
 
                         var lastY = 0
                         for (x in 0 until crop.width) {
-                            val value = inputCropChannel[x, crop.height/2]
+                            val value = inputCropChannel[x, crop.height / 2]
                             val y = ((1.0 - value) * (brightnessGraphSize - baseStrokeSize) + baseStrokeSize).toInt()
                             if (x > 0) {
-                                graphics.drawLine(graphX+x-1, graphY+lastY, graphX+x, graphY+y)
+                                graphics.drawLine(graphX + x - 1, graphY + lastY, graphX + x, graphY + y)
                             }
                             lastY = y
                         }
@@ -465,14 +510,18 @@ class AnnotateZoom {
                 subtitleWidth = inputImage.width / 3
                 titleWidth = inputImage.width - subtitleWidth
             }
-            graphics.color = java.awt.Color(thumbnailLabelColor.toInt(16))
+            graphics.color = java.awt.Color(titleColor.toInt(16))
             setAdaptiveFont(graphics, titleFont, title, titleWidth)
-            graphics.drawShadowString(title, offsetX, offsetY - graphics.fontMetrics.descent)
+            graphics.drawShadow { dx, dy ->
+                graphics.drawString(title, offsetX + dx, offsetY - graphics.fontMetrics.descent + dy)
+            }
 
-            graphics.color = java.awt.Color(thumbnailInfoColor.toInt(16))
-            setAdaptiveFont(graphics, titleFont, subTitle, subtitleWidth)
-            subtitleWidth = graphics.fontMetrics.stringWidth(subTitle)
-            graphics.drawShadowString(subTitle, offsetX + inputImage.width - subtitleWidth, offsetY - graphics.fontMetrics.descent)
+            graphics.color = java.awt.Color(subtitleColor.toInt(16))
+            setAdaptiveFont(graphics, titleFont, subtitle, subtitleWidth)
+            subtitleWidth = graphics.fontMetrics.stringWidth(subtitle)
+            graphics.drawShadow { dx, dy ->
+                graphics.drawString(subtitle, offsetX + inputImage.width - subtitleWidth + dx, offsetY - graphics.fontMetrics.descent + dy)
+            }
 
             graphics.color = java.awt.Color(thumbnailRectColor.toInt(16))
             graphics.stroke = java.awt.BasicStroke(baseStrokeSize.toFloat())
