@@ -1,7 +1,13 @@
 package ch.obermuhlner.kimage.astro.annotate
 
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Blue
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Cyan
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Green
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Red
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.White
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
+import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.image.awt.graphics
 import ch.obermuhlner.kimage.core.image.awt.toBufferedImage
 import ch.obermuhlner.kimage.core.image.crop.cropCenter
@@ -20,6 +26,28 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class AnnotateZoom {
+    enum class MarkerStyle {
+        Square,
+        Rectangle,
+        Circle,
+        Oval,
+        None
+    }
+
+    enum class MarkerLabelStyle {
+        Index,
+        Name,
+        None
+    }
+
+    enum class ColorTheme {
+        White,
+        Cyan,
+        Red,
+        Green,
+        Blue
+    }
+
     var magnitude: Optional<Double> = Optional.empty()
     var minObjectSize: Int = 50
     var title: String = ""
@@ -27,8 +55,8 @@ class AnnotateZoom {
     var whiteList: Optional<List<String>> = Optional.empty()
     var blackList: Optional<List<String>> = Optional.empty()
     var ignoreClipped: Boolean = true
-    var markerStyle: String = "square"
-    var markerLabelStyle: String = "index"
+    var markerStyle: MarkerStyle = MarkerStyle.Square
+    var markerLabelStyle: MarkerLabelStyle = MarkerLabelStyle.Index
     var thumbnailSize: Int = 400
     var thumbnailMargin: Int = 20
     var brightnessGraphSize: Int = 200
@@ -46,6 +74,7 @@ class AnnotateZoom {
     var thumbnailInfoColor: String = "cccccc"
     var thumbnailIndexColor: String = "00cc00"
     var brightnessGraphColor: String = "88cc88"
+    var shadowColor: String = "000000"
 
     var titleFontSize = baseFontSize * titleFontSizeFactor
     var markerIndexFontSize = baseFontSize * markerIndexFontSizeFactor
@@ -60,9 +89,80 @@ class AnnotateZoom {
     var brightnessGraphGridColor = "444444"
     var brightnessGraphGridStrokeSize = brightnessGraphStrokeSize
 
+    val shadowOffsets: MutableList<PointXY> = mutableListOf(
+        PointXY(-1, 0),
+        PointXY(1, 0),
+        PointXY(0, -1),
+        PointXY(0, 1),
+    )
     val markers = mutableListOf<Marker>()
 
-    fun arePointsOnSameSide(ra1: Double, dec1: Double, ra2: Double, dec2: Double): Boolean {
+    fun setColorTheme(colorTheme: ColorTheme) {
+        when(colorTheme) {
+            White -> {
+                markerRectColor = "cccccc"
+                markerIndexColor = "aaaaaa"
+                thumbnailRectColor = "aaaaaa"
+                thumbnailLabelColor = "cccccc"
+                thumbnailInfoColor = "cccccc"
+                thumbnailIndexColor = "aaaaaa"
+                brightnessGraphColor = "aaaaaa"
+                gridColor = "888888"
+                brightnessGraphGridColor = "666666"
+                shadowColor = "000000"
+            }
+            Cyan -> {
+                markerRectColor = "44ffff"
+                markerIndexColor = "22cccc"
+                thumbnailRectColor = "88ffff"
+                thumbnailLabelColor = "aaffff"
+                thumbnailInfoColor = "88cccc"
+                thumbnailIndexColor = "88cccc"
+                brightnessGraphColor = "00cccc"
+                gridColor = "226666"
+                brightnessGraphGridColor = "226666"
+                shadowColor = "006666"
+            }
+            Red -> {
+                markerRectColor = "ff4444"
+                markerIndexColor = "cc2222"
+                thumbnailRectColor = "ff8888"
+                thumbnailLabelColor = "ffaaaa"
+                thumbnailInfoColor = "cc8888"
+                thumbnailIndexColor = "cc8888"
+                brightnessGraphColor = "cc0000"
+                gridColor = "662222"
+                brightnessGraphGridColor = "662222"
+                shadowColor = "660000"
+            }
+            Green -> {
+                markerRectColor = "44ff44"
+                markerIndexColor = "22cc22"
+                thumbnailRectColor = "88ff88"
+                thumbnailLabelColor = "aaffaa"
+                thumbnailInfoColor = "88cc88"
+                thumbnailIndexColor = "88cc88"
+                brightnessGraphColor = "00cc00"
+                gridColor = "226622"
+                brightnessGraphGridColor = "226622"
+                shadowColor = "006600"
+            }
+            Blue -> {
+                markerRectColor = "4444ff"
+                markerIndexColor = "2222cc"
+                thumbnailRectColor = "8888ff"
+                thumbnailLabelColor = "aaaaff"
+                thumbnailInfoColor = "8888cc"
+                thumbnailIndexColor = "8888cc"
+                brightnessGraphColor = "0000cc"
+                gridColor = "222266"
+                brightnessGraphGridColor = "222266"
+                shadowColor = "000066"
+            }
+        }
+    }
+
+    private fun arePointsOnSameSide(ra1: Double, dec1: Double, ra2: Double, dec2: Double): Boolean {
         val x1 = cos(Math.toRadians(ra1)) * cos(Math.toRadians(dec1))
         val y1 = sin(Math.toRadians(ra1)) * cos(Math.toRadians(dec1))
         val z1 = sin(Math.toRadians(dec1))
@@ -180,6 +280,17 @@ class AnnotateZoom {
             val thumbnailInfoFont = graphics.font.deriveFont(thumbnailInfoFontSize.toFloat())
             val thumbnailIndexFont = graphics.font.deriveFont(thumbnailIndexFontSize.toFloat())
 
+            val shadowColor = java.awt.Color(shadowColor.toInt(16))
+            fun Graphics2D.drawShadowString(text: String, x: Int, y: Int) {
+                val color = this.color
+                this.color = shadowColor
+                for (shadowOffset in shadowOffsets) {
+                    this.drawString(text, x+shadowOffset.x, y+shadowOffset.y)
+                }
+                this.color = color
+                this.drawString(text, x, y)
+            }
+
 //            graphics.clipRect(offsetX, offsetY, inputImage.width, inputImage.height)
 //            graphics.color = java.awt.Color(gridColor.toInt(16))
 //            graphics.stroke = java.awt.BasicStroke(gridStrokeSize.toFloat())
@@ -222,8 +333,6 @@ class AnnotateZoom {
 
 
             for (marker in markers) {
-                val zoomFactor = thumbnailSize.toDouble() / marker.size.toDouble()
-
                 if (ignoreClipped) {
                     if (marker.x - marker.size /2 < 0 || marker.x + marker.size /2 > inputImage.width || marker.y - marker.size /2 < 0 || marker.y + marker.size /2 > inputImage.height) {
                         continue
@@ -239,64 +348,61 @@ class AnnotateZoom {
                 graphics.color = java.awt.Color(markerIndexColor.toInt(16))
                 graphics.font = markerIndexFont
                 val markerLabel = when (markerLabelStyle) {
-                    "index" -> thumbnailIndex.toString()
-                    "name" -> marker.name
-                    "none" -> ""
-                    else -> throw IllegalArgumentException("Unknown markerLabelStyle: $markerLabelStyle")
+                    MarkerLabelStyle.Index -> thumbnailIndex.toString()
+                    MarkerLabelStyle.Name -> marker.name
+                    MarkerLabelStyle.None -> ""
                 }
                 when (markerStyle) {
-                    "square" -> {
-                        graphics.drawString(markerLabel, offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2 - graphics.fontMetrics.descent)
+                    MarkerStyle.Square -> {
+                        graphics.drawShadowString(markerLabel, offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2 - graphics.fontMetrics.descent)
                     }
                     else -> {
                         val stringWidth = graphics.fontMetrics.stringWidth(markerLabel)
-                        graphics.drawString(markerLabel, offsetX+marker.x - stringWidth/2, offsetY+marker.y -marker.size /2 - graphics.fontMetrics.descent)
+                        graphics.drawShadowString(markerLabel, offsetX+marker.x - stringWidth/2, offsetY+marker.y -marker.size /2 - graphics.fontMetrics.descent)
                     }
                 }
 
                 graphics.color = java.awt.Color(markerRectColor.toInt(16))
                 when (markerStyle) {
-                    "square" -> {
+                    MarkerStyle.Square -> {
                         graphics.drawRect(offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2, marker.size, marker.size)
                     }
-                    "rect" -> {
-                        //graphics.drawRect(pixelX-pixelSize/2, pixelY-pixelSize/2, pixelMajAx, pixelMinAx)
+                    MarkerStyle.Rectangle -> {
                         val backupTransform = graphics.transform
                         graphics.translate(offsetX+marker.x, offsetY+marker.y)
                         graphics.rotate(Math.toRadians(marker.posAngle))
                         graphics.drawRect(-marker.majAx/2, -marker.minAx/2, marker.majAx, marker.minAx)
                         graphics.transform = backupTransform
                     }
-                    "circle" -> {
-                        graphics.drawOval(marker.x -marker.size /2, marker.y -marker.size /2, marker.size, marker.size)
+                    MarkerStyle.Circle -> {
+                        graphics.drawOval(offsetX+marker.x -marker.size /2, offsetY+marker.y -marker.size /2, marker.size, marker.size)
                     }
-                    "oval" -> {
+                    MarkerStyle.Oval -> {
                         val backupTransform = graphics.transform
                         graphics.translate(offsetX+marker.x, offsetY+marker.y)
                         graphics.rotate(Math.toRadians(marker.posAngle))
                         graphics.drawOval(-marker.majAx/2, -marker.minAx/2, marker.majAx, marker.minAx)
                         graphics.transform = backupTransform
                     }
-                    "none" -> {}
-                    else -> throw IllegalArgumentException("Unknown markerStyle: $markerStyle")
+                    MarkerStyle.None -> {}
                 }
 
                 graphics.drawImage(crop, thumbnailX, thumbnailY, null)
 
                 graphics.color = java.awt.Color(thumbnailLabelColor.toInt(16))
                 setAdaptiveFont(graphics, thumbnailLabelFont, marker.name, thumbnailSize)
-                graphics.drawString(marker.name, thumbnailX, thumbnailY - thumbnailInfoFontHeight - thumbnailInfoFontHeight - graphics.fontMetrics.descent)
+                graphics.drawShadowString(marker.name, thumbnailX, thumbnailY - thumbnailInfoFontHeight - thumbnailInfoFontHeight - graphics.fontMetrics.descent)
 
                 graphics.color = java.awt.Color(thumbnailInfoColor.toInt(16))
                 setAdaptiveFont(graphics, thumbnailInfoFont, marker.info1, thumbnailSize)
-                graphics.drawString(marker.info1, thumbnailX, thumbnailY - graphics.fontMetrics.height - graphics.fontMetrics.descent)
+                graphics.drawShadowString(marker.info1, thumbnailX, thumbnailY - graphics.fontMetrics.height - graphics.fontMetrics.descent)
                 setAdaptiveFont(graphics, thumbnailInfoFont, marker.info2, thumbnailSize)
-                graphics.drawString(marker.info2, thumbnailX, thumbnailY - graphics.fontMetrics.descent)
+                graphics.drawShadowString(marker.info2, thumbnailX, thumbnailY - graphics.fontMetrics.descent)
 
-                if (markerLabelStyle == "index") {
+                if (markerLabelStyle == MarkerLabelStyle.Index) {
                     graphics.color = java.awt.Color(thumbnailIndexColor.toInt(16))
                     setAdaptiveFont(graphics, thumbnailIndexFont, markerLabel, thumbnailSize/4)
-                    graphics.drawString(markerLabel, thumbnailX + baseStrokeSize.roundToInt(), thumbnailY + baseStrokeSize.roundToInt() + graphics.fontMetrics.height)
+                    graphics.drawShadowString(markerLabel, thumbnailX + baseStrokeSize.roundToInt(), thumbnailY + baseStrokeSize.roundToInt() + graphics.fontMetrics.height)
                 }
 
                 graphics.color = java.awt.Color(thumbnailRectColor.toInt(16))
@@ -361,12 +467,12 @@ class AnnotateZoom {
             }
             graphics.color = java.awt.Color(thumbnailLabelColor.toInt(16))
             setAdaptiveFont(graphics, titleFont, title, titleWidth)
-            graphics.drawString(title, offsetX, offsetY - graphics.fontMetrics.descent)
+            graphics.drawShadowString(title, offsetX, offsetY - graphics.fontMetrics.descent)
 
             graphics.color = java.awt.Color(thumbnailInfoColor.toInt(16))
             setAdaptiveFont(graphics, titleFont, subTitle, subtitleWidth)
             subtitleWidth = graphics.fontMetrics.stringWidth(subTitle)
-            graphics.drawString(subTitle, offsetX + inputImage.width - subtitleWidth, offsetY - graphics.fontMetrics.descent)
+            graphics.drawShadowString(subTitle, offsetX + inputImage.width - subtitleWidth, offsetY - graphics.fontMetrics.descent)
 
             graphics.color = java.awt.Color(thumbnailRectColor.toInt(16))
             graphics.stroke = java.awt.BasicStroke(baseStrokeSize.toFloat())

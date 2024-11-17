@@ -3,6 +3,7 @@ package ch.obermuhlner.kimage.core.image.awt
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.matrix.values.asXY
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 
@@ -30,9 +31,9 @@ fun toBufferedImage(image: Image): BufferedImage {
     val result = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_RGB)
 
     val pixel = IntArray(3)
-    val red = image[Channel.Red]
-    val green = image[Channel.Green]
-    val blue = image[Channel.Blue]
+    val red = image[Channel.Red].asXY()
+    val green = image[Channel.Green].asXY()
+    val blue = image[Channel.Blue].asXY()
     for (y in 0 until image.height) {
         for (x in 0 until image.width) {
             pixel[0] = (red[x, y] * 255).toInt()

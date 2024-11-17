@@ -8,7 +8,11 @@ import ch.obermuhlner.kimage.astro.align.findStars
 import ch.obermuhlner.kimage.astro.align.formatTransformation
 import ch.obermuhlner.kimage.astro.align.processCalibrationImages
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Green
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.Marker
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerLabelStyle
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerStyle
 import ch.obermuhlner.kimage.astro.background.createFixPointEightCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointFourCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointGrid
@@ -90,6 +94,9 @@ data class DecorationConfig(
     var enabled: Boolean = false,
     var title: String = "",
     var subTitle: String = "",
+    var colorTheme: ColorTheme = Green,
+    var markerStyle: MarkerStyle = MarkerStyle.Rectangle,
+    var markerLabelStyle: MarkerLabelStyle = MarkerLabelStyle.Index,
     var markers: MutableList<MarkerConfig> = mutableListOf()
 )
 
@@ -1152,6 +1159,9 @@ class AstroProcess(val config: ProcessConfig) {
             val annotateZoom = AnnotateZoom()
             annotateZoom.title = annotateConfig.decorate.title.replaceTokens(infoTokens)
             annotateZoom.subTitle = annotateConfig.decorate.subTitle.replaceTokens(infoTokens)
+            annotateZoom.setColorTheme(annotateConfig.decorate.colorTheme)
+            annotateZoom.markerStyle = annotateConfig.decorate.markerStyle
+            annotateZoom.markerLabelStyle = annotateConfig.decorate.markerLabelStyle
             for (markerConfig in annotateConfig.decorate.markers) {
                 annotateZoom.addMarker(Marker(
                     markerConfig.name,
