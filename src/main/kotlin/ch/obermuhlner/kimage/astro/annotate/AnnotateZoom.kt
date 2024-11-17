@@ -52,6 +52,7 @@ class AnnotateZoom {
     var minObjectSize: Int = 50
     var title: String = ""
     var subtitle: String = ""
+    var text: String = ""
     var whiteList: Optional<List<String>> = Optional.empty()
     var blackList: Optional<List<String>> = Optional.empty()
     var ignoreClipped: Boolean = true
@@ -63,12 +64,14 @@ class AnnotateZoom {
     var baseFontSize: Double = 50.0
     var baseStrokeSize: Double = 3.0
     var titleFontSizeFactor: Double = 2.0
+    var textFontSizeFactor: Double = 1.0
     var markerIndexFontSizeFactor: Double = 0.8
     var thumbnailLabelFontSizeFactor: Double = 1.2
     var thumbnailInfoFontSizeFactor: Double = 1.0
     var thumbnailIndexFontSizeFactor: Double = 0.8
     var titleColor: String = ""
     var subtitleColor: String = ""
+    var textColor: String = ""
     var markerRectColor: String = ""
     var markerIndexColor: String = ""
     var thumbnailRectColor: String = ""
@@ -79,6 +82,7 @@ class AnnotateZoom {
     var shadowColor: String = ""
 
     var titleFontSize = baseFontSize * titleFontSizeFactor
+    var textFontSize = baseFontSize * textFontSizeFactor
     var markerIndexFontSize = baseFontSize * markerIndexFontSizeFactor
     var thumbnailLabelFontSize = baseFontSize * thumbnailLabelFontSizeFactor
     var thumbnailInfoFontSize = baseFontSize * thumbnailInfoFontSizeFactor
@@ -108,6 +112,7 @@ class AnnotateZoom {
             White -> {
                 titleColor = "ffffff"
                 subtitleColor = "cccccc"
+                textColor = "aaaaaa"
                 markerRectColor = "cccccc"
                 markerIndexColor = "aaaaaa"
                 thumbnailRectColor = "aaaaaa"
@@ -122,6 +127,7 @@ class AnnotateZoom {
             Cyan -> {
                 titleColor = "ccffff"
                 subtitleColor = "88aaaa"
+                textColor = "88aaaa"
                 markerRectColor = "88ffff"
                 markerIndexColor = "aacccc"
                 thumbnailRectColor = "88ffff"
@@ -137,6 +143,7 @@ class AnnotateZoom {
             Red -> {
                 titleColor = "ffcccc"
                 subtitleColor = "aa8888"
+                textColor = "cc8888"
                 markerRectColor = "ff8888"
                 markerIndexColor = "aa8888"
                 thumbnailRectColor = "ff8888"
@@ -151,6 +158,7 @@ class AnnotateZoom {
             Green -> {
                 titleColor = "ccffcc"
                 subtitleColor = "88aa88"
+                textColor = "88cc88"
                 markerRectColor = "88ff88"
                 markerIndexColor = "88aa88"
                 thumbnailRectColor = "88ff88"
@@ -165,6 +173,7 @@ class AnnotateZoom {
             Blue -> {
                 titleColor = "ccccff"
                 subtitleColor = "8888aa"
+                textColor = "8888cc"
                 markerRectColor = "8888ff"
                 markerIndexColor = "8888aa"
                 thumbnailRectColor = "8888ff"
@@ -259,11 +268,19 @@ class AnnotateZoom {
 
     fun annotate(inputImage: Image, ): Image {
         var titleFontHeight = 0
+        var textFontHeight = 0
         var thumbnailLabelFontHeight = 0
         var thumbnailInfoFontHeight = 0
         graphics(inputImage, 0, 0, 0, 0) { graphics, width, height, offsetX, offsetY ->
-            graphics.font = graphics.font.deriveFont(titleFontSize.toFloat())
-            titleFontHeight = graphics.fontMetrics.height
+            if (title.isNotBlank() || subtitle.isNotBlank()) {
+                graphics.font = graphics.font.deriveFont(titleFontSize.toFloat())
+                titleFontHeight = graphics.fontMetrics.height
+            }
+
+            if (text.isNotBlank()) {
+                graphics.font = graphics.font.deriveFont(textFontSize.toFloat())
+                textFontHeight = graphics.fontMetrics.height
+            }
 
             graphics.font = graphics.font.deriveFont(thumbnailLabelFontSize.toFloat())
             thumbnailLabelFontHeight = graphics.fontMetrics.height
@@ -272,12 +289,14 @@ class AnnotateZoom {
             thumbnailInfoFontHeight = graphics.fontMetrics.height
         }
 
+        val textHeight = textFontHeight * text.lines().size
+
         val thumbnailColWidth = thumbnailSize + thumbnailMargin
         val thumbnailRowHeight = thumbnailSize + thumbnailMargin + thumbnailLabelFontHeight + thumbnailInfoFontHeight + thumbnailInfoFontHeight + brightnessGraphSize
         val thumbnailCols = inputImage.width / thumbnailColWidth
         val thumbnailRows = ceil(markers.size.toDouble() / thumbnailCols).toInt()
 
-        val marginTop = thumbnailMargin + titleFontHeight
+        val marginTop = thumbnailMargin + titleFontHeight + textHeight
         val marginLeft = thumbnailMargin
         val marginBottom = thumbnailRows * thumbnailRowHeight + thumbnailMargin
         val marginRight = thumbnailMargin
@@ -290,8 +309,11 @@ class AnnotateZoom {
             var thumbnailY = thumbnailStartY
             var thumbnailIndex = 1
 
+            var textY = 0
+
             graphics.stroke = java.awt.BasicStroke(baseStrokeSize.toFloat())
             val titleFont = graphics.font.deriveFont(titleFontSize.toFloat())
+            val textFont = graphics.font.deriveFont(textFontSize.toFloat())
             val markerIndexFont = graphics.font.deriveFont(markerIndexFontSize.toFloat())
             val thumbnailLabelFont = graphics.font.deriveFont(thumbnailLabelFontSize.toFloat())
             val thumbnailInfoFont = graphics.font.deriveFont(thumbnailInfoFontSize.toFloat())
@@ -503,24 +525,38 @@ class AnnotateZoom {
                 thumbnailIndex++
             }
 
-            setAdaptiveFont(graphics, titleFont, title, inputImage.width)
-            var titleWidth = graphics.fontMetrics.stringWidth(title)
-            var subtitleWidth = inputImage.width - titleWidth
-            if (subtitleWidth < inputImage.width / 3) {
-                subtitleWidth = inputImage.width / 3
-                titleWidth = inputImage.width - subtitleWidth
-            }
-            graphics.color = java.awt.Color(titleColor.toInt(16))
-            setAdaptiveFont(graphics, titleFont, title, titleWidth)
-            graphics.drawShadow { dx, dy ->
-                graphics.drawString(title, offsetX + dx, offsetY - graphics.fontMetrics.descent + dy)
+            if (title.isNotBlank() || subtitle.isNotBlank()) {
+                setAdaptiveFont(graphics, titleFont, title, inputImage.width)
+                textY += titleFontHeight
+                var titleWidth = graphics.fontMetrics.stringWidth(title)
+                var subtitleWidth = inputImage.width - titleWidth
+                if (subtitleWidth < inputImage.width / 3) {
+                    subtitleWidth = inputImage.width / 3
+                    titleWidth = inputImage.width - subtitleWidth
+                }
+                graphics.color = java.awt.Color(titleColor.toInt(16))
+                setAdaptiveFont(graphics, titleFont, title, titleWidth)
+                graphics.drawShadow { dx, dy ->
+                    graphics.drawString(title, offsetX + dx, textY + dy)
+                }
+
+                graphics.color = java.awt.Color(subtitleColor.toInt(16))
+                setAdaptiveFont(graphics, titleFont, subtitle, subtitleWidth)
+                subtitleWidth = graphics.fontMetrics.stringWidth(subtitle)
+                graphics.drawShadow { dx, dy ->
+                    graphics.drawString(subtitle, offsetX + inputImage.width - subtitleWidth + dx, textY + dy)
+                }
             }
 
-            graphics.color = java.awt.Color(subtitleColor.toInt(16))
-            setAdaptiveFont(graphics, titleFont, subtitle, subtitleWidth)
-            subtitleWidth = graphics.fontMetrics.stringWidth(subtitle)
-            graphics.drawShadow { dx, dy ->
-                graphics.drawString(subtitle, offsetX + inputImage.width - subtitleWidth + dx, offsetY - graphics.fontMetrics.descent + dy)
+            if (text.isNotBlank()) {
+                graphics.color = java.awt.Color(textColor.toInt(16))
+                for (textLine in text.lines()) {
+                    textY += textFontHeight
+                    graphics.font = textFont
+                    graphics.drawShadow { dx, dy ->
+                        graphics.drawString(textLine, offsetX + dx, textY + dy)
+                    }
+                }
             }
 
             graphics.color = java.awt.Color(thumbnailRectColor.toInt(16))

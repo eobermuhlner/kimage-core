@@ -93,7 +93,8 @@ data class AnnotateConfig(
 data class DecorationConfig(
     var enabled: Boolean = false,
     var title: String = "",
-    var subTitle: String = "",
+    var subtitle: String = "",
+    var text: String = "",
     var colorTheme: ColorTheme = Green,
     var markerStyle: MarkerStyle = MarkerStyle.Rectangle,
     var markerLabelStyle: MarkerLabelStyle = MarkerLabelStyle.Index,
@@ -1158,7 +1159,8 @@ class AstroProcess(val config: ProcessConfig) {
         annotatedImage = if (annotateConfig.decorate.enabled) {
             val annotateZoom = AnnotateZoom()
             annotateZoom.title = annotateConfig.decorate.title.replaceTokens(infoTokens)
-            annotateZoom.subtitle = annotateConfig.decorate.subTitle.replaceTokens(infoTokens)
+            annotateZoom.subtitle = annotateConfig.decorate.subtitle.replaceTokens(infoTokens)
+            annotateZoom.text = annotateConfig.decorate.text.replaceTokens(infoTokens)
             annotateZoom.setColorTheme(annotateConfig.decorate.colorTheme)
             annotateZoom.markerStyle = annotateConfig.decorate.markerStyle
             annotateZoom.markerLabelStyle = annotateConfig.decorate.markerLabelStyle

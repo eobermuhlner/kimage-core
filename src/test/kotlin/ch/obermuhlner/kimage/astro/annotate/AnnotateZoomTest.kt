@@ -33,12 +33,49 @@ class AnnotateZoomTest : AbstractImageProcessingTest() {
     }
 
     @Test
+    fun `should annotate multiple markers`() {
+        val image = readTestImage("flowers.bmp")
+        val annotateZoom = AnnotateZoom()
+        annotateZoom.title = "Title"
+        annotateZoom.subtitle = "Subtitle"
+        annotateZoom.addMarker(Marker(
+            "marker1",
+            50,
+            50,
+            30,
+            "info1",
+            "info2"
+        ))
+        annotateZoom.addMarker(Marker(
+            "marker2",
+            100,
+            100,
+            10,
+            "info1",
+            ""
+        ))
+        annotateZoom.addMarker(Marker(
+            "marker3",
+            200,
+            200,
+            50,
+            "info1",
+            ""
+        ))
+        assertReferenceImage("annotate", annotateZoom.annotate(image))
+    }
+
+    @Test
     fun `should annotate marker using all color themes`() {
         val image = readTestImage("flowers.bmp")
         for (colorTheme in ColorTheme.entries) {
             val annotateZoom = AnnotateZoom()
             annotateZoom.title = "Title"
             annotateZoom.subtitle = "Subtitle"
+            annotateZoom.text = """
+                Text line 1
+                Text line 2
+            """.trimIndent()
             annotateZoom.setColorTheme(colorTheme)
             annotateZoom.addMarker(Marker(
                 "marker1",
