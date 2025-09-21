@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 class ImageDebayerTest : AbstractImageProcessingTest() {
     @Test
     fun `should debayer image with bayer pattern and interpolation`() {
-        val image = readTestImage()
+        val image = readTestImage("flowers.bmp")
         assertReferenceImage("default", image.bayer().debayer())
 
         for (bayerPattern in BayerPattern.entries) {
