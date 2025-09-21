@@ -678,44 +678,59 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
 
-        val minBackground = mutableMapOf<Channel, Double>()
-        if (config.calibrate.normalizeBackground.enabled) {
-            println()
-            elapsed("Normalizing backgrounds for ${inputFiles.size} input files") {
-                inputFiles.forEach { inputFile ->
-                    val calibratedFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
-                        .resolve("${inputFile.nameWithoutExtension}.${config.format.outputImageExtension}")
-                    if (!calibratedFile.exists()) {
-                        println()
-                        println("Loading $inputFile")
-                        var light = elapsed("Reading light frame") { ImageReader.read(inputFile) }
-                        if (config.format.debayer.enabled) {
-                            elapsed("Debayering light frame $inputFile") {
-                                light =
-                                    debayerImageIfConfigured(
-                                        light,
-                                        config.format.debayer.copy(cleanupBadPixels = false)
-                                    )
-                            }
-                        }
+        println()
+        println("### Calibrating ${inputFiles.size} images ...")
 
-                        for (channel in light.channels) {
-                            val median = light[channel].values().median()
-                            println("Background: $channel: $median")
-                            minBackground[channel] = minBackground[channel]?.let { min(it, median) } ?: median
+        val (minBackground, dirtyMinBackground) = if (config.calibrate.normalizeBackground.enabled) {
+            val minBackgroundFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
+                .resolve("minBackground.yaml")
+            if (minBackgroundFile.exists()) {
+                val yaml = Yaml()
+                val stringMap = minBackgroundFile.inputStream().use {
+                    yaml.load<Map<String, Double>>(it)
+                }
+                val map = stringMap.mapKeys { Channel.valueOf(it.key) }
+                Pair(map, false)
+            } else {
+                val minBackground = mutableMapOf<Channel, Double>()
+                println()
+                elapsed("Normalizing backgrounds for ${inputFiles.size} input files") {
+                    inputFiles.forEach { inputFile ->
+                        val calibratedFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
+                            .resolve("${inputFile.nameWithoutExtension}.${config.format.outputImageExtension}")
+                        if (!calibratedFile.exists()) {
+                            println()
+                            println("Loading $inputFile")
+                            var light = elapsed("Reading light frame") { ImageReader.read(inputFile) }
+                            if (config.format.debayer.enabled) {
+                                elapsed("Debayering light frame $inputFile") {
+                                    light =
+                                        debayerImageIfConfigured(
+                                            light,
+                                            config.format.debayer.copy(cleanupBadPixels = false)
+                                        )
+                                }
+                            }
+
+                            for (channel in light.channels) {
+                                val median = light[channel].values().median()
+                                println("Background: $channel: $median")
+                                minBackground[channel] = minBackground[channel]?.let { min(it, median) } ?: median
+                            }
                         }
                     }
                 }
-            }
 
-            println()
-            minBackground.forEach { (channel, median) ->
-                println("Minimum background $channel: $median")
+                val yaml = Yaml()
+                val stringMap = minBackground.mapKeys { it.key.name }
+                minBackgroundFile.writeText(yaml.dumpAsMap(stringMap))
+                Pair(minBackground, true)
             }
+        } else {
+            Pair(emptyMap(), false)
         }
+        dirty = dirty || dirtyMinBackground
 
-        println()
-        println("### Calibrating ${inputFiles.size} images ...")
 
         var dirtyCalibrated = false
         val dirtyCalibratedFiles = mutableSetOf<File>()
@@ -1271,5 +1286,17 @@ class AstroProcess(val config: ProcessConfig) {
             FixPointType.EightCorners -> image.createFixPointEightCorners(fixPointsConfig.borderDistance)
             FixPointType.Custom -> fixPointsConfig.customPoints.map { PointXY(it.x, it.y)}
         }
+    }
+
+    private fun <T> readConfig(file: File, clazz: Class<T>): T {
+        val yaml = Yaml()
+        return file.inputStream().use { input ->
+            yaml.loadAs(input, clazz::class.java)
+        }
+    }
+
+    private fun <T> writeConfig(file: File, config: T) {
+        val yaml = Yaml()
+        file.writeText(yaml.dumpAsMap(config))
     }
 }
