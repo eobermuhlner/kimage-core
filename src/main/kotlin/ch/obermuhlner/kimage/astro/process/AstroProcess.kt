@@ -422,6 +422,18 @@ format:
     bayerPattern: RGGB
   inputImageExtension: fit
   outputImageExtension: tif
+  filenameTokens:
+    enabled: false
+    names:
+      - targetType
+      - targetName
+      - exposureTime
+      - binLevel
+      - camera
+      - iso
+      - dateTime
+      - temperature
+      - sequenceNumber
 enhance:
   steps:
   - rotate:
@@ -454,7 +466,11 @@ enhance:
       maxPercentile: 0.9999
     addToHighDynamicRange: true
   - sigmoid:
-      midpoint: 0.3
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - sigmoid:
+      midpoint: 0.4
       strength: 1.1
     addToHighDynamicRange: true
   - sigmoid:
@@ -470,13 +486,29 @@ enhance:
       saturationWeight: 0.1
       exposureWeight: 1.0
   - sigmoid:
-      midpoint: 0.4
-      strength: 1.5
+      midpoint: 0.3
+      strength: 1.1
   - reduceNoise:
       thresholding: Soft
       thresholds:
         - 0.01
         - 0.001
+annotate:
+  enabled: false
+  decorate:
+    enabled: true
+    title: "Object Name"
+    subtitle: "{stackedCount}x{exposureTime}"
+    text: "Object Description"
+    markerStyle: Square
+    markerLabelStyle: Index
+    colorTheme: Cyan
+output:
+  outputName: "{targetName}_{stackedCount}x{exposureTime}_{iso}_{calibration}"
+  outputImageExtensions:
+    - tif
+    - jpg
+    - png
 """.trimIndent()
 
 fun main(args: Array<String>) {
