@@ -22,7 +22,7 @@ class ImageCombineTest : AbstractImageProcessingTest() {
 
     @Test
     fun `should replace brightness debayered monochrome in rgb image`() {
-        val image = readTestImage("flowers.bmp").bayer()
+        val image = readTestImage().bayer()
 
         val monochromeImage = image.debayer(interpolation = Monochrome)
         val rgbImage = image.debayer()

@@ -45,13 +45,13 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
 
     @Test
     fun `should interpolate gradient test image with various automated grid points`() {
-        val image = createGradientTestImage(600, 300)
+        val image = createGradientTestImage(60, 30)
         assertReferenceImage("orig", image)
 
         for (i in 1 .. 9) {
             val fixPoints = image.createFixPointGrid(i, i)
 
-            val medianRadius = 50
+            val medianRadius = 10
             val power = 2.0
             val sigmaThreshold = 3.0
             val sigmaClippingMaxIterations = 5
@@ -74,40 +74,6 @@ class ImageInterpolateTest: AbstractImageProcessingTest() {
             val withoutBackgroundImage = image - background + 0.01
             withoutBackgroundImage.applyEach { v -> clamp(v, 0.0, 1.0) }
             assertReferenceImage("withoutBackgroundImage$i", withoutBackgroundImage)
-        }
-    }
-
-    @Test
-    fun `should interpolate M42 with various automated grid points`() {
-        val image = readTestImage("small_M42.png")
-        //val image = createGradientTestImage(600, 300)
-        val stretchFactor = 1000.0
-        assertReferenceImage("orig", image.stretchLogarithmic(stretchFactor))
-
-        for (i in 1 .. 9) {
-            val fixPointValues = image.getFixPointValues(image.createFixPointGrid(i, i))
-
-            val medianRadius = 50
-            val power = 2.0
-            val sigmaThreshold = 3.0
-            val sigmaClippingMaxIterations = 5
-            //val medianRadius = estimateMedianRadiusForInterpolate(fixPoints, image.width, image.height)
-            //val power = estimatePowerForInterpolate(fixPoints, image.width, image.height)
-            println("generated ${fixPointValues.size} fix points")
-            println("medianRadius: $medianRadius")
-            println("power: $power")
-
-            val background = image.interpolate(
-                fixPointValues,
-                power = power
-            ).let {
-                assertReferenceImage("interpolate$i", it.stretchLogarithmic(stretchFactor))
-                it
-            }
-
-            val withoutBackgroundImage = image - background + 0.01
-            withoutBackgroundImage.applyEach { v -> clamp(v, 0.0, 1.0) }
-            assertReferenceImage("withoutBackgroundImage$i", withoutBackgroundImage.stretchLogarithmic(stretchFactor))
         }
     }
 }

@@ -35,7 +35,7 @@ class ImageBayerDebayerTest: AbstractImageProcessingTest() {
         simulateStuckPixel(2, 2, 1.0)
         simulateStuckPixel(5, 3, 0.0)
         simulateStuckPixel(width-5, 2, 1.0)
-        ImageWriter.write(bayeredImage, File("after_bayer.tif"))
+        //ImageWriter.write(bayeredImage, File("after_bayer.tif"))
 
         val bayeredColorImage = bayeredImage.debayer(interpolation = DebayerInterpolation.None)
         assertReferenceImage("after_bayer_color", bayeredColorImage)

@@ -13,7 +13,7 @@ class ImageHistogramTest: AbstractImageProcessingTest() {
 
     @Test
     fun `should create histogram image`() {
-        val image = readTestImage("flowers.bmp")
+        val image = readTestImage("flowers.png")
 
         image.histogramImage(200, 100).let {
             assertReferenceImage("histogramImage", it)

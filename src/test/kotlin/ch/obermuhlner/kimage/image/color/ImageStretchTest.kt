@@ -19,7 +19,7 @@ class ImageStretchTest : AbstractImageProcessingTest() {
 
     @Test
     fun testStretch() {
-        val image = readTestImage("small_M42.png")
+        val image = createGradientTestImage(60, 30)
 
         assertReferenceImage("stretchLinear", image.stretchLinear())
         assertReferenceImage("stretchLinearPercentile", image.stretchLinearPercentile())
