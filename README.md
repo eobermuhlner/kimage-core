@@ -6,7 +6,7 @@ This documentation explains how to use the `ch.obermuhlner.kimage.astro.process`
 
 To start processing your astrophotography images, you need to configure the `ProcessConfig` according to your needs and invoke the appropriate processing commands. The main entry points are:
 
-- **Process Configuration (`ProcessConfig`)**: Configure input formats, calibration, alignment, stacking, and enhancement settings.
+- **Process Configuration (`ProcessConfig`)**: Configure input formats, calibration, alignment, stacking, enhancement, annotation, and output settings.
 - **Commands**: `init`, `process`, `config`, `stars`.
 
 ### Commands Overview
@@ -16,11 +16,11 @@ To start processing your astrophotography images, you need to configure the `Pro
 - **`config`**: Displays the current configuration.
 - **`stars`**: Performs an analysis of the stars in the images, useful for estimating focus and image quality.
 
-## Configuration (`ProcessConfig`)
+## Configuration
 
-The `ProcessConfig` is a comprehensive structure that allows you to specify how each step of the astrophotography workflow should be handled. Below is a detailed breakdown of all configuration options available in `ProcessConfig` using YAML snippets for clarity.
+The configuration is a comprehensive structure that allows you to specify how each step of the astrophotography workflow should be handled. Below is a detailed breakdown of all configuration options available in `ProcessConfig` using YAML snippets for clarity.
 
-### Format Configuration (`FormatConfig`)
+### Format Configuration
 
 Defines input/output formats, debayer settings, and directory paths for input images.
 
@@ -29,13 +29,26 @@ format:
   inputImageExtension: "fit"   # The file extension for input images.
   outputImageExtension: "tif"  # The file extension for output images.
   inputDirectory: "."          # Directory where input images are stored.
-  debayer:                      # Configuration for debayering raw images.
-    enabled: true               # Whether debayering is enabled.
-    cleanupBadPixels: true      # Whether to clean up bad pixels.
-    bayerPattern: "RGGB"       # The Bayer pattern of the camera sensor (e.g., RGGB).
+  filenameTokens:              # Configuration for parsing filename tokens
+    enabled: false             # Whether to parse filename tokens
+    separator: "_"             # Token separator in filenames
+    names:                     # Names of tokens in order
+      - "targetType"
+      - "targetName"
+      - "exposureTime"
+      - "binLevel"
+      - "camera"
+      - "iso"
+      - "dateTime"
+      - "temperature"
+      - "sequenceNumber"
+  debayer:                     # Configuration for debayering raw images.
+    enabled: true              # Whether debayering is enabled.
+    cleanupBadPixels: true     # Whether to clean up bad pixels.
+    bayerPattern: "RGGB"       # The Bayer pattern of the camera sensor (RGGB, GRBG, GBRG, BGGR).
 ```
 
-### Calibration Configuration (`CalibrateConfig`)
+### Calibration Configuration
 
 Specifies directories and settings for calibration frames, such as bias, dark, flat, and darkflat frames.
 
@@ -56,7 +69,7 @@ calibrate:
   calibratedOutputDirectory: "astro-process/calibrated" # Directory for calibrated images.
 ```
 
-### Alignment Configuration (`AlignConfig`)
+### Alignment Configuration
 
 Defines parameters for star detection and alignment.
 
@@ -68,7 +81,7 @@ align:
   alignedOutputDirectory: "astro-process/aligned" # Directory for aligned images.
 ```
 
-### Stacking Configuration (`StackConfig`)
+### Stacking Configuration
 
 Specifies the output directory for stacked images.
 
@@ -77,145 +90,171 @@ stack:
   stackedOutputDirectory: "astro-process/stacked" # Directory for stacked images.
 ```
 
-### Enhancement Configuration (`EnhanceConfig`)
+### Enhancement Configuration
 
-The enhancement configuration is divided into several parts: debayering, rotation, cropping, noise reduction, background correction, white balance, color stretching, histogram settings, and final format.
-
-#### Debayering Configuration
-
-Settings related to debayering during the enhancement phase.
+The enhancement configuration uses a step-based approach where each enhancement operation is defined as a separate step in a sequence.
 
 ```yaml
 enhance:
-  enabled: true                           # Whether image enhancement is enabled.
   enhancedOutputDirectory: "astro-process/enhanced" # Directory for enhanced images.
-  debayer:                                # Debayer configuration for enhancement.
-    enabled: false
+  measure:                               # Measurement area for percentile calculations
+    enabled: false                       # Whether to use a specific area for measurements
+    x: 0                                 # X coordinate of measurement area
+    y: 0                                 # Y coordinate of measurement area
+    width: 0                             # Width of measurement area
+    height: 0                            # Height of measurement area
+  regionOfInterest:                      # Region of interest to save separately
+    enabled: false                       # Whether to save ROI images
+    x: 0                                 # X coordinate of ROI
+    y: 0                                 # Y coordinate of ROI
+    width: 0                             # Width of ROI
+    height: 0                            # Height of ROI
+  histogram:                             # Histogram settings
+    enabled: true                        # Whether to generate histograms
+    histogramWidth: 1000                 # Width of the histogram
+    histogramHeight: 400                 # Height of the histogram
+    printPercentiles: false              # Whether to print histogram percentiles
+  steps:                                 # Enhancement steps (processed in order)
+    - rotate:                            # Rotation step
+        angle: 0.0                       # Rotation angle in degrees (90, 180, 270 for exact rotations)
+    - crop:                              # Cropping step
+        x: 100                           # X coordinate (negative values count from right/bottom)
+        y: 100                           # Y coordinate
+        width: -100                      # Width (negative = image width - x + width)
+        height: -100                     # Height (negative = image height - y + height)
+    - debayer:                           # Debayer step (if not done earlier)
+        enabled: true                    # Whether debayering is enabled
+        cleanupBadPixels: true           # Whether to clean up bad pixels
+        bayerPattern: "RGGB"             # Bayer pattern
+    - whitebalance:                      # White balance step
+        enabled: true                    # Whether white balance is enabled
+        type: "Local"                    # Type: Global, Local, Custom
+        fixPoints:                       # Fix points for local white balance
+          type: "FourCorners"            # Grid, FourCorners, EightCorners, Custom
+          borderDistance: 100            # Distance from border for corners
+          gridSize: 2                    # Grid size (for Grid type)
+          customPoints: []               # Custom points (for Custom type)
+        localMedianRadius: 50            # Radius for local median
+        valueRangeMin: 0.2               # Minimum value range
+        valueRangeMax: 0.9               # Maximum value range
+        customRed: 1.0                   # Custom red multiplier
+        customGreen: 1.0                 # Custom green multiplier
+        customBlue: 1.0                  # Custom blue multiplier
+    - removeBackground:                  # Background removal step
+        fixPoints:                       # Fix points configuration
+          type: "FourCorners"            # Type of fix points
+          borderDistance: 100            # Distance from border
+          gridSize: 2                    # Grid size
+          customPoints: []               # Custom points
+        medianRadius: 50                 # Radius for median calculation
+        power: 1.5                       # Interpolation power
+        offset: 0.01                     # Background offset
+    - linearPercentile:                  # Linear percentile stretch
+        minPercentile: 0.0001            # Minimum percentile
+        maxPercentile: 0.9999            # Maximum percentile
+      addToHighDynamicRange: true        # Add result to HDR processing
+    - sigmoid:                           # Sigmoid stretch
+        midpoint: 0.01                   # Midpoint of sigmoid curve
+        strength: 1.1                    # Strength of sigmoid curve
+      addToHighDynamicRange: true        # Add result to HDR processing
+    - blur:                              # Blur step
+        strength: 0.1                    # Blur strength (0.0 = no blur, 1.0 = full blur)
+    - sharpen:                           # Sharpen step
+        strength: 0.5                    # Sharpen strength
+    - unsharpMask:                       # Unsharp mask step
+        radius: 1                        # Unsharp mask radius
+        strength: 1.0                    # Unsharp mask strength
+    - reduceNoise:                       # Noise reduction step
+        algorithm: "MultiScaleMedianOverAllChannels" # Algorithm: MultiScaleMedianOverAllChannels, MultiScaleMedianOverGrayChannel
+        thresholding: "Soft"             # Thresholding: Hard, Soft, Sigmoid, SigmoidLike
+        thresholds:                      # Threshold levels
+          - 0.01
+          - 0.001
+    - highDynamicRange:                  # HDR combination step
+        saturationBlurRadius: 3          # Blur radius for saturation
+        contrastWeight: 0.2              # Weight for contrast
+        saturationWeight: 0.1            # Weight for saturation
+        exposureWeight: 1.0              # Weight for exposure
 ```
 
-#### Rotation Configuration
+### Annotation Configuration
 
-Settings for rotating images.
+Configuration for adding annotations, decorations, and custom drawings to the final images.
 
 ```yaml
-  rotate:                                 # Configuration for rotating images.
-    angle: 0.0                            # Rotation angle in degrees.
+annotate:
+  enabled: false                         # Whether annotation is enabled
+  annotatedOutputDirectory: "astro-process/annotated" # Directory for annotated images
+  decorate:                              # Decoration settings
+    enabled: true                        # Whether decoration is enabled
+    title: "Object Name"                 # Title text (supports tokens)
+    subtitle: "{stackedCount}x{exposureTime}" # Subtitle text (supports tokens)
+    text: "Object Description"           # Additional text
+    colorTheme: "Cyan"                   # Color theme: Green, Cyan, Red, Blue, Yellow, Magenta
+    markerStyle: "Square"                # Marker style: Rectangle, Square, Circle
+    markerLabelStyle: "Index"            # Label style: Index, Name, Info1, Info2, None
+    markers:                             # List of markers to add
+      - name: "Star"                     # Marker name
+        x: 100                           # X coordinate
+        y: 100                           # Y coordinate
+        size: 100                        # Marker size
+        info1: "Bright star"             # Additional info 1
+        info2: "Magnitude 2.5"           # Additional info 2
+  draw:                                  # Custom drawing settings
+    enabled: false                       # Whether custom drawing is enabled
+    margin:                              # Margins for drawing area
+      top: 0                             # Top margin
+      left: 0                            # Left margin
+      bottom: 0                          # Bottom margin
+      right: 0                           # Right margin
+    steps:                               # Drawing steps (processed in order)
+      - color:                           # Set drawing color
+          color: "ffffff"                # Color in hex format
+      - stroke:                          # Set stroke width
+          width: 1.0                     # Stroke width
+      - fontSize:                        # Set font size
+          size: 12.0                     # Font size
+      - line:                            # Draw line
+          x1: 0                          # Start X coordinate
+          y1: 0                          # Start Y coordinate
+          x2: 100                        # End X coordinate
+          y2: 100                        # End Y coordinate
+      - rectangle:                       # Draw rectangle
+          x: 0                           # X coordinate
+          y: 0                           # Y coordinate
+          width: 100                     # Rectangle width
+          height: 100                    # Rectangle height
+      - text:                            # Draw text
+          x: 10                          # X coordinate
+          y: 20                          # Y coordinate
+          text: "Hello World"            # Text to draw (supports tokens)
 ```
 
-#### Cropping Configuration
+### Output Configuration
 
-Settings for cropping images.
+Configuration for final output files and naming.
 
 ```yaml
-  crop:                                   # Configuration for cropping images.
-    enabled: false
-    x: 0                                  # X coordinate of the top-left corner.
-    y: 0                                  # Y coordinate of the top-left corner.
-    width: 0                              # Width of the crop area.
-    height: 0                             # Height of the crop area.
+output:
+  outputName: "{targetName}_{stackedCount}x{exposureTime}_{iso}_{calibration}" # Output filename pattern (supports tokens)
+  outputImageExtensions:                 # List of output formats
+    - "tif"                              # TIFF format
+    - "jpg"                              # JPEG format
+    - "png"                              # PNG format
+  outputDirectory: "astro-process/output" # Directory for final output images
 ```
 
-#### Noise Reduction Configuration
+### Available Tokens
 
-Settings for reducing noise in images.
+The following tokens can be used in filename patterns, titles, and text:
 
-```yaml
-  noise:                                  # Noise reduction settings.
-    enabled: true
-    algorithm: "MultiScaleMedianOverAllChannels" # Noise reduction algorithm to use.
-    thresholding: "Soft"                 # Type of thresholding (Hard, Soft, Sigmoid).
-    thresholds:                           # Threshold levels for noise reduction.
-      - 0.0001
-```
+- `{parentDir}` - Parent directory name
+- `{firstInput}` - First input filename (without extension)
+- `{inputCount}` - Number of input files
+- `{stackedCount}` - Number of successfully stacked files
+- `{calibration}` - Calibration types used (e.g., "bias,dark,flat")
 
-#### Background Correction Configuration
-
-Settings for correcting the background of images.
-
-```yaml
-  background:                             # Background correction settings.
-    enabled: false
-    fixPoints:                            # Configuration for fixed points.
-      type: "FourCorners"                # Type of fixed points (Grid, FourCorners, EightCorners, Custom).
-      borderDistance: 100                 # Distance from the image border.
-      gridSize: 2                         # Size of the grid for fixed points.
-      customPoints: []                    # List of custom points.
-    medianRadius: 50                      # Radius for median calculation.
-    power: 1.5                            # Power for interpolation.
-    offset: 0.01                          # Offset for background correction.
-```
-
-#### White Balance Configuration
-
-Settings for white balance adjustments.
-
-```yaml
-  whitebalance:                           # White balance settings.
-    enabled: true
-    type: "Global"                       # White balance type (Global, Local, Custom).
-    fixPoints:                            # Fix points for local white balance.
-      type: "FourCorners"
-      borderDistance: 100
-    localMedianRadius: 50                 # Radius for local median calculation.
-    valueRangeMin: 0.0                    # Minimum value range for white balance.
-    valueRangeMax: 0.9                    # Maximum value range for white balance.
-    customRed: 1.0                        # Custom red balance.
-    customGreen: 1.0                      # Custom green balance.
-    customBlue: 1.0                       # Custom blue balance.
-```
-
-#### Color Stretching Configuration
-
-Settings for color stretching to enhance image contrast and dynamic range.
-
-```yaml
-  colorStretch:                           # Color stretching settings.
-    enabled: true
-    measure:                              # Measurement area for color stretching.
-      enabled: false
-      x: 0
-      y: 0
-      width: 0
-      height: 0
-    steps:                                # Steps for color stretching.
-      - type: "LinearPercentile"          # Type of color stretch (LinearPercentile).
-        linearPercentileMin: 0.0001        # Minimum percentile for linear stretching.
-        linearPercentileMax: 0.9999        # Maximum percentile for linear stretching.
-        addToHighDynamicRange: false       # Add to HDR calculation.
-      - type: "Sigmoid"                   # Type of color stretch (Sigmoid).
-        sigmoidMidpoint: 0.1               # Midpoint for sigmoid stretching.
-        sigmoidFactor: 10.0                # Factor for sigmoid stretching.
-        addToHighDynamicRange: false       # Add to HDR calculation.
-      - type: "Blur"                      # Type of color stretch (Blur).
-        blurStrength: 0.1                  # Strength of the blur effect.
-        addToHighDynamicRange: false       # Add to HDR calculation.
-      - type: "HighDynamicRange"          # Type of color stretch (HighDynamicRange).
-        addToHighDynamicRange: false       # Add to HDR calculation.       # Add to HDR calculation.
-```
-
-#### Histogram Configuration
-
-Settings for generating histograms of the images.
-
-```yaml
-  histogram:                              # Histogram settings.
-    enabled: true
-    histogramWidth: 1000                  # Width of the histogram.
-    histogramHeight: 400                  # Height of the histogram.
-    printPercentiles: false               # Whether to print histogram percentiles.
-```
-
-#### Final Format Configuration
-
-Settings for the final output format of enhanced images.
-
-```yaml
-  finalFormat:                            # Final output format settings.
-    outputImageExtensions:                # List of output image formats.
-      - "tif"
-      - "jpg"
-      - "png"
-```
+When `filenameTokens.enabled` is true, additional tokens are available based on the parsed filename.
 
 ### Quick Mode Configuration
 
@@ -225,10 +264,6 @@ The quick mode allows you to process a limited number of images for testing purp
 quick: false                 # Enable or disable quick mode.
 quickCount: 3                # Number of images to process in quick mode.
 ```
-
-## Using YAML Config Files
-
-After running `init`, you will have a default configuration file (`kimage-astro-process.yaml`). Edit this file to change settings such as input image directories, calibration options, alignment parameters, and enhancement steps.
 
 ## Typical Workflow
 
@@ -240,7 +275,9 @@ First, create a default configuration file with:
 $ kimage-astro-process init
 ```
 
-This will generate a YAML file you can modify according to your needs.
+This will generate an initial YAML file `kimage-astro-process.yaml`.
+
+Edit this file to change settings such as input image directories, calibration options, alignment parameters, and enhancement steps.
 
 ### 2. Configure Image Processing
 
@@ -248,7 +285,9 @@ Edit `kimage-astro-process.yaml` to adjust settings. Here are some common modifi
 
 - **Input Directory**: Update the `inputDirectory` in `format` to point to where your images are stored.
 - **Calibration**: Specify paths for calibration frames like `biasDirectory`, `flatDirectory`, etc., in the `calibrate` section.
-- **Enhancements**: Enable or disable features such as noise reduction, color stretching, and rotation in the `enhance` section.
+- **Enhancement Steps**: Modify the `enhance.steps` array to add, remove, or reorder processing steps.
+- **Output Settings**: Configure output formats, naming patterns, and directories in the `output` section.
+- **Annotation**: Enable and configure annotations in the `annotate` section to add titles, markers, and custom drawings.
 
 ### 3. Run the Image Processing Pipeline
 
@@ -265,10 +304,10 @@ This command will process all images according to the configuration, including c
 To analyze star quality in your images, run:
 
 ```sh
-$ java -jar kimage-astro-process.jar stars
+$ kimage-astro-process stars
 ```
 
-This will output metrics such as the number of stars, Full Width at Half Maximum (FWHM), and sharpness scores, which help evaluate the quality of your focus and tracking.
+This will output metrics such as the number of stars, Full Width at Half Maximum (FWHM), and sharpness scores, which help evaluate the quality of your focus and tracking. The analysis includes a composite score that considers star sharpness, count, overall sharpness (via Laplacian), and brightness balance.
 
 ## Key Features and Settings
 
@@ -288,38 +327,131 @@ The `stackedOutputDirectory` defines where the stacked images are saved. This pr
 
 ### Enhancement
 
-- **Color Stretching**: Options like `stretchLinearPercentile` and `stretchSigmoidLike` allow you to enhance image contrast and dynamic range.
-- **Noise Reduction**: Different algorithms are available (`MultiScaleMedianOverAllChannels` or `MultiScaleMedianOverGrayChannel`), allowing you to reduce noise while retaining detail.
-- **White Balance**: You can apply global, local, or custom white balancing depending on the color needs of your images.
+The enhancement pipeline uses a step-based approach where operations are applied in sequence:
+
+- **Step-Based Processing**: Each enhancement operation (crop, rotate, white balance, etc.) is a separate step that can be configured individually.
+- **Linear Percentile Stretching**: Enhances image contrast by stretching the histogram between specified percentiles.
+- **Sigmoid Stretching**: Applies S-curve stretching for more natural contrast enhancement.
+- **High Dynamic Range (HDR)**: Combines multiple processing steps to create HDR images with enhanced detail.
+- **Noise Reduction**: Two algorithms available (`MultiScaleMedianOverAllChannels` or `MultiScaleMedianOverGrayChannel`) with configurable thresholding.
+- **White Balance**: Global, local, or custom white balancing to correct color casts.
+- **Background Removal**: Removes uneven backgrounds using interpolation from fix points.
+- **Additional Operations**: Blur, sharpen, unsharp mask, rotation, and cropping.
 
 ## Example Configuration
 
-Here is a snippet from the default configuration for enhancement:
+Here is the default configuration that gets generated by the `init` command:
 
 ```yaml
+quick: false
+quickCount: 3
+format:
+  debayer:
+    enabled: true
+    bayerPattern: RGGB
+  inputImageExtension: fit
+  outputImageExtension: tif
+  filenameTokens:
+    enabled: false
+    names:
+      - targetType
+      - targetName
+      - exposureTime
+      - binLevel
+      - camera
+      - iso
+      - dateTime
+      - temperature
+      - sequenceNumber
 enhance:
-  enabled: true
-  noise:
+  steps:
+  - rotate:
+      angle: 0
+  - crop:
+      x: 100
+      y: 100
+      width: -100
+      height: -100
+  - whitebalance:
+      enabled: true
+      type: Local
+      fixPoints:
+        type: FourCorners
+        borderDistance: 100
+      localMedianRadius: 50
+      valueRangeMin: 0.2
+      valueRangeMax: 0.9
+  - linearPercentile:
+      minPercentile: 0.0001
+      maxPercentile: 0.9999
+    addToHighDynamicRange: true
+  - blur:
+      strength: 0.1
+  - sigmoid:
+      midpoint: 0.01
+      strength: 1.1
+  - linearPercentile:
+      minPercentile: 0.0001
+      maxPercentile: 0.9999
+    addToHighDynamicRange: true
+  - sigmoid:
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - sigmoid:
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - sigmoid:
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - sigmoid:
+      midpoint: 0.4
+      strength: 1.1
+    addToHighDynamicRange: true
+  - highDynamicRange:
+      contrastWeight: 0.2
+      saturationWeight: 0.1
+      exposureWeight: 1.0
+  - sigmoid:
+      midpoint: 0.3
+      strength: 1.1
+  - reduceNoise:
+      thresholding: Soft
+      thresholds:
+        - 0.01
+        - 0.001
+annotate:
+  enabled: false
+  decorate:
     enabled: true
-    thresholding: Soft
-    thresholds:
-      - 0.01
-      - 0.001
-  colorStretch:
-    enabled: true
-    steps:
-      - type: LinearPercentile
-        linearPercentileMin: 0.0001
-        linearPercentileMax: 0.9999
+    title: "Object Name"
+    subtitle: "{stackedCount}x{exposureTime}"
+    text: "Object Description"
+    markerStyle: Square
+    markerLabelStyle: Index
+    colorTheme: Cyan
+output:
+  outputName: "{targetName}_{stackedCount}x{exposureTime}_{iso}_{calibration}"
+  outputImageExtensions:
+    - tif
+    - jpg
+    - png
 ```
 
-This example configures noise reduction with soft thresholding and uses linear percentile stretching for contrast enhancement.
+This configuration demonstrates a sophisticated enhancement pipeline with multiple sigmoid stretches, HDR processing, and noise reduction.
 
 ## Tips for Effective Image Processing
 
 - **Use Good Calibration Frames**: The quality of bias, dark, and flat frames directly impacts the final image quality.
 - **Adjust Star Thresholds Carefully**: If the alignment is inaccurate, tweak `starThreshold` and `positionTolerance`.
 - **Quick Mode for Testing**: Use `quick: true` to process a limited number of images while testing your workflow.
+- **Check stacked `max` file**: The stacked `max` file shows problems with the aligned images. Check for elongated, blurry or streaky stars and delete the culprit single frame.
+- **Step-Based Enhancement**: The order of enhancement steps matters. Generally follow: crop → white balance → stretching → noise reduction.
+- **HDR Processing**: Use `addToHighDynamicRange: true` on steps you want to include in HDR combination, then add a `highDynamicRange` step.
+- **Token-Based Naming**: Use filename tokens to organize outputs systematically and extract metadata from filenames.
+- **Region of Interest**: Enable `regionOfInterest` in enhancement config to save cropped versions of each step for detailed analysis.
 
 ## Conclusion
 
