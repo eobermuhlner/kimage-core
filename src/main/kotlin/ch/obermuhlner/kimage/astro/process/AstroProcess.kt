@@ -891,7 +891,6 @@ class AstroProcess(val config: ProcessConfig) {
                 if (outputFile.exists() && !dirty && !dirtyCalibratedFiles.contains(calibratedFile)) {
                     return@mapNotNull outputFile
                 }
-                dirtyAligned = true
 
                 println()
                 println("Loading $calibratedFile")
@@ -922,11 +921,13 @@ class AstroProcess(val config: ProcessConfig) {
                 }
 
                 if (alignedImage != null) {
+                    dirtyAligned = true
                     println("Saving $outputFile")
                     ImageWriter.write(alignedImage, outputFile)
 
                     outputFile
                 } else {
+                    println("Failed to align $calibratedFile")
                     null
                 }
             }
