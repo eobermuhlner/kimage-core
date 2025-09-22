@@ -212,23 +212,24 @@ enhance:
 ### Performance Issues
 
 **Problem: Processing too slow**
+
 - Enable quick mode: `quick: true, quickCount: 3`
 - Reduce `maxStars` to 50
-- Skip calibration if you don't have calibration frames
 
 **Problem: Need to redo processing steps**
-Delete intermediate files and rerun:
+
+- Delete intermediate files and rerun:
 ```sh
+# To redo just enhancement onward (most common)
+rm -rf astro-process/enhanced
+kimage-astro-process process
+
+# To redo everything from stacking onward
+rm -rf astro-process/stacked kimage-astro-process process
+kimage-astro-process process
+
 # To redo everything from alignment onward
-rm -rf astro-process/aligned astro-process/stacked astro-process/enhanced astro-process/output
-kimage-astro-process process
-
-# To redo just enhancement onward
-rm -rf astro-process/enhanced astro-process/output
-kimage-astro-process process
-
-# To redo just final output with different settings
-rm -rf astro-process/output
+rm -rf astro-process/aligned 
 kimage-astro-process process
 ```
 
