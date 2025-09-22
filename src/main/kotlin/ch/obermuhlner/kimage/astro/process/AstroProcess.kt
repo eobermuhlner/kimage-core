@@ -414,101 +414,149 @@ enum class InfoTokens {
 }
 
 val defaultAstroProcessConfigText = """
-quick: false
-quickCount: 3
+# kimage Astrophotography Processing Configuration
+#
+# This file defines the complete pipeline for processing astrophotography images:
+# 1. Calibration - Remove sensor artifacts using bias/dark/flat frames
+# 2. Alignment - Align images based on star positions
+# 3. Stacking - Combine aligned images to reduce noise
+# 4. Enhancement - Apply contrast stretching, noise reduction, etc.
+#
+# Most settings work well by default. Common changes:
+# - Set inputImageExtension to your file format ("fit", "tif", "jpg", etc.)
+# - Enable filenameTokens if your files have structured names
+# - Enable quick mode for testing (quick: true, quickCount: 3)
+# - Adjust enhancement steps for different brightness/contrast needs
+
+# Quick Mode Settings - Process limited images for testing
+quick: false                    # Set to true for testing with fewer images
+quickCount: 3                   # Number of images to process in quick mode
+
+# Input/Output Format Configuration
 format:
-  debayer:
-    enabled: true
-    bayerPattern: RGGB
-  inputImageExtension: fit
-  outputImageExtension: tif
-  filenameTokens:
-    enabled: false
-    names:
-      - targetType
-      - targetName
-      - exposureTime
-      - binLevel
-      - camera
-      - iso
-      - dateTime
-      - temperature
-      - sequenceNumber
+  debayer:                      # Debayering configuration for raw camera files
+    enabled: true               # Convert Bayer pattern to RGB (disable if already RGB)
+    bayerPattern: RGGB          # Camera sensor pattern: RGGB, GRBG, GBRG, BGGR
+  inputImageExtension: fit      # Input file format (fit, tif, jpg, png, etc.)
+  outputImageExtension: tif     # Intermediate file format (tif recommended)
+  filenameTokens:               # Extract metadata from structured filenames
+    enabled: false              # Set to true if filenames contain structured info
+    separator: "_"              # Character separating tokens in filenames
+    names:                      # Token names matching filename order (separated by separator)
+      - targetType              # e.g., "Light", "Dark", "Flat"
+      - targetName              # e.g., "M42", "NGC7000", "Orion"
+      - exposureTime            # e.g., "300s", "120s", "60s"
+      - binLevel                # e.g., "1x1", "2x2", "3x3"
+      - camera                  # e.g., "ASI294MC", "Canon5D", "ZWO"
+      - iso                     # e.g., "ISO800", "ISO1600", "ISO3200"
+      - dateTime                # e.g., "20240115", "2024-01-15"
+      - temperature             # e.g., "-10C", "5C", "15C"
+      - sequenceNumber          # e.g., "001", "042", "999"
+
+# Enhancement Pipeline - Applied in order after calibration/alignment/stacking
 enhance:
   steps:
+  # Step 1: Rotation - Correct image orientation
   - rotate:
-      angle: 0
+      angle: 0                  # Rotation angle in degrees (90, 180, 270, or any value)
+
+  # Step 2: Cropping - Remove edge artifacts and unwanted borders
   - crop:
-      x: 100
-      y: 100
-      width: -100
-      height: -100
+      x: 100                    # Left crop (pixels from left edge)
+      y: 100                    # Top crop (pixels from top edge)
+      width: -100               # Width (negative = image_width - x + width)
+      height: -100              # Height (negative = image_height - y + height)
+
+  # Step 3: White Balance - Correct color casts
   - whitebalance:
       enabled: true
-      type: Local
-      fixPoints:
-        type: FourCorners
-        borderDistance: 100
-      localMedianRadius: 50
-      valueRangeMin: 0.2
-      valueRangeMax: 0.9    
+      type: Local               # Local (recommended), Global, or Custom
+      fixPoints:                # Points used for local white balance
+        type: FourCorners       # FourCorners (recommended), Grid, EightCorners, Custom
+        borderDistance: 100     # Distance from image edges for corner sampling
+      localMedianRadius: 50     # Radius for local median calculation
+      valueRangeMin: 0.2        # Minimum value range for white balance
+      valueRangeMax: 0.9        # Maximum value range for white balance
+
+  # Step 4: Initial Histogram Stretch - Bring out initial detail
   - linearPercentile:
-      minPercentile: 0.0001
-      maxPercentile: 0.9999
-    addToHighDynamicRange: true
+      minPercentile: 0.0001     # Black point (lower = more aggressive)
+      maxPercentile: 0.9999     # White point (higher = more aggressive)
+    addToHighDynamicRange: true # Include this result in HDR processing
+
+  # Step 5: Blur - Smooth transition for HDR processing
   - blur:
-      strength: 0.1
+      strength: 0.1             # Blur amount (0.0-1.0, subtle smoothing)
+
+  # Step 6: Initial Sigmoid - Brighten darker areas
   - sigmoid:
-      midpoint: 0.01
-      strength: 1.1
+      midpoint: 0.01            # Midpoint of S-curve (lower = brighter, 0.001-1.0)
+      strength: 1.1             # Curve strength (1.0 = linear, higher = more contrast)
+
+  # Step 7: Second Histogram Stretch - Further detail enhancement
   - linearPercentile:
-      minPercentile: 0.0001
-      maxPercentile: 0.9999
-    addToHighDynamicRange: true
+      minPercentile: 0.0001     # Maintain black point
+      maxPercentile: 0.9999     # Maintain white point
+    addToHighDynamicRange: true # Include this result in HDR processing
+
+  # Steps 8-12: Multiple Sigmoid Applications - Build up contrast gradually
   - sigmoid:
-      midpoint: 0.4
+      midpoint: 0.4             # Mid-tone targeting
+      strength: 1.1             # Gentle contrast increase
+    addToHighDynamicRange: true # Include in HDR
+  - sigmoid:
+      midpoint: 0.4             # Consistent mid-tone work
       strength: 1.1
     addToHighDynamicRange: true
   - sigmoid:
-      midpoint: 0.4
+      midpoint: 0.4             # Continue building contrast
       strength: 1.1
     addToHighDynamicRange: true
   - sigmoid:
-      midpoint: 0.4
+      midpoint: 0.4             # Further contrast refinement
       strength: 1.1
     addToHighDynamicRange: true
-  - sigmoid:
-      midpoint: 0.4
-      strength: 1.1
-    addToHighDynamicRange: true
+
+  # Step 13: HDR Combination - Merge multiple enhancement results
   - highDynamicRange:
-      contrastWeight: 0.2
-      saturationWeight: 0.1
-      exposureWeight: 1.0
+      contrastWeight: 0.2       # Weight for contrast enhancement (0.0-1.0)
+      saturationWeight: 0.1     # Weight for color saturation (0.0-1.0)
+      exposureWeight: 1.0       # Weight for exposure blending (0.0-2.0)
+
+  # Step 14: Final Sigmoid - Last contrast adjustment
   - sigmoid:
-      midpoint: 0.3
-      strength: 1.1
+      midpoint: 0.3             # Final midpoint adjustment
+      strength: 1.1             # Final contrast polish
+
+  # Step 15: Noise Reduction - Clean up the final image
   - reduceNoise:
-      thresholding: Soft
-      thresholds:
-        - 0.01
-        - 0.001
+      thresholding: Soft        # Soft (recommended), Hard, Sigmoid, SigmoidLike
+      thresholds:               # Multiple scales for different noise types
+        - 0.01                  # Coarse noise threshold
+        - 0.001                 # Fine noise threshold
+
+# Annotation Configuration - Add titles, markers, and graphics to final images
 annotate:
-  enabled: false
-  decorate:
-    enabled: true
-    title: "Object Name"
-    subtitle: "{stackedCount}x{exposureTime}"
-    text: "Object Description"
-    markerStyle: Square
-    markerLabelStyle: Index
-    colorTheme: Cyan
+  enabled: false                # Set to true to create annotated versions
+  decorate:                     # Text and marker decorations
+    enabled: true               # Enable decorative elements
+    title: "Object Name"        # Main title (use tokens like {targetName})
+    subtitle: "{stackedCount}x{exposureTime}" # Subtitle with dynamic info
+    text: "Object Description"  # Additional descriptive text
+    markerStyle: Square         # Marker shape: Square, Rectangle, Circle
+    markerLabelStyle: Index     # Label style: Index, Name, Info1, Info2, None
+    colorTheme: Cyan            # Color scheme: Cyan, Green, Red, Blue, Yellow, Magenta
+
+# Output Configuration - Final file naming and formats
 output:
+  # Output filename pattern using tokens
+  # Available tokens: {parentDir}, {firstInput}, {inputCount}, {stackedCount},
+  # {calibration}, plus any custom tokens from filenameTokens
   outputName: "{targetName}_{stackedCount}x{exposureTime}_{iso}_{calibration}"
-  outputImageExtensions:
-    - tif
-    - jpg
-    - png
+  outputImageExtensions:        # Generate multiple formats
+    - tif                       # TIFF - Best quality, large files
+    - jpg                       # JPEG - Good for sharing, smaller files
+    - png                       # PNG - Good for web, lossless compression
 """.trimIndent()
 
 fun main(args: Array<String>) {
