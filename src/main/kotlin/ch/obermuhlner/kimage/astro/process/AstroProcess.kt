@@ -13,6 +13,9 @@ import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Green
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.Marker
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerLabelStyle
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerStyle
+import ch.obermuhlner.kimage.astro.annotate.DeepSkyObjects
+import ch.obermuhlner.kimage.astro.annotate.WCSConverter
+import ch.obermuhlner.kimage.astro.annotate.WCSParser
 import ch.obermuhlner.kimage.astro.background.createFixPointEightCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointFourCorners
 import ch.obermuhlner.kimage.astro.background.createFixPointGrid
@@ -67,21 +70,47 @@ import ch.obermuhlner.kimage.core.matrix.values.values
 import ch.obermuhlner.kimage.util.elapsed
 import org.yaml.snakeyaml.Yaml
 import java.io.File
+import java.nio.file.Paths
+import java.util.Optional
+import kotlin.io.path.pathString
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.sin
 
 data class ProcessConfig(
     var quick: Boolean = false,
     var quickCount: Int = 3,
+    var target: TargetConfig = TargetConfig(),
     var format: FormatConfig = FormatConfig(),
     var calibrate: CalibrateConfig = CalibrateConfig(),
+    var platesolve: PlatesolveConfig = PlatesolveConfig(),
     var align: AlignConfig = AlignConfig(),
     var stack: StackConfig = StackConfig(),
     var enhance: EnhanceConfig = EnhanceConfig(),
     var annotate: AnnotateConfig = AnnotateConfig(),
     var output: OutputFormatConfig = OutputFormatConfig(),
 )
+
+data class TargetConfig(
+    var name: String? = null,
+    var ra: Double? = null,
+    var dec: Double? = null,
+    var angle: Double? = null,
+    var fov: Double? = null,
+)
+
+data class PlatesolveConfig(
+    var enabled: Boolean = false,
+    var platesolveType: PlatesolveType = PlatesolveType.Astap,
+    var executable: String? = null,
+)
+
+enum class PlatesolveType {
+    Astap,
+    Custom
+}
 
 data class AnnotateConfig(
     var enabled: Boolean = false,
@@ -96,9 +125,19 @@ data class DecorationConfig(
     var subtitle: String = "",
     var text: String = "",
     var colorTheme: ColorTheme = Green,
+    var platesolveMarkers: PlatesolveMarkersConfig = PlatesolveMarkersConfig(),
+    var grid: Boolean = false,
     var markerStyle: MarkerStyle = MarkerStyle.Rectangle,
     var markerLabelStyle: MarkerLabelStyle = MarkerLabelStyle.Index,
     var markers: MutableList<MarkerConfig> = mutableListOf()
+)
+
+data class PlatesolveMarkersConfig(
+    var enabled: Boolean = true,
+    var magnitute: Double = Double.MAX_VALUE,
+    var minObjectSize: Int = 50,
+    var whiteList: List<String>? = null,
+    var blackList: List<String>? = null,
 )
 
 data class MarkerConfig(
@@ -675,7 +714,7 @@ class AstroProcess(val config: ProcessConfig) {
                 config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             ).let {
-                Pair(it.first.normalizeImage(),it.second)
+                Pair(it.first.normalizeImage(), it.second)
             }
         }
         if (flat != null) {
@@ -714,6 +753,14 @@ class AstroProcess(val config: ProcessConfig) {
             infoTokens.merge(InfoTokens.calibration.name, "dark") { old, new -> "$old,$new" }
         }
         dirty = dirty || dirtyDark
+
+        println()
+        println("Images used for calibration:")
+        if (bias != null) println("- bias frame")
+        if (dark != null) println("- dark frame")
+        if (darkflat != null) println("- darkflat frame")
+        if (flat != null) println("- flat frame")
+        if (bias == null && dark == null && darkflat == null && flat == null) println("- no calibration frames used ")
 
         val files = currentDir.listFiles() ?: return
 
@@ -756,6 +803,51 @@ class AstroProcess(val config: ProcessConfig) {
                     infoTokens[config.format.filenameTokens.names[i]] = tokens[i]
                 }
             }
+        }
+
+        val correctedTargetConfig = resolvedTarget(config.target)
+
+        val wcsFile: File? = inputFiles[0].let { referenceInputFile ->
+            if (config.platesolve.enabled) {
+                println()
+                println("### Platesolve reference image ...")
+
+                val executable = config.platesolve.executable ?: "astap_cli"
+
+                elapsed("Platesolving reference image") {
+                    val wcsFilename = Paths.get("astro-process", "reference.wcs").pathString
+                    val output = executeCommand(executable, "-f", referenceInputFile.path, "-o", wcsFilename)
+                    println(output)
+
+                    File(wcsFilename)
+                }
+            } else {
+                null
+            }
+        }
+
+        if (wcsFile != null && wcsFile.exists()) {
+            println()
+            println("Platesolved:")
+            val wcsData = WCSParser.parse(wcsFile)
+            wcsData.forEach {
+                println("  wcs.${it.key} = ${it.value}")
+                infoTokens["wcs." + it.key] = it.value
+            }
+
+            wcsData["RA"]?.toDouble()?.let {
+                correctedTargetConfig.ra = it
+            }
+            wcsData["DEC"]?.toDouble()?.let {
+                correctedTargetConfig.dec = it
+            }
+        }
+
+        correctedTargetConfig.ra?.let {
+            infoTokens["ra"] = raToString(it)
+        }
+        correctedTargetConfig.dec?.let {
+            infoTokens["dec"] = decToString(it)
         }
 
         println()
@@ -988,7 +1080,7 @@ class AstroProcess(val config: ProcessConfig) {
         println()
         println("### Annotating image ...")
         println()
-        processAnnotate(enhancedImage, infoTokens, config.annotate, config.output)
+        processAnnotate(enhancedImage, infoTokens, wcsFile, config.annotate, config.output)
     }
 
     fun processEnhance(
@@ -1240,6 +1332,7 @@ class AstroProcess(val config: ProcessConfig) {
     fun processAnnotate(
         inputImage: Image,
         infoTokens: Map<String, String>,
+        wcsFile: File?,
         annotateConfig: AnnotateConfig,
         outputConfig: OutputFormatConfig
     ): Image {
@@ -1260,6 +1353,11 @@ class AstroProcess(val config: ProcessConfig) {
             annotateZoom.setColorTheme(annotateConfig.decorate.colorTheme)
             annotateZoom.markerStyle = annotateConfig.decorate.markerStyle
             annotateZoom.markerLabelStyle = annotateConfig.decorate.markerLabelStyle
+            annotateZoom.magnitude = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.magnitute)
+            annotateZoom.minObjectSize = config.annotate.decorate.platesolveMarkers.minObjectSize
+            annotateZoom.whiteList = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.whiteList)
+            annotateZoom.blackList = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.blackList)
+            annotateZoom.grid = config.annotate.decorate.grid
             for (markerConfig in annotateConfig.decorate.markers) {
                 annotateZoom.addMarker(Marker(
                     markerConfig.name,
@@ -1270,7 +1368,15 @@ class AstroProcess(val config: ProcessConfig) {
                     markerConfig.info2
                 ))
             }
-            annotateZoom.annotate(annotatedImage)
+            val wcsConverter  = wcsFile?.let {
+                val wcsData = WCSParser.parse(wcsFile)
+                WCSConverter(wcsData)
+            }
+
+            if (wcsConverter != null && config.annotate.decorate.platesolveMarkers.enabled) {
+                annotateZoom.addPlatesolve(inputImage, wcsConverter)
+            }
+            annotateZoom.annotate(annotatedImage, wcsConverter)
         } else {
             annotatedImage
         }
@@ -1380,4 +1486,49 @@ class AstroProcess(val config: ProcessConfig) {
         val yaml = Yaml()
         file.writeText(yaml.dumpAsMap(config))
     }
+
+    private fun resolvedTarget(target: TargetConfig): TargetConfig {
+        val resolved = target.copy()
+
+        if (resolved.ra == null && resolved.dec == null) {
+            val name = target.name
+            if (name != null) {
+                val ngc = DeepSkyObjects.name(name)
+                if (ngc != null) {
+                    resolved.ra = ngc.ra
+                    resolved.dec = ngc.dec
+                }
+            }
+        }
+
+        return resolved
+    }
+
+    private fun executeCommand(vararg arguments: String): String {
+        val process = ProcessBuilder(*arguments)
+            .redirectErrorStream(true)
+            .start()
+
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+
+        return output
+    }
+}
+
+fun raToString(raDegrees: Double): String {
+    val totalHours = raDegrees / 15.0
+    val hours = floor(totalHours).toInt()
+    val minutes = floor((totalHours - hours) * 60).toInt()
+    val seconds = (totalHours * 3600) - (hours * 3600) - (minutes * 60)
+    return String.format("%02dh %02dm %05.2fs", hours, minutes, seconds)
+}
+
+fun decToString(decDegrees: Double): String {
+    val sign = if (decDegrees >= 0) "+" else "-"
+    val absDeg = abs(decDegrees)
+    val degrees = floor(absDeg).toInt()
+    val minutes = floor((absDeg - degrees) * 60).toInt()
+    val seconds = (absDeg * 3600) - (degrees * 3600) - (minutes * 60)
+    return String.format("%s%02d° %02d' %05.2f\"", sign, degrees, minutes, seconds)
 }

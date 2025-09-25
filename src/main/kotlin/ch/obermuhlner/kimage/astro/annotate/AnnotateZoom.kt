@@ -15,7 +15,6 @@ import ch.obermuhlner.kimage.core.image.scaling.scaleTo
 import ch.obermuhlner.kimage.core.matrix.scaling.Scaling
 import java.awt.Font
 import java.awt.Graphics2D
-import java.io.File
 import java.util.Locale
 import java.util.Optional
 import kotlin.math.absoluteValue
@@ -56,6 +55,7 @@ class AnnotateZoom {
     var whiteList: Optional<List<String>> = Optional.empty()
     var blackList: Optional<List<String>> = Optional.empty()
     var ignoreClipped: Boolean = true
+    var grid: Boolean = false
     var markerStyle: MarkerStyle = MarkerStyle.Square
     var markerLabelStyle: MarkerLabelStyle = MarkerLabelStyle.Index
     var thumbnailSize: Int = 400
@@ -202,10 +202,7 @@ class AnnotateZoom {
         return dotProduct >= 0
     }
 
-    fun addPlatesolve(inputImage: Image, wcsFile: File) {
-        val wcsData = WCSParser.parse(wcsFile)
-        val wcsConverter = WCSConverter(wcsData)
-
+    fun addPlatesolve(inputImage: Image, wcsConverter: WCSConverter) {
         val (centerRa, centerDec) = wcsConverter.convertXYToRADec(inputImage.width/2.0, inputImage.height/2.0)
 
         val filteredNGCs = mutableListOf<DeepSkyObjects.NGC>()
@@ -244,9 +241,9 @@ class AnnotateZoom {
             val info2 = "${formatDegreesToHMS(ngc.ra)} ${formatDegreesToDMS(ngc.dec)}"
             val pixelX = x.toInt()
             val pixelY = inputImage.height - y.toInt()
-            val majAx = ngc?.majAx ?: ngc.minAx
-            val minAx = ngc?.minAx ?: ngc.majAx
-            val posAngle = ngc?.posAngle ?: 0.0
+            val majAx = ngc.majAx ?: ngc.minAx
+            val minAx = ngc.minAx ?: ngc.majAx
+            val posAngle = ngc.posAngle ?: 0.0
             val pixelMajAx =
                 if (majAx != null) wcsConverter.convertDegreeToLength(majAx).absoluteValue.toInt() else minObjectSize
             val pixelMinAx =
@@ -266,7 +263,7 @@ class AnnotateZoom {
         markers.add(marker)
     }
 
-    fun annotate(inputImage: Image, ): Image {
+    fun annotate(inputImage: Image, wcsConverter: WCSConverter?): Image {
         var titleFontHeight = 0
         var textFontHeight = 0
         var thumbnailLabelFontHeight = 0
@@ -330,46 +327,47 @@ class AnnotateZoom {
                 drawFunc(0, 0)
             }
 
-//            graphics.clipRect(offsetX, offsetY, inputImage.width, inputImage.height)
-//            graphics.color = java.awt.Color(gridColor.toInt(16))
-//            graphics.stroke = java.awt.BasicStroke(gridStrokeSize.toFloat())
-//            var raHour = 0.0
-//            var dec: Double
-//            while (raHour <= 24.0) {
-//                val ra = raHour / 24 * 360
-//                dec = -90.0
-//                var lastX = 0.0
-//                var lastY = 0.0
-//                while (dec <= 90.0) {
-//                    val (x, y) = wcsConverter.convertRADecToXY(ra, dec)
-//                    if (dec != -90.0) {
-//                        graphics.drawLine((lastX+offsetX).toInt(), (lastY+offsetY).toInt(), (x+offsetX).toInt(), (y+offsetY).toInt())
-//                    }
-//                    lastX = x
-//                    lastY = y
-//                    dec += 0.1
-//                }
-//                raHour += 0.5
-//            }
-//            dec = -90.0
-//            while (dec <= 90.0) {
-//                raHour = 0.0
-//                var lastX = 0.0
-//                var lastY = 0.0
-//                while (raHour <= 24.0) {
-//                    val ra = raHour / 24 * 360
-//                    val (x, y) = wcsConverter.convertRADecToXY(ra, dec)
-//                    if (ra != 0.0) {
-//                        graphics.drawLine((lastX+offsetX).toInt(), (lastY+offsetY).toInt(), (x+offsetX).toInt(), (y+offsetY).toInt())
-//                    }
-//                    lastX = x
-//                    lastY = y
-//                    raHour += 0.1
-//                }
-//                dec += 1.0
-//            }
-//            graphics.setClip(java.awt.Rectangle(0, 0, width, height))
-
+            if (grid && wcsConverter != null) {
+                graphics.clipRect(offsetX, offsetY, inputImage.width, inputImage.height)
+                graphics.color = java.awt.Color(gridColor.toInt(16))
+                graphics.stroke = java.awt.BasicStroke(gridStrokeSize.toFloat())
+                var raHour = 0.0
+                var dec: Double
+                while (raHour <= 24.0) {
+                    val ra = raHour / 24 * 360
+                    dec = -90.0
+                    var lastX = 0.0
+                    var lastY = 0.0
+                    while (dec <= 90.0) {
+                        val (x, y) = wcsConverter.convertRADecToXY(ra, dec)
+                        if (dec != -90.0) {
+                            graphics.drawLine((lastX+offsetX).toInt(), (lastY+offsetY).toInt(), (x+offsetX).toInt(), (y+offsetY).toInt())
+                        }
+                        lastX = x
+                        lastY = y
+                        dec += 0.1
+                    }
+                    raHour += 0.5
+                }
+                dec = -90.0
+                while (dec <= 90.0) {
+                    raHour = 0.0
+                    var lastX = 0.0
+                    var lastY = 0.0
+                    while (raHour <= 24.0) {
+                        val ra = raHour / 24 * 360
+                        val (x, y) = wcsConverter.convertRADecToXY(ra, dec)
+                        if (ra != 0.0) {
+                            graphics.drawLine((lastX+offsetX).toInt(), (lastY+offsetY).toInt(), (x+offsetX).toInt(), (y+offsetY).toInt())
+                        }
+                        lastX = x
+                        lastY = y
+                        raHour += 0.1
+                    }
+                    dec += 1.0
+                }
+                graphics.setClip(java.awt.Rectangle(0, 0, width, height))
+            }
 
             for (marker in markers) {
                 if (ignoreClipped) {

@@ -50,19 +50,6 @@ class WCSConverter(
         return Pair(ra, dec)
     }
 
-    fun convertRADecToXY_OLD(ra: Double, dec: Double): Pair<Double, Double> {
-        val deltaRa = ra - crval1
-        val deltaDec = dec - crval2
-
-        val deltaX = (cd1_1 * deltaRa + cd2_1 * deltaDec) / (cd1_1 * cd2_2 - cd1_2 * cd2_1)
-        val deltaY = (cd1_2 * deltaRa + cd2_2 * deltaDec) / (cd1_2 * cd2_1 - cd1_1 * cd2_2)
-
-        val x = crpix1 + deltaX
-        val y = crpix2 + deltaY
-
-        return Pair(x, y)
-    }
-
     fun convertRADecToXY(raDegrees: Double, decDegrees: Double): Pair<Double, Double> {
         val ra = Math.toRadians(raDegrees)
         val dec = Math.toRadians(decDegrees)
@@ -89,7 +76,7 @@ class WCSConverter(
         m2[1, 0] = cd2_1
         m2[1, 1] = cd2_2
         val m3 = m2.invert()
-        val m4 = m1 * m3!!
+        val m4 = m3!! * m1
 
         val x = crpix1 + m4[0, 0]
         val y = crpix2 + m4[1, 0]
