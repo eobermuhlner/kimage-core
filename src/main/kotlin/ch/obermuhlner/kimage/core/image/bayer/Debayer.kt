@@ -444,11 +444,12 @@ fun Matrix.findBayerBadPixels(
     val width = matrixXY.width
     val height = matrixXY.height
     val result = mutableSetOf<PointXY>()
+    val values = mutableListOf<Double>()
 
     for (y in 0 until height) {
         for (x in 0 until width) {
+            values.clear()
             val value = matrixXY[x, y]
-            val values = mutableListOf<Double>()
 
             fun addValueIfInBounds(x: Int, y: Int) {
                 if (matrixXY.isInBounds(x, y)) {
