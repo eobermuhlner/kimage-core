@@ -74,7 +74,7 @@ fun mixCubicHermite(x00: Double, x01: Double, x10: Double, x11: Double, t: Doubl
 }
 
 fun sigmoid(x: Double, midpoint: Double = 0.5, strength: Double = 2.0): Double {
-    return (1 / (1 + exp(-strength * (strength - midpoint))))
+    return (1 / (1 + exp(-strength * (x - midpoint))))
 }
 
 fun sigmoidLike(x: Double, midpoint: Double, strength: Double): Double {
@@ -356,7 +356,17 @@ fun Iterable<Double>.medianAbsoluteDeviation(): Double {
     for (i in list.indices) {
         list[i] = abs(list[i] - m)
     }
-    return list.onEach { abs(it - m) }.medianInplace()
+    return list.medianInplace()
+}
+
+fun DoubleArray.medianAndMedianAbsoluteDeviation(): Pair<Double, Double> {
+    val m = median()
+    val list = toMutableList()
+    for (i in list.indices) {
+        list[i] = abs(list[i] - m)
+    }
+    val mad = list.medianInplace()
+    return Pair(m, mad)
 }
 
 fun Iterable<Double>.medianAndMedianAbsoluteDeviation(): Pair<Double, Double> {

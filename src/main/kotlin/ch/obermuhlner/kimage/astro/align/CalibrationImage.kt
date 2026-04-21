@@ -31,7 +31,8 @@ fun processCalibrationImages(
     }
     if (imageDirectory == null) return Pair(null, dirty)
 
-    val masterFileName = "master_$calibrationName.$outputImageExtension"
+    val debayerName = if (debayer) "debayer" else "bayer"
+    val masterFileName = "master_${calibrationName}_${debayerName}.$outputImageExtension"
     val masterImageFile = imageDirectory.resolve(masterFileName)
     if (masterImageFile.isFile) {
         println("Loading calibration $calibrationName image: $masterImageFile")

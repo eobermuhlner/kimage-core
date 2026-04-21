@@ -34,6 +34,7 @@ enum class StackAlgorithm {
     SigmaClipAverage,
     SigmaWinsorizeMedian,
     SigmaWinsorizeAverage,
+    SmartMax,
     WinsorizedSigmaClipMedian,
     WinsorizedSigmaClipAverage,
     SigmaClipWeightedMedian,
@@ -90,6 +91,17 @@ fun stack(
         StackAlgorithm.SigmaWinsorizeAverage -> { array ->
             array.sigmaWinsorizeInplace(kappa.toFloat())
             array.average()
+        }
+
+        StackAlgorithm.SmartMax -> { array ->
+//            val clippedLength = array.sigmaClipInplace(kappa.toFloat(), iterations, histogram = sigmaClipHistogram)
+            val clippedLength = array.huberWinsorizedSigmaClipInplace(
+                kappa = kappa.toFloat(),
+                iterations,
+                histogram = sigmaClipHistogram
+            )
+            array.sort(0, clippedLength)
+            array[clippedLength - 1]
         }
 
         StackAlgorithm.WinsorizedSigmaClipMedian -> { array ->

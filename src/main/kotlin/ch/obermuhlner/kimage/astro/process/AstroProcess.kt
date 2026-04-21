@@ -49,6 +49,7 @@ import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoid
 import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoidLike
 import ch.obermuhlner.kimage.core.image.noise.thresholdSoft
 import ch.obermuhlner.kimage.core.image.plus
+import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import ch.obermuhlner.kimage.core.image.stack.max
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
@@ -134,7 +135,7 @@ data class DecorationConfig(
 
 data class PlatesolveMarkersConfig(
     var enabled: Boolean = true,
-    var magnitute: Double = Double.MAX_VALUE,
+    var magnitude: Double = Double.MAX_VALUE,
     var minObjectSize: Int = 50,
     var whiteList: List<String>? = null,
     var blackList: List<String>? = null,
@@ -268,6 +269,7 @@ data class AlignConfig(
 
 data class StackConfig(
     var stackedOutputDirectory: String = "astro-process/stacked",
+    var algorithm: StackAlgorithm = StackAlgorithm.Median,
 )
 
 data class EnhanceConfig(
@@ -714,7 +716,7 @@ class AstroProcess(val config: ProcessConfig) {
                 config.calibrate.searchParentDirectories,
                 config.calibrate.debayer.enabled
             ).let {
-                Pair(it.first.normalizeImage(), it.second)
+                Pair(it.first?.normalizeImage(), it.second)
             }
         }
         if (flat != null) {
@@ -768,20 +770,6 @@ class AstroProcess(val config: ProcessConfig) {
         currentDir.resolve(config.align.alignedOutputDirectory).mkdirs()
         currentDir.resolve(config.stack.stackedOutputDirectory).mkdirs()
 
-        val applyBiasOnCalibration = false
-
-        if (applyBiasOnCalibration && bias != null) {
-            if (dark != null) {
-                dark -= bias
-            }
-            if (darkflat != null) {
-                darkflat -= bias
-            }
-            if (flat != null) {
-                flat -= bias
-            }
-        }
-
         if (flat != null && darkflat != null) {
             flat -= darkflat
         }
@@ -794,6 +782,10 @@ class AstroProcess(val config: ProcessConfig) {
         }
 
         infoTokens[InfoTokens.inputCount.name] = inputFiles.size.toString()
+        if (inputFiles.isEmpty()) {
+            println("No input files found with extension '${config.format.inputImageExtension}' in $currentDir")
+            return
+        }
         inputFiles[0].let {
             infoTokens[InfoTokens.firstInput.name] = it.nameWithoutExtension
             if (config.format.filenameTokens.enabled) {
@@ -919,7 +911,8 @@ class AstroProcess(val config: ProcessConfig) {
                 println()
                 println("Loading $inputFile")
                 var light = elapsed("Reading light frame $inputFile") { ImageReader.read(inputFile) }
-                if (config.format.debayer.enabled) {
+
+                if (config.format.debayer.enabled && config.calibrate.debayer.enabled) {
                     light = elapsed("Debayering light frame $inputFile") {
                         debayerImageIfConfigured(light, config.format.debayer)
                     }
@@ -934,6 +927,12 @@ class AstroProcess(val config: ProcessConfig) {
                     }
                     if (flat != null) {
                         light /= flat
+                    }
+
+                    if (config.format.debayer.enabled && !config.calibrate.debayer.enabled) {
+                        light = elapsed("Debayering light frame $inputFile") {
+                            debayerImageIfConfigured(light, config.format.debayer)
+                        }
                     }
 
                     if (config.calibrate.normalizeBackground.enabled) {
@@ -1048,7 +1047,12 @@ class AstroProcess(val config: ProcessConfig) {
                     image
                 }
             }
-            val stackedImage = elapsed("Stacking images") { stack(alignedFileSuppliers) }
+            val stackedImage = elapsed("Stacking images") {
+                stack(
+                    algorithm = config.stack.algorithm,
+                    imageSuppliers = alignedFileSuppliers
+                )
+            }
 
             println("Saving $outputStackedFile")
             ImageWriter.write(stackedImage, outputStackedFile)
@@ -1353,7 +1357,7 @@ class AstroProcess(val config: ProcessConfig) {
             annotateZoom.setColorTheme(annotateConfig.decorate.colorTheme)
             annotateZoom.markerStyle = annotateConfig.decorate.markerStyle
             annotateZoom.markerLabelStyle = annotateConfig.decorate.markerLabelStyle
-            annotateZoom.magnitude = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.magnitute)
+            annotateZoom.magnitude = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.magnitude)
             annotateZoom.minObjectSize = config.annotate.decorate.platesolveMarkers.minObjectSize
             annotateZoom.whiteList = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.whiteList)
             annotateZoom.blackList = Optional.ofNullable(config.annotate.decorate.platesolveMarkers.blackList)
@@ -1411,7 +1415,7 @@ class AstroProcess(val config: ProcessConfig) {
 
                         DrawStepType.Line -> {
                             val lineConfig = drawStepConfig.line!!
-                            graphics2D.drawLine(lineConfig.x1, lineConfig.y1, lineConfig.x2, lineConfig.x2)
+                            graphics2D.drawLine(lineConfig.x1, lineConfig.y1, lineConfig.x2, lineConfig.y2)
                         }
 
                         DrawStepType.Rectangle -> {
@@ -1475,18 +1479,6 @@ class AstroProcess(val config: ProcessConfig) {
         }
     }
 
-    private fun <T> readConfig(file: File, clazz: Class<T>): T {
-        val yaml = Yaml()
-        return file.inputStream().use { input ->
-            yaml.loadAs(input, clazz::class.java)
-        }
-    }
-
-    private fun <T> writeConfig(file: File, config: T) {
-        val yaml = Yaml()
-        file.writeText(yaml.dumpAsMap(config))
-    }
-
     private fun resolvedTarget(target: TargetConfig): TargetConfig {
         val resolved = target.copy()
 
@@ -1511,6 +1503,9 @@ class AstroProcess(val config: ProcessConfig) {
 
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            println("WARNING: Command '${arguments[0]}' exited with code $exitCode")
+        }
 
         return output
     }

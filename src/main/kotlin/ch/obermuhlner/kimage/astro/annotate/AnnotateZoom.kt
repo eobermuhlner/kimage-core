@@ -263,7 +263,7 @@ class AnnotateZoom {
         markers.add(marker)
     }
 
-    fun annotate(inputImage: Image, wcsConverter: WCSConverter?): Image {
+    fun annotate(inputImage: Image, wcsConverter: WCSConverter? = null): Image {
         var titleFontHeight = 0
         var textFontHeight = 0
         var thumbnailLabelFontHeight = 0
