@@ -337,7 +337,9 @@ calibrate:
   flatDirectory: "flat"         # Directory containing flat frames
   darkflatDirectory: "darkflat" # Directory containing dark flat frames
   darkDirectory: "dark"         # Directory containing dark frames
-  searchParentDirectories: true # Search parent directories for calibration frames
+  searchParentDirectories: true  # Search parent directories for calibration frames
+  darkskip: false               # Skip dark subtraction from light frames (for short exposures)
+  darkScalingFactor: 1.0        # Scale dark frame by (lightExp/darkExp) before subtraction
   normalizeBackground:          # Background normalization settings
     enabled: true               # Whether to normalize backgrounds across images
     offset: 0.01                # Offset value for normalization

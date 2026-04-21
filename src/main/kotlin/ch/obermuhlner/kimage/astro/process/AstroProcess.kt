@@ -251,6 +251,8 @@ data class CalibrateConfig(
     var darkflatDirectory: String = "darkflat",
     var darkDirectory: String = "dark",
     var searchParentDirectories: Boolean = true,
+    var darkskip: Boolean = false,
+    var darkScalingFactor: Double = 1.0,
     var normalizeBackground: NormalizeBackgroundConfig = NormalizeBackgroundConfig(),
     var calibratedOutputDirectory: String = "astro-process/calibrated",
 )
@@ -770,8 +772,20 @@ class AstroProcess(val config: ProcessConfig) {
         currentDir.resolve(config.align.alignedOutputDirectory).mkdirs()
         currentDir.resolve(config.stack.stackedOutputDirectory).mkdirs()
 
-        if (flat != null && darkflat != null) {
-            flat -= darkflat
+        if (flat != null) {
+            if (!config.calibrate.darkskip && dark != null) {
+                println("Subtracting dark from flat")
+                val darkScaling = config.calibrate.darkScalingFactor
+                if (darkScaling != 1.0) {
+                    flat -= dark * darkScaling
+                } else {
+                    flat -= dark
+                }
+            }
+            if (darkflat != null) {
+                println("Subtracting darkflat from flat")
+                flat -= darkflat
+            }
         }
 
         var inputFiles = files.filter { it.extension == config.format.inputImageExtension }.filterNotNull().sorted()
@@ -922,8 +936,13 @@ class AstroProcess(val config: ProcessConfig) {
                     if (bias != null) {
                         light -= bias
                     }
-                    if (dark != null) {
-                        light -= dark
+                    if (dark != null && !config.calibrate.darkskip) {
+                        val darkScaling = config.calibrate.darkScalingFactor
+                        if (darkScaling != 1.0) {
+                            light -= dark * darkScaling
+                        } else {
+                            light -= dark
+                        }
                     }
                     if (flat != null) {
                         light /= flat
