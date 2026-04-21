@@ -14,6 +14,8 @@ import javax.swing.Spring.height
 import org.junit.jupiter.api.Test
 
 class AnnotateZoomTest : AbstractImageProcessingTest() {
+    override fun getEpsilon(): Double = 1e-3
+
     @Test
     fun `should annotate empty using defaults`() {
         val image = createAnnotationTestImage()

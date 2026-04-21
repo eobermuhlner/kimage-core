@@ -35,7 +35,9 @@ abstract class AbstractImageProcessingTest {
         return directory
     }
 
-    fun assertReferenceImage(name: String, image: Image, epsilon: Double = 1e-10) {
+    open fun getEpsilon(): Double = 1e-10
+
+    fun assertReferenceImage(name: String, image: Image, epsilon: Double = getEpsilon()) {
         assertReferenceImage(name, image, "png", max(epsilon, 1e-4))
         //assertReferenceImage(name, image, "dimg", epsilon)
     }

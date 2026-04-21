@@ -14,7 +14,9 @@ import ch.obermuhlner.kimage.core.image.crop.cropCenter
 import ch.obermuhlner.kimage.core.image.scaling.scaleTo
 import ch.obermuhlner.kimage.core.matrix.scaling.Scaling
 import java.awt.Font
+import java.awt.FontFormatException
 import java.awt.Graphics2D
+import java.io.IOException
 import java.util.Locale
 import java.util.Optional
 import kotlin.math.absoluteValue
@@ -25,6 +27,25 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class AnnotateZoom {
+
+    companion object {
+        private var bundledFont: Font? = null
+
+        fun loadBundledFont(size: Float): Font {
+            if (bundledFont == null) {
+                bundledFont = try {
+                    val inputStream = AnnotateZoom::class.java.getResourceAsStream("/DejaVuSans.ttf")
+                    Font.createFont(Font.TRUETYPE_FONT, inputStream.also { it.close() })
+                } catch (e: IOException) {
+                    Font("SansSerif", Font.PLAIN, 1)
+                } catch (e: FontFormatException) {
+                    Font("SansSerif", Font.PLAIN, 1)
+                }
+            }
+            return bundledFont!!.deriveFont(size)
+        }
+    }
+
     enum class MarkerStyle {
         Square,
         Rectangle,
@@ -269,6 +290,7 @@ class AnnotateZoom {
         var thumbnailLabelFontHeight = 0
         var thumbnailInfoFontHeight = 0
         graphics(inputImage, 0, 0, 0, 0) { graphics, width, height, offsetX, offsetY ->
+            graphics.font = loadBundledFont(1f)
             if (title.isNotBlank() || subtitle.isNotBlank()) {
                 graphics.font = graphics.font.deriveFont(titleFontSize.toFloat())
                 titleFontHeight = graphics.fontMetrics.height
@@ -309,12 +331,12 @@ class AnnotateZoom {
             var textY = 0
 
             graphics.stroke = java.awt.BasicStroke(baseStrokeSize.toFloat())
-            val titleFont = graphics.font.deriveFont(titleFontSize.toFloat())
-            val textFont = graphics.font.deriveFont(textFontSize.toFloat())
-            val markerIndexFont = graphics.font.deriveFont(markerIndexFontSize.toFloat())
-            val thumbnailLabelFont = graphics.font.deriveFont(thumbnailLabelFontSize.toFloat())
-            val thumbnailInfoFont = graphics.font.deriveFont(thumbnailInfoFontSize.toFloat())
-            val thumbnailIndexFont = graphics.font.deriveFont(thumbnailIndexFontSize.toFloat())
+            val titleFont = loadBundledFont(titleFontSize.toFloat())
+            val textFont = loadBundledFont(textFontSize.toFloat())
+            val markerIndexFont = loadBundledFont(markerIndexFontSize.toFloat())
+            val thumbnailLabelFont = loadBundledFont(thumbnailLabelFontSize.toFloat())
+            val thumbnailInfoFont = loadBundledFont(thumbnailInfoFontSize.toFloat())
+            val thumbnailIndexFont = loadBundledFont(thumbnailIndexFontSize.toFloat())
 
             val shadowColor = java.awt.Color(shadowColor.toInt(16))
             fun Graphics2D.drawShadow(drawFunc: (dx: Int, dy: Int) -> Unit) {
