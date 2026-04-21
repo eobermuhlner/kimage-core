@@ -20,6 +20,11 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs(
+        "-Djava.awt.headless=true",
+        "-Dawt.useSystemAAFontSettings=false",
+        "-Dsun.font.fontfactory=LucidaSansFontFactory"
+    )
 }
 kotlin {
     jvmToolchain(17)

@@ -8,10 +8,20 @@ import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.values.asXY
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeAll
 import java.io.File
 import kotlin.math.max
 
 abstract class AbstractImageProcessingTest {
+
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun setUpHeadless() {
+            System.setProperty("java.awt.headless", "true")
+            System.setProperty("awt.useSystemAAFontSettings", "off")
+        }
+    }
 
     val testInputDirectory = File("test-input")
 
