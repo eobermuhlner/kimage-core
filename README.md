@@ -59,7 +59,7 @@ your-project/
 ├── *.fit                       # Light frames (your main images)
 ├── bias/*.fit                  # Bias frames (optional)
 ├── dark/*.fit                  # Dark frames (optional)
-├── darkflat/*.fit              # Dark frames (optional)
+├── darkflat/*.fit              # Dark flat frames (optional)
 ├── flat/*.fit                  # Flat frames (optional)
 └── kimage-astro-process.yaml   # Configuration file
 ```
@@ -266,6 +266,8 @@ For power users, the software also supports:
 - **Token-Based Naming** - Extract metadata from filenames for organized outputs
 - **HDR Processing** - Combine multiple enhancement steps for maximum detail
 - **Background Removal** - Remove gradients and light pollution
+- **Plate Solving** - Automatically determine sky coordinates using ASTAP and mark NGC objects
+- **Stacking Algorithms** - Choose from Median, SigmaClip, Winsorize, SmartMax, and more
 
 <details>
 <summary>Click to see full configuration reference</summary>
@@ -277,6 +279,27 @@ For power users, the software also supports:
 quick: false                 # Enable quick mode (process limited images)
 quickCount: 3               # Number of images to process in quick mode
 ```
+
+### Target Configuration
+```yaml
+target:
+  name: "M42"                   # Object name (used to look up RA/DEC from NGC catalog)
+  ra: 83.82                     # Right ascension in degrees (optional, overrides name lookup)
+  dec: -5.39                    # Declination in degrees (optional, overrides name lookup)
+  angle: 0.0                    # Image rotation angle in degrees (optional)
+  fov: 1.5                      # Field of view in degrees (optional)
+```
+
+### Platesolve Configuration
+```yaml
+platesolve:
+  enabled: false                # Whether to run plate solving on the reference image
+  platesolveType: "Astap"       # Solver type: Astap, Custom
+  executable: "astap_cli"       # Path to solver executable (default: astap_cli)
+```
+
+Plate solving determines the sky coordinates (RA/DEC) of the image. When enabled, the WCS result
+is used to automatically mark deep sky objects from the NGC catalog in annotated output images.
 
 ### Format Configuration
 ```yaml
@@ -334,6 +357,12 @@ align:
 ```yaml
 stack:
   stackedOutputDirectory: "astro-process/stacked" # Output directory for stacked images
+  algorithm: "Median"           # Stacking algorithm:
+                                # Median, Average, Max, Min
+                                # SigmaClipMedian, SigmaClipAverage
+                                # SigmaWinsorizeMedian, SigmaWinsorizeAverage
+                                # WinsorizedSigmaClipMedian, WinsorizedSigmaClipAverage
+                                # SigmaClipWeightedMedian, SmartMax
 ```
 
 ### Enhancement Configuration
@@ -358,6 +387,10 @@ enhance:
     histogramHeight: 400        # Height of histogram images
     printPercentiles: false     # Whether to print percentile values
   steps:                        # Processing steps (executed in order)
+    # Each step supports an optional top-level "enabled" flag to skip it:
+    #   - sigmoid:
+    #       midpoint: 0.01
+    #     enabled: false        # Temporarily disable this step without removing it
     # Debayer Step (if not done earlier)
     - debayer:
         enabled: true
@@ -442,10 +475,17 @@ annotate:
     title: "Object Name"        # Main title (supports tokens like {targetName})
     subtitle: "{stackedCount}x{exposureTime}" # Subtitle (supports tokens)
     text: "Object Description"  # Additional text
-    colorTheme: "Cyan"          # Green, Cyan, Red, Blue, Yellow, Magenta
-    markerStyle: "Square"       # Rectangle, Square, Circle
-    markerLabelStyle: "Index"   # Index, Name, Info1, Info2, None
-    markers:                    # List of markers to place
+    colorTheme: "Cyan"          # White, Cyan, Red, Green, Blue
+    grid: false                 # Overlay a coordinate grid on the image
+    platesolveMarkers:          # Auto-markers from plate solve results
+      enabled: true             # Whether to add markers for detected objects
+      magnitude: 10.0           # Only show objects brighter than this magnitude
+      minObjectSize: 50         # Minimum object size in pixels to display
+      whiteList: null           # Only show these object names (null = show all)
+      blackList: null           # Never show these object names (null = block none)
+    markerStyle: "Square"       # Square, Rectangle, Circle, Oval, None
+    markerLabelStyle: "Index"   # Index, Name, None
+    markers:                    # List of manually placed markers
       - name: "Star Name"       # Marker name
         x: 100                  # X coordinate
         y: 100                  # Y coordinate
@@ -485,14 +525,16 @@ annotate:
 ### Output Configuration
 ```yaml
 output:
-  outputName: "{targetName}_{stackedCount}x{exposureTime}_{iso}_{calibration}"
-  # Token-based output naming. Available tokens:
-  # {parentDir} - Parent directory name
-  # {firstInput} - First input filename (without extension)
-  # {inputCount} - Number of input files processed
+  outputName: "{firstInput}_{calibration}_{stackedCount}x"
+  # Token-based output naming. Always-available tokens:
+  # {parentDir}    - Parent directory name
+  # {firstInput}   - First input filename (without extension)
+  # {inputCount}   - Number of input files processed
   # {stackedCount} - Number of successfully stacked files
-  # {calibration} - Calibration types used (e.g., "bias,dark,flat")
-  # Plus any custom tokens from filenameTokens configuration
+  # {calibration}  - Calibration types used (e.g., "bias,dark,flat")
+  # Custom tokens (e.g. {targetName}, {exposureTime}, {iso}) are only available
+  # when filenameTokens.enabled is true and the token name is listed under
+  # format.filenameTokens.names
   outputImageExtensions:        # List of output formats to generate
     - "tif"                     # TIFF format (best quality, large files)
     - "jpg"                     # JPEG format (smaller files, some quality loss)
