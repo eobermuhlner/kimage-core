@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class FloatMatrixTest {
 
@@ -98,5 +99,25 @@ class FloatMatrixTest {
         val matrixC = FloatMatrix.matrixOf(2, 2, 4.0f, 3.0f, 2.0f, 1.0f)
         assertTrue(matrixA.contentEquals(matrixB))
         assertFalse(matrixA.contentEquals(matrixC))
+    }
+
+    @Test
+    fun `throws when rows is zero`() {
+        assertThrows<IllegalArgumentException> { FloatMatrix(0, 2) }
+    }
+
+    @Test
+    fun `throws when cols is zero`() {
+        assertThrows<IllegalArgumentException> { FloatMatrix(2, 0) }
+    }
+
+    @Test
+    fun `throws when rows is negative`() {
+        assertThrows<IllegalArgumentException> { FloatMatrix(-1, 2) }
+    }
+
+    @Test
+    fun `throws when size exceeds maximum`() {
+        assertThrows<IllegalArgumentException> { FloatMatrix(50000, 50000) }
     }
 }

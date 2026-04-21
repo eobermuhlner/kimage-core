@@ -86,8 +86,10 @@ class MedianFilter(
 
             Arrays.sort(values,0, n)
 
+            if (n == 0) return Double.NaN
+
             return if (n % 2 == 0) {
-                (values[n/2] + values[n/2+1]) / 2
+                (values[n/2 - 1] + values[n/2]) / 2
             } else {
                 values[n/2]
             }

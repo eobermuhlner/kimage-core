@@ -43,8 +43,8 @@ class JsonImageParser(private val tokenizer: JsonTokenizer) {
 
         val channels = data.keys.map { Channel.valueOf(it) }
         return MatrixImage(width, height, channels) { channel, _, _ ->
-            val values = data[channel.name]!!
-            DoubleMatrix.matrixOf(height, width) { index -> values[index]  }
+            val values = data[channel.name] ?: List(width * height) { 0.0 }
+            DoubleMatrix.matrixOf(height, width) { index -> values[index] }
         }
     }
 

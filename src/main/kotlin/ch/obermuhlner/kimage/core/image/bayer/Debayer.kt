@@ -221,9 +221,9 @@ fun Image.debayer(
                     }
 
                     val gray = (r * red + g * green + b * blue) / 3.0
-                    redMatrixXY[x, y] = gray
-                    greenMatrixXY[x, y] = gray
-                    blueMatrixXY[x, y] = gray
+                    redMatrixXY[x, y] = gray * red
+                    greenMatrixXY[x, y] = gray * green
+                    blueMatrixXY[x, y] = gray * blue
                 }
             }
         }
@@ -460,18 +460,12 @@ fun Matrix.findBayerBadPixels(
             for (dy in -2 .. 2 step 2) {
                 for (dx in -2 .. 2 step 2) {
                     if (dx != 0 || dy != 0) {
-                        addValueIfInBounds(x+dx, y+dy)
-                    }
+addValueIfInBounds(x+dx, y+dy)
                 }
             }
-//            addValueIfInBounds(x-2, y)
-//            addValueIfInBounds(x+2, y)
-//            addValueIfInBounds(x, y-2)
-//            addValueIfInBounds(x, y+2)
+        }
 
             val sigma = values.stddev()
-            //val sigma = values.medianAbsoluteDeviation()
-
             val sigmaCorrected = max(sigma, minSigma)
             val steepGradientsCount = values.count {
                 (value - it).absoluteValue > sigmaCorrected * gradientThresholdFactor

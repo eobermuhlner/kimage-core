@@ -45,11 +45,13 @@ fun clamp(x: Int, min: Int, max: Int): Int {
 }
 
 fun smoothstep(x0: Double, x1: Double, a: Double): Double {
+    if (x0 == x1) return if (a < x0) 0.0 else 1.0
     val x = clamp((a - x0) / (x1 - x0), 0.0, 1.0)
     return x * x * (3.0 - 2.0 * x);
 }
 
 fun smootherstep(x0: Double, x1: Double, a: Double): Double {
+    if (x0 == x1) return if (a < x0) 0.0 else 1.0
     val x = clamp((a - x0) / (x1 - x0), 0.0, 1.0)
     return x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
 }

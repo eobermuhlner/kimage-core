@@ -4,16 +4,38 @@
 
 Write simple, concise commit messages. Do not mention agentic coding tools (Claude Code, OpenCode, etc.) in commit messages or co-author lines.
 
-## Test-Driven Development
+## Test-Driven Development (MANDATORY)
 
-Write tests before implementing. For each change:
-1. Write a failing test that captures the expected behavior.
-2. Implement the minimum code to make it pass.
-3. Refactor if needed, keeping tests green.
+**You MUST write tests before touching production code.** This is not optional.
 
-For bug fixes, write a test that reproduces the bug first, then fix it.
+For every code modification task:
+1. Write a failing test that captures the expected behavior
+2. Run the test to confirm it fails
+3. Implement the minimum code to make it pass
+4. Run the test to confirm it passes
+5. Run all tests to ensure no regression
+
+**Bug fix example:**
+```
+# 1. Write failing test first
+fun testDivisionByZero() {
+    assertFails { smoothstep(1.0, 1.0, 0.5) }  # x0 == x1 should not crash
+}
+
+# 2. Run test -> FAILS
+
+# 3. Fix code
+fun smoothstep(x0: Double, x1: Double, a: Double): Double {
+    if (x0 == x1) return 0.0
+    ...
+}
+
+# 4. Run test -> PASSES
+```
 
 For image-processing changes, use `AbstractImageProcessingTest.assertReferenceImage` — run once to generate the reference, then subsequent runs verify against it. Delete the reference file when intentionally changing output.
+
+**If you fix code without a prior failing test, I will reject it.**
 
 ## Build & Test
 

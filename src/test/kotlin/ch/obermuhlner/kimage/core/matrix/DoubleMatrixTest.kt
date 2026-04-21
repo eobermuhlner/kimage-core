@@ -264,4 +264,24 @@ class DoubleMatrixTest {
         }
         assertEquals("Matrix size mismatch: (2x2) vs (3x2)", exception.message)
     }
+
+    @Test
+    fun `throws when rows is zero`() {
+        assertThrows<IllegalArgumentException> { DoubleMatrix(0, 2) }
+    }
+
+    @Test
+    fun `throws when cols is zero`() {
+        assertThrows<IllegalArgumentException> { DoubleMatrix(2, 0) }
+    }
+
+    @Test
+    fun `throws when rows is negative`() {
+        assertThrows<IllegalArgumentException> { DoubleMatrix(-1, 2) }
+    }
+
+    @Test
+    fun `throws when size exceeds maximum`() {
+        assertThrows<IllegalArgumentException> { DoubleMatrix(50000, 50000) }
+    }
 }

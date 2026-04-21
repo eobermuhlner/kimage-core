@@ -48,8 +48,12 @@ class HugeMultiDimensionalFloatArray(vararg dimensions: Int) : MultiDimensionalF
     }
 
     override fun close() {
-        memoryFiles.forEach {
-            it.delete()
+        try {
+            floatBuffers.forEach { it.clear() }
+        } finally {
+            memoryFiles.forEach {
+                it.delete()
+            }
         }
     }
 }

@@ -59,4 +59,28 @@ class MathFunctionsTest {
         val values = listOf(3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0)
         assert(values.medianAbsoluteDeviation() >= 0.0)
     }
+
+    @Test
+    fun `smoothstep handles x0 equals x1`() {
+        val result = smoothstep(1.0, 1.0, 0.5)
+        assertEquals(0.0, result, 1e-9)
+    }
+
+    @Test
+    fun `smoothstep returns 1 when a greater than x1 equals x0`() {
+        val result = smoothstep(1.0, 1.0, 2.0)
+        assertEquals(1.0, result, 1e-9)
+    }
+
+    @Test
+    fun `smootherstep handles x0 equals x1`() {
+        val result = smootherstep(1.0, 1.0, 0.5)
+        assertEquals(0.0, result, 1e-9)
+    }
+
+    @Test
+    fun `smootherstep returns 1 when a greater than x1 equals x0`() {
+        val result = smootherstep(1.0, 1.0, 2.0)
+        assertEquals(1.0, result, 1e-9)
+    }
 }

@@ -4,6 +4,13 @@ import java.util.Objects
 
 class FloatMatrix(override val rows: Int, override val cols: Int) : Matrix {
 
+    init {
+        require(rows > 0) { "rows must be positive" }
+        require(cols > 0) { "cols must be positive" }
+        val size = rows.toLong() * cols
+        require(size <= Int.MAX_VALUE) { "Matrix size exceeds maximum" }
+    }
+
     private val data = FloatArray(rows * cols)
 
     constructor(rows: Int, cols: Int, init: (row: Int, col: Int) -> Float): this(rows, cols) {
