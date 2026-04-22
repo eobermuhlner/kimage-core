@@ -10,10 +10,10 @@ This document outlines the significant gaps between the current implementation a
 - **Files**: `core.image.io.ImageWriter` - no FITS writer implementation
 
 ### 1.2 Deconvolution
-- **Status**: No deconvolution algorithm implemented
-- **Impact**: Cannot restore resolution degraded by seeing/optics
-- **Needed**: Richardson-Lucy or Wiener filter deconvolution
-- **Files**: Would need new `EnhanceDeconvolve.kt`
+- **Status**: Implemented Richardson-Lucy deconvolution
+- **Impact**: Can restore resolution degraded by seeing/optics
+- **Files**: `core.image.filter.Filters.kt`, `core.matrix.filter.Convolute.kt`
+- **Config**: Added to enhance pipeline with psfSigma and iterations parameters
 
 ### 1.3 Field Flattening / DBE
 - **Status**: `removeBackground` uses naive interpolation, not true DBE

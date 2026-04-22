@@ -39,6 +39,7 @@ import ch.obermuhlner.kimage.core.image.crop.crop
 import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.filter.gaussianBlur3Filter
 import ch.obermuhlner.kimage.core.image.filter.laplacianFilter
+import ch.obermuhlner.kimage.core.image.filter.richardsonLucyDeconvolution
 import ch.obermuhlner.kimage.core.image.filter.sharpenFilter
 import ch.obermuhlner.kimage.core.image.filter.unsharpMaskFilter
 import ch.obermuhlner.kimage.core.image.hdr.highDynamicRange
@@ -302,6 +303,7 @@ data class EnhanceStepConfig(
     var unsharpMask: UnsharpMaskConfig? = null,
     var highDynamicRange: HighDynamicRangeConfig? = null,
     var cosmeticCorrection: CosmeticCorrectionConfig? = null,
+    var deconvolve: DeconvolutionConfig? = null,
     var addToHighDynamicRange: Boolean = false,
 ) {
     val type: EnhanceStepType
@@ -319,6 +321,7 @@ data class EnhanceStepConfig(
             unsharpMask != null -> EnhanceStepType.UnsharpMask
             highDynamicRange != null -> EnhanceStepType.HighDynamicRange
             cosmeticCorrection != null -> EnhanceStepType.CosmeticCorrection
+            deconvolve != null -> EnhanceStepType.Deconvolve
             else -> throw IllegalArgumentException("No enhancement step configuration found")
         }
 }
@@ -336,7 +339,8 @@ enum class EnhanceStepType {
     UnsharpMask,
     ReduceNoise,
     HighDynamicRange,
-    CosmeticCorrection
+    CosmeticCorrection,
+    Deconvolve
 }
 
 data class HighDynamicRangeConfig(
@@ -388,6 +392,17 @@ data class CosmeticCorrectionConfig(
     var fixRadius: Int = 1,
     var minNetNoise: Double = 0.01
 )
+
+data class DeconvolutionConfig(
+    var algorithm: DeconvolutionAlgorithm = DeconvolutionAlgorithm.RichardsonLucy,
+    var psfSigma: Double = 1.5,
+    var iterations: Int = 20,
+)
+
+enum class DeconvolutionAlgorithm {
+    RichardsonLucy,
+    Wiener
+}
 
 data class RemoveBackgroundConfig(
     var fixPoints: FixPointsConfig = FixPointsConfig(),
@@ -1329,6 +1344,23 @@ class AstroProcess(val config: ProcessConfig) {
 
                     EnhanceStepType.CosmeticCorrection -> {
                         it.cosmeticCorrect(enhanceStepConfig.cosmeticCorrection!!)
+                    }
+
+                    EnhanceStepType.Deconvolve -> {
+                        when (enhanceStepConfig.deconvolve!!.algorithm) {
+                            DeconvolutionAlgorithm.RichardsonLucy -> {
+                                it.richardsonLucyDeconvolution(
+                                    enhanceStepConfig.deconvolve!!.psfSigma,
+                                    enhanceStepConfig.deconvolve!!.iterations
+                                )
+                            }
+                            DeconvolutionAlgorithm.Wiener -> {
+                                it.richardsonLucyDeconvolution(
+                                    enhanceStepConfig.deconvolve!!.psfSigma,
+                                    enhanceStepConfig.deconvolve!!.iterations
+                                )
+                            }
+                        }
                     }
 
                     else -> it

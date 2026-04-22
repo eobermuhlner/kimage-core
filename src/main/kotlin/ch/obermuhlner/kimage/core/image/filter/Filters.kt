@@ -1,7 +1,9 @@
 package ch.obermuhlner.kimage.core.image.filter
 
 import ch.obermuhlner.kimage.core.image.Image
+import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
+import ch.obermuhlner.kimage.core.matrix.filter.richardsonLucyDeconvolution
 import ch.obermuhlner.kimage.core.matrix.filter.sobelFilter
 import ch.obermuhlner.kimage.core.matrix.filter.unsharpMaskFilter
 import ch.obermuhlner.kimage.filter.GaussianBlurFilter
@@ -56,3 +58,19 @@ fun Image.sobelFilter(sobelHorizontal: Matrix = KernelFilter.SobelHorizontal3, s
 fun Image.sobel3Filter() = this.sobelFilter(KernelFilter.SobelHorizontal3, KernelFilter.SobelVertical3)
 
 fun Image.sobel5Filter() = this.sobelFilter(KernelFilter.SobelHorizontal5, KernelFilter.SobelVertical5)
+
+fun Image.richardsonLucyDeconvolution(psfSigma: Double = 1.5, iterations: Int = 20): Image {
+    val size = 7
+    val center = size / 2
+    val psf = DoubleMatrix.matrixOf(size, size) { row, col ->
+        val dx = row - center
+        val dy = col - center
+        val dist2 = dx * dx + dy * dy
+        kotlin.math.exp(-dist2 / (2 * psfSigma * psfSigma))
+    }
+    return this.richardsonLucyDeconvolution(psf, iterations)
+}
+
+fun Image.richardsonLucyDeconvolution(psf: Matrix, iterations: Int = 20): Image = MatrixImageFilter(
+    { _, matrix -> matrix.richardsonLucyDeconvolution(psf, iterations) }
+).filter(this)

@@ -100,6 +100,7 @@ Enhancement uses a flexible step-by-step approach. Common steps include:
 - **linearPercentile** - Histogram stretching
 - **sigmoid** - S-curve contrast enhancement
 - **reduceNoise** - Noise reduction
+- **deconvolve** - Richardson-Lucy deconvolution (restores resolution)
 - **highDynamicRange** - HDR processing
 
 The default configuration includes a sophisticated pipeline that works well for most images.
@@ -339,7 +340,7 @@ calibrate:
   flatDirectory: "flat"         # Directory containing flat frames
   darkflatDirectory: "darkflat" # Directory containing dark flat frames
   darkDirectory: "dark"         # Directory containing dark frames
-  searchParentDirectories: true  # Search parent directories for calibration frames
+  searchParentDirectories: true # Search parent directories for calibration frames
   darkskip: false               # Skip dark subtraction from light frames (for short exposures)
   darkScalingFactor: 1.0        # Scale dark frame by (lightExp/darkExp) before subtraction
   normalizeBackground:          # Background normalization settings
@@ -462,6 +463,11 @@ enhance:
         thresholds:             # Threshold levels (multiple levels supported)
           - 0.01
           - 0.001
+    # Deconvolution Step (Richardson-Lucy)
+    - deconvolve:
+        algorithm: "RichardsonLucy"  # Algorithm: RichardsonLucy, Wiener
+        psfSigma: 1.5            # PSF sigma for Gaussian kernel (0.5-5.0)
+        iterations: 20           # Number of iterations (5-100)
     # High Dynamic Range Step
     - highDynamicRange:
         saturationBlurRadius: 3 # Blur radius for saturation calculation
@@ -562,6 +568,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`sharpen`** - Apply sharpening filter
 - **`unsharpMask`** - Apply unsharp mask filter
 - **`reduceNoise`** - Multi-scale noise reduction
+- **`deconvolve`** - Richardson-Lucy deconvolution to restore resolution
 - **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
 
@@ -587,6 +594,12 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - `mode`: `Hot` (bright outliers), `Cold` (dark outliers), or `Both` (default)
 - `sigmaThreshold`: 3.0 (aggressive) to 10.0 (conservative)
 - `fixRadius`: 1 (3x3 area) to 3 (7x7 area)
+
+**Deconvolution:**
+- `psfSigma`: 1.0 (tight stars) to 3.0 (looser blur - 1.5 is typical)
+- `iterations`: 5 (faster) to 100 (more aggressive restoration)
+- Best results achieved after good calibration and stacking
+- Too many iterations can introduce artifacts/noise amplification
 
 </details>
 

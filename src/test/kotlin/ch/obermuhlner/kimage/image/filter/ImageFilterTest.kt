@@ -17,6 +17,7 @@ import ch.obermuhlner.kimage.core.image.filter.highPassFilter
 import ch.obermuhlner.kimage.core.image.filter.kernelFilter
 import ch.obermuhlner.kimage.core.image.filter.laplacianFilter
 import ch.obermuhlner.kimage.core.image.filter.medianFilter
+import ch.obermuhlner.kimage.core.image.filter.richardsonLucyDeconvolution
 import ch.obermuhlner.kimage.core.image.filter.medianPixelFilter
 import ch.obermuhlner.kimage.core.image.filter.motionBlurFilter
 import ch.obermuhlner.kimage.core.image.filter.sharpenFilter
@@ -185,6 +186,15 @@ class ImageFilterTest : AbstractImageProcessingTest() {
 
         image.sharpenFilter().let {
             assertReferenceImage("sharpenFilter()", it)
+        }
+    }
+
+    @Test
+    fun `should apply richardson lucy deconvolution`() {
+        val image = readTestImage()
+
+        image.richardsonLucyDeconvolution(1.5, 5).let {
+            assertReferenceImage("richardsonLucyDeconvolution(sigma=1.5,iterations=5)", it)
         }
     }
 
