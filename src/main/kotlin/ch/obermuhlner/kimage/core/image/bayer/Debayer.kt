@@ -264,6 +264,14 @@ fun Image.debayer(
         }
         DebayerInterpolation.GLI -> {
             val mosaicBoundedXY = mosaic.asBoundedXY()
+
+            fun hasValue(x: Int, y: Int): Boolean = mosaicBoundedXY.isInBounds(x, y) && mosaicBoundedXY[x, y] != null
+
+            fun avgNonNull(vararg coords: Pair<Int, Int>): Double {
+                val values = coords.mapNotNull { (cx, cy) -> mosaicBoundedXY[cx, cy] }
+                return if (values.isEmpty()) 0.0 else values.average()
+            }
+
             for (y in 0 until height) {
                 for (x in 0 until width) {
                     val dx = x % 2
@@ -276,64 +284,101 @@ fun Image.debayer(
                     if (dx == rX && dy == rY) { // Red pixel
                         r = mosaicBoundedXY[x, y] ?: 0.0
 
-                        val gHorizontalGradient = listOf(
-                            mosaicBoundedXY[x - 2, y],
-                            mosaicBoundedXY[x + 2, y]
-                        ).average()
+                        val hasLeft = hasValue(x - 1, y)
+                        val hasRight = hasValue(x + 1, y)
+                        val hasTop = hasValue(x, y - 1)
+                        val hasBottom = hasValue(x, y + 1)
 
-                        val gVerticalGradient = listOf(
-                            mosaicBoundedXY[x, y - 2],
-                            mosaicBoundedXY[x, y + 2]
-                        ).average()
+                        val hGrad = if (hasLeft && hasRight) {
+                            (mosaicBoundedXY[x - 1, y]!! - mosaicBoundedXY[x + 1, y]!!).absoluteValue
+                        } else Double.MAX_VALUE
+                        val vGrad = if (hasTop && hasBottom) {
+                            (mosaicBoundedXY[x, y - 1]!! - mosaicBoundedXY[x, y + 1]!!).absoluteValue
+                        } else Double.MAX_VALUE
 
-                        g = if (gHorizontalGradient < gVerticalGradient) {
-                            listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
+                        g = if (hGrad <= vGrad) {
+                            avgNonNull(x - 1 to y, x + 1 to y)
                         } else {
-                            listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
+                            avgNonNull(x to y - 1, x to y + 1)
                         }
 
-                        b = listOf(
-                            mosaicBoundedXY[x - 1, y - 1],
-                            mosaicBoundedXY[x + 1, y - 1],
-                            mosaicBoundedXY[x - 1, y + 1],
-                            mosaicBoundedXY[x + 1, y + 1]
-                        ).average() ?: 0.0
+                        b = avgNonNull(
+                            x - 1 to y - 1, x + 1 to y - 1,
+                            x - 1 to y + 1, x + 1 to y + 1
+                        )
 
                     } else if (dx == bX && dy == bY) { // Blue pixel
                         b = mosaicBoundedXY[x, y] ?: 0.0
 
-                        val gHorizontalGradient = listOf(
-                            mosaicBoundedXY[x - 2, y],
-                            mosaicBoundedXY[x + 2, y]
-                        ).average()
+                        val hasLeft = hasValue(x - 1, y)
+                        val hasRight = hasValue(x + 1, y)
+                        val hasTop = hasValue(x, y - 1)
+                        val hasBottom = hasValue(x, y + 1)
 
-                        val gVerticalGradient = listOf(
-                            mosaicBoundedXY[x, y - 2],
-                            mosaicBoundedXY[x, y + 2]
-                        ).average()
+                        val hGrad = if (hasLeft && hasRight) {
+                            (mosaicBoundedXY[x - 1, y]!! - mosaicBoundedXY[x + 1, y]!!).absoluteValue
+                        } else Double.MAX_VALUE
+                        val vGrad = if (hasTop && hasBottom) {
+                            (mosaicBoundedXY[x, y - 1]!! - mosaicBoundedXY[x, y + 1]!!).absoluteValue
+                        } else Double.MAX_VALUE
 
-                        g = if (gHorizontalGradient < gVerticalGradient) {
-                            listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
+                        g = if (hGrad <= vGrad) {
+                            avgNonNull(x - 1 to y, x + 1 to y)
                         } else {
-                            listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
+                            avgNonNull(x to y - 1, x to y + 1)
                         }
 
-                        r = listOf(
-                            mosaicBoundedXY[x - 1, y - 1],
-                            mosaicBoundedXY[x + 1, y - 1],
-                            mosaicBoundedXY[x - 1, y + 1],
-                            mosaicBoundedXY[x + 1, y + 1]
-                        ).average() ?: 0.0
+                        r = avgNonNull(
+                            x - 1 to y - 1, x + 1 to y - 1,
+                            x - 1 to y + 1, x + 1 to y + 1
+                        )
 
                     } else { // Green pixel
                         g = mosaicBoundedXY[x, y] ?: 0.0
 
-                        if ((x - 1) % 2 == rX) { // Green adjacent to red
-                            r = listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
-                            b = listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
-                        } else { // Green adjacent to blue
-                            b = listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
-                            r = listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
+                        val hasLeft = hasValue(x - 1, y)
+                        val hasRight = hasValue(x + 1, y)
+                        val hasTop = hasValue(x, y - 1)
+                        val hasBottom = hasValue(x, y + 1)
+
+                        if ((x - 1) % 2 == rX) { // Green adjacent to red horizontally
+                            r = if (hasLeft && hasRight) {
+                                avgNonNull(x - 1 to y, x + 1 to y)
+                            } else if (hasLeft) {
+                                mosaicBoundedXY[x - 1, y]!!
+                            } else if (hasRight) {
+                                mosaicBoundedXY[x + 1, y]!!
+                            } else {
+                                0.0
+                            }
+                            b = if (hasTop && hasBottom) {
+                                avgNonNull(x to y - 1, x to y + 1)
+                            } else if (hasTop) {
+                                mosaicBoundedXY[x, y - 1]!!
+                            } else if (hasBottom) {
+                                mosaicBoundedXY[x, y + 1]!!
+                            } else {
+                                0.0
+                            }
+                        } else { // Green adjacent to blue horizontally
+                            b = if (hasLeft && hasRight) {
+                                avgNonNull(x - 1 to y, x + 1 to y)
+                            } else if (hasLeft) {
+                                mosaicBoundedXY[x - 1, y]!!
+                            } else if (hasRight) {
+                                mosaicBoundedXY[x + 1, y]!!
+                            } else {
+                                0.0
+                            }
+                            r = if (hasTop && hasBottom) {
+                                avgNonNull(x to y - 1, x to y + 1)
+                            } else if (hasTop) {
+                                mosaicBoundedXY[x, y - 1]!!
+                            } else if (hasBottom) {
+                                mosaicBoundedXY[x, y + 1]!!
+                            } else {
+                                0.0
+                            }
                         }
                     }
 
@@ -345,6 +390,14 @@ fun Image.debayer(
         }
         DebayerInterpolation.AHD -> {
             val mosaicBoundedXY = mosaic.asBoundedXY()
+
+            fun avgNonNull(vararg coords: Pair<Int, Int>): Double {
+                val values = coords.mapNotNull { (cx, cy) -> mosaicBoundedXY[cx, cy] }
+                return if (values.isEmpty()) 0.0 else values.average()
+            }
+
+            fun hasValue(x: Int, y: Int): Boolean = mosaicBoundedXY.isInBounds(x, y) && mosaicBoundedXY[x, y] != null
+
             for (y in 0 until height) {
                 for (x in 0 until width) {
                     val dx = x % 2
@@ -354,62 +407,81 @@ fun Image.debayer(
                     val g: Double
                     val b: Double
 
-                    // Calculate gradients safely using average() for surrounding pixels
-                    val horizontalGradient = listOf(
-                        mosaicBoundedXY[x - 1, y],
-                        mosaicBoundedXY[x + 1, y]
-                    ).average().let { gradient -> gradient ?: 0.0 }
-
-                    val verticalGradient = listOf(
-                        mosaicBoundedXY[x, y - 1],
-                        mosaicBoundedXY[x, y + 1]
-                    ).average().let { gradient -> gradient ?: 0.0 }
-
-                    if (dx == rX && dy == rY) { // Red pixel
+                    if (dx == rX && dy == rY) { // Red pixel position
+                        // Known values
                         r = mosaicBoundedXY[x, y] ?: 0.0
 
-                        g = if (horizontalGradient < verticalGradient) {
-                            listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
+                        // Interpolate missing green using gradient direction from adjacent green pixels
+                        val hasLeft = hasValue(x - 1, y)
+                        val hasRight = hasValue(x + 1, y)
+                        val hasTop = hasValue(x, y - 1)
+                        val hasBottom = hasValue(x, y + 1)
+
+                        val hGrad = if (hasLeft && hasRight) {
+                            (mosaicBoundedXY[x - 1, y]!! - mosaicBoundedXY[x + 1, y]!!).absoluteValue
+                        } else Double.MAX_VALUE
+                        val vGrad = if (hasTop && hasBottom) {
+                            (mosaicBoundedXY[x, y - 1]!! - mosaicBoundedXY[x, y + 1]!!).absoluteValue
+                        } else Double.MAX_VALUE
+
+                        g = if (hGrad <= vGrad) {
+                            avgNonNull(x - 1 to y, x + 1 to y)
                         } else {
-                            listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
+                            avgNonNull(x to y - 1, x to y + 1)
                         }
 
-                        b = listOf(
-                            mosaicBoundedXY[x - 1, y - 1],
-                            mosaicBoundedXY[x + 1, y - 1],
-                            mosaicBoundedXY[x - 1, y + 1],
-                            mosaicBoundedXY[x + 1, y + 1]
-                        ).average() ?: 0.0
+                        // Interpolate missing blue via bilinear from diagonals (standard - no gradient direction)
+                        b = avgNonNull(
+                            x - 1 to y - 1, x + 1 to y - 1,
+                            x - 1 to y + 1, x + 1 to y + 1
+                        )
 
-                    } else if (dx == bX && dy == bY) { // Blue pixel
+                    } else if (dx == bX && dy == bY) { // Blue pixel position
+                        // Known values
                         b = mosaicBoundedXY[x, y] ?: 0.0
 
-                        g = if (horizontalGradient < verticalGradient) {
-                            listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
+                        // Interpolate missing green using gradient direction from adjacent green pixels
+                        val hasLeft = hasValue(x - 1, y)
+                        val hasRight = hasValue(x + 1, y)
+                        val hasTop = hasValue(x, y - 1)
+                        val hasBottom = hasValue(x, y + 1)
+
+                        val hGrad = if (hasLeft && hasRight) {
+                            (mosaicBoundedXY[x - 1, y]!! - mosaicBoundedXY[x + 1, y]!!).absoluteValue
+                        } else Double.MAX_VALUE
+                        val vGrad = if (hasTop && hasBottom) {
+                            (mosaicBoundedXY[x, y - 1]!! - mosaicBoundedXY[x, y + 1]!!).absoluteValue
+                        } else Double.MAX_VALUE
+
+                        g = if (hGrad <= vGrad) {
+                            avgNonNull(x - 1 to y, x + 1 to y)
                         } else {
-                            listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
+                            avgNonNull(x to y - 1, x to y + 1)
                         }
 
-                        r = listOf(
-                            mosaicBoundedXY[x - 1, y - 1],
-                            mosaicBoundedXY[x + 1, y - 1],
-                            mosaicBoundedXY[x - 1, y + 1],
-                            mosaicBoundedXY[x + 1, y + 1]
-                        ).average() ?: 0.0
+                        // Interpolate missing red via bilinear from diagonals (standard - no gradient direction)
+                        r = avgNonNull(
+                            x - 1 to y - 1, x + 1 to y - 1,
+                            x - 1 to y + 1, x + 1 to y + 1
+                        )
 
-                    } else { // Green pixel
+                    } else { // Green pixel position
+                        // Known value
                         g = mosaicBoundedXY[x, y] ?: 0.0
 
-                        if ((x - 1) % 2 == rX) { // Green adjacent to red
-                            r = listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
-                            b = listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
-                        } else { // Green adjacent to blue
-                            b = listOf(mosaicBoundedXY[x - 1, y], mosaicBoundedXY[x + 1, y]).average() ?: 0.0
-                            r = listOf(mosaicBoundedXY[x, y - 1], mosaicBoundedXY[x, y + 1]).average() ?: 0.0
+                        if ((x - 1) % 2 == rX) { // Green adjacent to red horizontally (at red column)
+                            // Interpolate red from left/right
+                            r = avgNonNull(x - 1 to y, x + 1 to y)
+                            // Interpolate blue from top/bottom
+                            b = avgNonNull(x to y - 1, x to y + 1)
+                        } else { // Green adjacent to blue horizontally (at blue column)
+                            // Interpolate blue from left/right
+                            b = avgNonNull(x - 1 to y, x + 1 to y)
+                            // Interpolate red from top/bottom
+                            r = avgNonNull(x to y - 1, x to y + 1)
                         }
                     }
 
-                    // Choose interpolation with minimum gradient
                     redMatrixXY[x, y] = r * red
                     greenMatrixXY[x, y] = g * green
                     blueMatrixXY[x, y] = b * blue
