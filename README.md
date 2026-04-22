@@ -562,6 +562,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`sharpen`** - Apply sharpening filter
 - **`unsharpMask`** - Apply unsharp mask filter
 - **`reduceNoise`** - Multi-scale noise reduction
+- **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
 
 ### Parameter Ranges and Tips
@@ -581,6 +582,11 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - Use lower threshold values (0.001) for aggressive noise reduction
 - Use higher threshold values (0.1) for subtle noise reduction
 - Multiple threshold levels process different noise scales
+
+**Cosmetic Correction:**
+- `mode`: `Hot` (bright outliers), `Cold` (dark outliers), or `Both` (default)
+- `sigmaThreshold`: 3.0 (aggressive) to 10.0 (conservative)
+- `fixRadius`: 1 (3x3 area) to 3 (7x7 area)
 
 </details>
 

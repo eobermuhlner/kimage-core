@@ -24,6 +24,9 @@ import ch.obermuhlner.kimage.astro.background.interpolate
 import ch.obermuhlner.kimage.astro.color.histogram
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
+import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionConfig
+import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionMode
+import ch.obermuhlner.kimage.astro.cosmetic.cosmeticCorrect
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.PointXY
@@ -298,6 +301,7 @@ data class EnhanceStepConfig(
     var sharpen: SharpenConfig? = null,
     var unsharpMask: UnsharpMaskConfig? = null,
     var highDynamicRange: HighDynamicRangeConfig? = null,
+    var cosmeticCorrection: CosmeticCorrectionConfig? = null,
     var addToHighDynamicRange: Boolean = false,
 ) {
     val type: EnhanceStepType
@@ -314,6 +318,7 @@ data class EnhanceStepConfig(
             sharpen != null -> EnhanceStepType.Sharpen
             unsharpMask != null -> EnhanceStepType.UnsharpMask
             highDynamicRange != null -> EnhanceStepType.HighDynamicRange
+            cosmeticCorrection != null -> EnhanceStepType.CosmeticCorrection
             else -> throw IllegalArgumentException("No enhancement step configuration found")
         }
 }
@@ -330,7 +335,8 @@ enum class EnhanceStepType {
     Sharpen,
     UnsharpMask,
     ReduceNoise,
-    HighDynamicRange
+    HighDynamicRange,
+    CosmeticCorrection
 }
 
 data class HighDynamicRangeConfig(
@@ -372,6 +378,15 @@ data class ReduceNoiseConfig(
     var algorithm: NoiseReductionAlgorithm = NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels,
     var thresholding: Thresholding = Thresholding.Soft,
     var thresholds: MutableList<Double> = mutableListOf(0.0001)
+)
+
+data class CosmeticCorrectionConfig(
+    var enabled: Boolean = true,
+    var mode: CosmeticCorrectionMode = CosmeticCorrectionMode.Both,
+    var sigmaThreshold: Double = 5.0,
+    var checkRadius: Int = 2,
+    var fixRadius: Int = 1,
+    var minNetNoise: Double = 0.01
 )
 
 data class RemoveBackgroundConfig(
@@ -1310,6 +1325,10 @@ class AstroProcess(val config: ProcessConfig) {
 
                     EnhanceStepType.HighDynamicRange -> {
                         highDynamicRange(hdrSourceImages.map { { it } })
+                    }
+
+                    EnhanceStepType.CosmeticCorrection -> {
+                        it.cosmeticCorrect(enhanceStepConfig.cosmeticCorrection!!)
                     }
 
                     else -> it
