@@ -29,6 +29,7 @@ import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.PointXY
 import ch.obermuhlner.kimage.core.image.awt.graphics
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
+import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.crop.crop
@@ -241,6 +242,7 @@ data class DebayerConfig(
     var enabled: Boolean = true,
     var cleanupBadPixels: Boolean = true,
     var bayerPattern: BayerPattern = BayerPattern.RGGB,
+    var interpolation: DebayerInterpolation = DebayerInterpolation.AHD,
 )
 
 data class CalibrateConfig(
@@ -1184,7 +1186,7 @@ class AstroProcess(val config: ProcessConfig) {
                         } else {
                             emptySet()
                         }
-                        it.debayer(enhanceStepConfig.debayer!!.bayerPattern, badpixelCoords = badPixels)
+                        it.debayer(enhanceStepConfig.debayer!!.bayerPattern, interpolation = enhanceStepConfig.debayer!!.interpolation, badpixelCoords = badPixels)
                     }
 
                     EnhanceStepType.Crop -> {
@@ -1483,7 +1485,7 @@ class AstroProcess(val config: ProcessConfig) {
             } else {
                 emptySet()
             }
-            image.debayer(debayerConfig.bayerPattern, badpixelCoords = badPixels)
+            image.debayer(debayerConfig.bayerPattern, interpolation = debayerConfig.interpolation, badpixelCoords = badPixels)
         } else {
             image
         }

@@ -52,6 +52,21 @@ Gradle project, Kotlin 2.0 targeting JVM 17.
 
 Tests depending on `AbstractImageProcessingTest` read from `test-input/` and write/compare reference images under `test-results/<classFqn>/<method>/`. If a reference file is missing it is written on first run; subsequent runs compare against it.
 
+### Reference Image Management
+
+Reference images in `test-results/` are committed to git alongside code changes:
+
+1. **New tests**: First run generates the reference file automatically
+2. **Intentional output changes**: Delete the old reference before running tests:
+   ```sh
+   rm test-results/<path>/<name>.png
+   ./gradlew test --tests "<TestClass>"
+   ```
+3. **Code fix (same output expected)**: If test fails unexpectedly, investigate the diff before regenerating
+4. **Always commit**: Include updated reference images in the same commit as the code change
+
+Reference images are binary PNG files stored in git - commit them to preserve the expected output for future test runs.
+
 ## End-User CLI
 
 Application name: `kimage-astro-process` (entry point `ch.obermuhlner.kimage.astro.process.AstroProcessKt`). Commands: `init`, `process`, `config`, `stars`. Reads `kimage-astro-process.yaml` from the current directory; `init` writes `defaultAstroProcessConfigText`. See `README.md` for the full config reference — it is the authoritative documentation for pipeline semantics and parameter ranges.

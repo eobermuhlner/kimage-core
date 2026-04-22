@@ -324,6 +324,7 @@ format:
     enabled: true               # Whether to debayer raw camera files
     cleanupBadPixels: true      # Remove bad/hot pixels during debayering
     bayerPattern: "RGGB"        # Bayer pattern: RGGB, GRBG, GBRG, BGGR
+    interpolation: "AHD"      # Debayer algorithm: None, SuperPixel, SuperPixelHalf, Monochrome, Nearest, Bilinear, AHD, GLI
 ```
 
 ### Calibration Configuration
@@ -333,6 +334,7 @@ calibrate:
   debayer:                      # Debayering for calibration frames
     enabled: true
     bayerPattern: "RGGB"
+    interpolation: "AHD"
   biasDirectory: "bias"         # Directory containing bias frames
   flatDirectory: "flat"         # Directory containing flat frames
   darkflatDirectory: "darkflat" # Directory containing dark flat frames
@@ -398,6 +400,7 @@ enhance:
         enabled: true
         cleanupBadPixels: true
         bayerPattern: "RGGB"
+        interpolation: "AHD"
     # Rotation Step
     - rotate:
         angle: 0.0              # Rotation angle: 90, 180, 270, or any angle in degrees
@@ -548,7 +551,7 @@ output:
 
 The enhancement pipeline supports these step types (use exactly one per step):
 
-- **`debayer`** - Convert Bayer pattern to RGB
+- **`debayer`** - Convert Bayer pattern to RGB (uses AHD by default)
 - **`rotate`** - Rotate image by specified angle
 - **`crop`** - Crop image to specified rectangle
 - **`whitebalance`** - Apply color correction
