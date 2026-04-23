@@ -1,5 +1,16 @@
 # CLAUDE.md
 
+## Git Safety (MANDATORY)
+
+**NEVER run destructive git commands without explicit user confirmation.** This includes but is not limited to:
+- `git checkout -- .` or `git checkout <file>`
+- `git reset --hard` or `git reset`
+- `git clean -fd`
+- `git stash drop`
+- Any git command that modifies or discards uncommitted changes
+
+When in doubt, ASK the user first.
+
 ## Git Commits
 
 Write simple, concise commit messages. Do not mention agentic coding tools (Claude Code, OpenCode, etc.) in commit messages or co-author lines.
