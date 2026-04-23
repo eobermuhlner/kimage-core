@@ -331,6 +331,7 @@ format:
 ### Calibration Configuration
 ```yaml
 calibrate:
+  enabled: true                # Enable/disable frame calibration (bias/dark/flat/darkflat)
   inputImageExtension: "fit"    # File extension for calibration frames
   debayer:                      # Debayering for calibration frames
     enabled: true
@@ -343,7 +344,7 @@ calibrate:
   searchParentDirectories: true # Search parent directories for calibration frames
   darkskip: false               # Skip dark subtraction from light frames (for short exposures)
   darkScalingFactor: 1.0        # Scale dark frame by (lightExp/darkExp) before subtraction
-  normalizeBackground:          # Background normalization settings
+  normalizeBackground:          # Background normalization settings (independent of frame calibration)
     enabled: true               # Whether to normalize backgrounds across images
     offset: 0.01                # Offset value for normalization
   calibratedOutputDirectory: "astro-process/calibrated" # Output directory for calibrated images

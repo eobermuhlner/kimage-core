@@ -250,6 +250,7 @@ data class DebayerConfig(
 )
 
 data class CalibrateConfig(
+    var enabled: Boolean = true,
     var inputImageExtension: String = "fit",
     var debayer: DebayerConfig = DebayerConfig(),
     var biasDirectory: String = "bias",
@@ -722,81 +723,95 @@ class AstroProcess(val config: ProcessConfig) {
             infoTokens[InfoTokens.parentDir.name] = it.name
         }
 
-        println("### Processing calibration images ...")
+        var bias: Image? = null
+        var flat: Image? = null
+        var darkflat: Image? = null
+        var dark: Image? = null
 
-        println()
-        val (bias, dirtyBias) = elapsed("Processing bias frames") {
-            processCalibrationImages(
-                "bias",
-                currentDir,
-                dirty,
-                config.calibrate.biasDirectory,
-                config.calibrate.searchParentDirectories,
-                config.calibrate.debayer.enabled
-            )
-        }
-        if (bias != null) {
-            infoTokens.merge(InfoTokens.calibration.name, "bias") { old, new -> "$old,$new" }
-        }
-        dirty = dirty || dirtyBias
+        if (config.calibrate.enabled) {
+            println("### Processing calibration images ...")
 
-        println()
-        var (flat, dirtyFlat) = elapsed("Processing flat frames") {
-            processCalibrationImages(
-                "flat",
-                currentDir,
-                dirty,
-                config.calibrate.flatDirectory,
-                config.calibrate.searchParentDirectories,
-                config.calibrate.debayer.enabled
-            ).let {
-                Pair(it.first?.normalizeImage(), it.second)
+            println()
+            val (biasResult, dirtyBias) = elapsed("Processing bias frames") {
+                processCalibrationImages(
+                    "bias",
+                    currentDir,
+                    dirty,
+                    config.calibrate.biasDirectory,
+                    config.calibrate.searchParentDirectories,
+                    config.calibrate.debayer.enabled
+                )
             }
-        }
-        if (flat != null) {
-            infoTokens.merge(InfoTokens.calibration.name, "flat") { old, new -> "$old,$new" }
-        }
-        dirty = dirty || dirtyFlat
+            bias = biasResult
+            if (bias != null) {
+                infoTokens.merge(InfoTokens.calibration.name, "bias") { old, new -> "$old,$new" }
+            }
+            dirty = dirty || dirtyBias
 
-        println()
-        var (darkflat, dirtyDarkFlat) = elapsed("Processing darkflat frames") {
-            processCalibrationImages(
-                "darkflat",
-                currentDir,
-                dirty,
-                config.calibrate.darkflatDirectory,
-                config.calibrate.searchParentDirectories,
-                config.calibrate.debayer.enabled
-            )
-        }
-        if (darkflat != null) {
-            infoTokens.merge(InfoTokens.calibration.name, "darkflat") { old, new -> "$old,$new" }
-        }
-        dirty = dirty || dirtyDarkFlat
+            println()
+            val (flatResult, dirtyFlat) = elapsed("Processing flat frames") {
+                processCalibrationImages(
+                    "flat",
+                    currentDir,
+                    dirty,
+                    config.calibrate.flatDirectory,
+                    config.calibrate.searchParentDirectories,
+                    config.calibrate.debayer.enabled
+                ).let {
+                    Pair(it.first?.normalizeImage(), it.second)
+                }
+            }
+            flat = flatResult
+            if (flat != null) {
+                infoTokens.merge(InfoTokens.calibration.name, "flat") { old, new -> "$old,$new" }
+            }
+            dirty = dirty || dirtyFlat
 
-        println()
-        var (dark, dirtyDark) = elapsed("Processing dark frames") {
-            processCalibrationImages(
-                "dark",
-                currentDir,
-                dirty,
-                config.calibrate.darkDirectory,
-                config.calibrate.searchParentDirectories,
-                config.calibrate.debayer.enabled
-            )
-        }
-        if (dark != null) {
-            infoTokens.merge(InfoTokens.calibration.name, "dark") { old, new -> "$old,$new" }
-        }
-        dirty = dirty || dirtyDark
+            println()
+            val (darkflatResult, dirtyDarkFlat) = elapsed("Processing darkflat frames") {
+                processCalibrationImages(
+                    "darkflat",
+                    currentDir,
+                    dirty,
+                    config.calibrate.darkflatDirectory,
+                    config.calibrate.searchParentDirectories,
+                    config.calibrate.debayer.enabled
+                )
+            }
+            darkflat = darkflatResult
+            if (darkflat != null) {
+                infoTokens.merge(InfoTokens.calibration.name, "darkflat") { old, new -> "$old,$new" }
+            }
+            dirty = dirty || dirtyDarkFlat
 
-        println()
-        println("Images used for calibration:")
-        if (bias != null) println("- bias frame")
-        if (dark != null) println("- dark frame")
-        if (darkflat != null) println("- darkflat frame")
-        if (flat != null) println("- flat frame")
-        if (bias == null && dark == null && darkflat == null && flat == null) println("- no calibration frames used ")
+            println()
+            val (darkResult, dirtyDark) = elapsed("Processing dark frames") {
+                processCalibrationImages(
+                    "dark",
+                    currentDir,
+                    dirty,
+                    config.calibrate.darkDirectory,
+                    config.calibrate.searchParentDirectories,
+                    config.calibrate.debayer.enabled
+                )
+            }
+            dark = darkResult
+            if (dark != null) {
+                infoTokens.merge(InfoTokens.calibration.name, "dark") { old, new -> "$old,$new" }
+            }
+            dirty = dirty || dirtyDark
+
+            println()
+            println("Images used for calibration:")
+            if (bias != null) println("- bias frame")
+            if (dark != null) println("- dark frame")
+            if (darkflat != null) println("- darkflat frame")
+            if (flat != null) println("- flat frame")
+            if (bias == null && dark == null && darkflat == null && flat == null) println("- no calibration frames used ")
+        } else {
+            println("### Calibration disabled - skipping bias/dark/flat/darkflat frames")
+            println("- no calibration frames used ")
+        }
 
         val files = currentDir.listFiles() ?: return
 
