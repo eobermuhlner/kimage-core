@@ -150,7 +150,7 @@ private fun markStars(imageName: String) {
         ImageWriter.write(starImage, File("stars_only.tif"))
     }
     elapsed("Write starless image stretched") {
-        val starlessImage = image - starImage
+        val starlessImage = image.minus(starImage)
         ImageWriter.write(starlessImage.stretchLinearPercentile(0.01, 0.99), File("starless_stretched.tif"))
     }
 }
@@ -337,7 +337,7 @@ private fun alignStarImages(
             positionTolerance = positionTolerance,
         )
         if (transform != null) {
-            println(formatTransformation(decomposeTransformationMatrix(transform)))
+            println(message = formatTransformation(decomposeTransformationMatrix(transform)))
 
             val alignedOtherImage = applyTransformationToImage(otherImage, transform)
             val transformedOtherStars = applyTransformationToStars(otherStars, transform, referenceImage.width, referenceImage.height)

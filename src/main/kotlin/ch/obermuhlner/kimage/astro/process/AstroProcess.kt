@@ -1076,7 +1076,7 @@ class AstroProcess(val config: ProcessConfig) {
                         )
                     }
                     if (transform != null) {
-                        println(formatTransformation(decomposeTransformationMatrix(transform)))
+                        println(message = formatTransformation(decomposeTransformationMatrix(transform)))
 
                         elapsed("Applying transformation to image") {
                             applyTransformationToImage(light, transform)

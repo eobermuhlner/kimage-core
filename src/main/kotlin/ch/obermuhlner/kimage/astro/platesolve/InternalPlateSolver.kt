@@ -1,9 +1,6 @@
 package ch.obermuhlner.kimage.astro.platesolve
 
-import ch.obermuhlner.kimage.astro.align.Star
-import ch.obermuhlner.kimage.astro.align.calculateTransformationMatrix
-import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
-import ch.obermuhlner.kimage.astro.align.findStars
+import ch.obermuhlner.kimage.astro.align.*
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.Matrix
@@ -23,9 +20,9 @@ class InternalPlateSolver(
         val radius = searchRadius ?: 0.5 // Very tight radius
 
         // 1. Fetch catalog stars
-        val catalogStars = catalog.getStars(searchRa, searchDec, radius)
-            .sortedByDescending { it.brightness } // Brightest first
-            .take(20)
+        val allCatalogStars = catalog.getStars(searchRa, searchDec, radius)
+        val catalogStars = selectUniformStars(allCatalogStars, 0.0, 0.0, 4, 4, 3)
+            .take(30)
         println("Catalog stars used: ${catalogStars.size}")
 
 
@@ -40,9 +37,9 @@ class InternalPlateSolver(
         }
 
         // 3. Find stars in the image
-        val imageStars = findStars(image)
-            .sortedByDescending { it.brightness } // Brightest first
-            .take(20)
+        val allImageStars = findStars(image)
+        val imageStars = selectUniformStars(allImageStars, image.width.toDouble(), image.height.toDouble(), 4, 4, 3)
+            .take(30)
         if (imageStars.isEmpty()) {
             println("No stars found in image")
             return null
@@ -57,7 +54,9 @@ class InternalPlateSolver(
             0,
             angleTolerance = 0.001,
             maxIterations = 20000,
-            positionTolerance = 0.1 // ~2 pixels
+            positionTolerance = 0.1, // ~2 pixels
+            minScale = 0.001, // ~0.02 arcsec/pixel
+            maxScale = 10.0 // ~200 arcsec/pixel
         ) ?: return null
         
         println("Found scaled transformation matrix:")
