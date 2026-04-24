@@ -38,7 +38,7 @@ abstract class AbstractImageProcessingTest {
     open fun getEpsilon(): Double = 1e-10
 
     fun assertReferenceImage(name: String, image: Image, epsilon: Double = getEpsilon()) {
-        assertReferenceImage(name, image, "png", max(epsilon, 1e-2))
+        assertReferenceImage(name, image, "png", max(epsilon, 1e-4))
         //assertReferenceImage(name, image, "dimg", epsilon)
     }
 

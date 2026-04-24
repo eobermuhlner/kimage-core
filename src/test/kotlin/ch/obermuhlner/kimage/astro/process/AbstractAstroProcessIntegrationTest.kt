@@ -20,6 +20,9 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var height = 20
     val starPositions = mutableListOf<MockStar>()
 
+    var flatLevel = 0.8
+    var flatSigma = 0.1
+
     var noiseBiasSigma = 0.01
     var noiseBiasLevel = 0.02
     var noiseReadSigma = 0.05
@@ -94,6 +97,19 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         }
     }
 
+    fun createRandomFlatImages(
+        directory: File,
+        prefix: String,
+        count: Int,
+    ) {
+        directory.mkdirs()
+        for (index in 1..count) {
+            val image = createRandomFlatImage(width, height)
+            val file = File(directory, "${prefix}${index}.png")
+            writeTestImage(file, image)
+        }
+    }
+
     fun createRandomAstroImage(
         width: Int,
         height: Int,
@@ -130,7 +146,22 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         )
     }
 
-    private fun writeTestImage(file: File, image: MatrixImage) {
+    fun createRandomFlatImage(
+        width: Int,
+        height: Int,
+    ): MatrixImage {
+        val matrix = DoubleMatrix(height, width) { row, col ->
+            random.nextGaussian(flatLevel, flatSigma)
+        }
+        return MatrixImage(
+            width, height,
+            Channel.Red to matrix,
+            Channel.Green to matrix,
+            Channel.Blue to matrix
+        )
+    }
+
+        private fun writeTestImage(file: File, image: MatrixImage) {
         ImageWriter.write(image, file)
     }
 

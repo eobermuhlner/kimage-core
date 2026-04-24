@@ -222,6 +222,10 @@ fun calculateTransformationMatrix(
     minScale: Double = 0.0,
     maxScale: Double = Double.MAX_VALUE
 ): Matrix? {
+val random = Random(123)
+    var bestTransformation: Matrix? = null
+    var bestInliers = 0
+    var bestError = Double.MAX_VALUE
     val minInliersThreshold = (min(referenceStars.count(), otherStars.count()) * minInliersThresholdFactor).toInt()
 
     val referenceQuads = computeQuadFeatures(referenceStars)

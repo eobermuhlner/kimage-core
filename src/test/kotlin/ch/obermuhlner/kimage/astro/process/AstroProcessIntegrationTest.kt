@@ -42,6 +42,7 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         createRandomAstroImages(testDir, "light", 10)
         createRandomAstroImages(testDir.resolve("dark"), "dark", 10, addSignal = false)
         createRandomAstroImages(testDir.resolve("bias"), "bias", 10, addReadNoise = false, addSignal = false)
+        createRandomFlatImages(testDir.resolve("flat"), "flat", 10)
 
         val config = ProcessConfig(
             format = FormatConfig(
