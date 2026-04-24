@@ -25,9 +25,9 @@ abstract class AbstractImageProcessingTest {
 
     val testInputDirectory = File("test-input")
 
-    private fun testResultsDirectory(): File {
+    protected fun testResultsDirectory(): File {
         val className = this::class.qualifiedName
-        val methodName = Thread.currentThread().stackTrace.firstOrNull {
+        val methodName = Thread.currentThread().stackTrace.lastOrNull {
             it.className == className
         } ?.methodName ?: "unknown"
 

@@ -677,8 +677,10 @@ fun main(args: Array<String>) {
 }
 
 class AstroProcess(val config: ProcessConfig) {
+    var workingDirectory: File = File(".")
+
     fun imageAnalysis() {
-        val currentDir = File(".")
+        val currentDir = workingDirectory
         val files = currentDir.listFiles() ?: return
         val inputImageExtension: String = config.format.inputImageExtension
 
@@ -717,7 +719,7 @@ class AstroProcess(val config: ProcessConfig) {
     fun processAstro() {
         val infoTokens = mutableMapOf<String, String>()
         var dirty = false
-        val currentDir = File(".")
+        val currentDir = workingDirectory
 
         currentDir.absoluteFile.parentFile?.let {
             infoTokens[InfoTokens.parentDir.name] = it.name
@@ -1159,7 +1161,7 @@ class AstroProcess(val config: ProcessConfig) {
         formatConfig: FormatConfig,
         enhanceConfig: EnhanceConfig,
     ): Image {
-        val currentDir = File(".")
+        val currentDir = workingDirectory
         currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
 
         var image = inputImage
@@ -1405,7 +1407,7 @@ class AstroProcess(val config: ProcessConfig) {
         infoTokens: Map<String, String>,
         outputConfig: OutputFormatConfig
     ): Image {
-        val currentDir = File(".")
+        val currentDir = workingDirectory
 
         currentDir.resolve(outputConfig.outputDirectory).mkdirs()
 
@@ -1429,7 +1431,7 @@ class AstroProcess(val config: ProcessConfig) {
     ): Image {
         if (!annotateConfig.enabled) return inputImage
 
-        val currentDir = File(".")
+        val currentDir = workingDirectory
 
         val annotateOutputDir = currentDir.resolve(annotateConfig.annotatedOutputDirectory)
         annotateOutputDir.mkdirs()
