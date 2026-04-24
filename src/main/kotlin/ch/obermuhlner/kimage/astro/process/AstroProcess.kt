@@ -744,7 +744,10 @@ class AstroProcess(val config: ProcessConfig) {
                     dirty,
                     config.calibrate.biasDirectory,
                     config.calibrate.searchParentDirectories,
-                    config.calibrate.debayer.enabled
+                    config.calibrate.debayer.enabled,
+                    config.calibrate.debayer.bayerPattern,
+                    config.format.inputImageExtension,
+                    config.format.outputImageExtension,
                 )
             }
             bias = biasResult
@@ -761,7 +764,10 @@ class AstroProcess(val config: ProcessConfig) {
                     dirty,
                     config.calibrate.flatDirectory,
                     config.calibrate.searchParentDirectories,
-                    config.calibrate.debayer.enabled
+                    config.calibrate.debayer.enabled,
+                    config.calibrate.debayer.bayerPattern,
+                    config.format.inputImageExtension,
+                    config.format.outputImageExtension,
                 ).let {
                     Pair(it.first?.normalizeImage(), it.second)
                 }
@@ -780,7 +786,10 @@ class AstroProcess(val config: ProcessConfig) {
                     dirty,
                     config.calibrate.darkflatDirectory,
                     config.calibrate.searchParentDirectories,
-                    config.calibrate.debayer.enabled
+                    config.calibrate.debayer.enabled,
+                    config.calibrate.debayer.bayerPattern,
+                    config.format.inputImageExtension,
+                    config.format.outputImageExtension,
                 )
             }
             darkflat = darkflatResult
@@ -797,7 +806,10 @@ class AstroProcess(val config: ProcessConfig) {
                     dirty,
                     config.calibrate.darkDirectory,
                     config.calibrate.searchParentDirectories,
-                    config.calibrate.debayer.enabled
+                    config.calibrate.debayer.enabled,
+                    config.calibrate.debayer.bayerPattern,
+                    config.format.inputImageExtension,
+                    config.format.outputImageExtension,
                 )
             }
             dark = darkResult
