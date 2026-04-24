@@ -1,0 +1,45 @@
+SIMPLE  =                    T / FITS header                                    
+BITPIX  =                    8 / Bits per entry                                 
+NAXIS   =                    2 / Number of dimensions                           
+NAXIS3  =                    3 / length of z axis (mostly colors)               
+EQUINOX =               2000.0 / Equinox of coordinates                         
+DATAMIN =                    0 / Minimum data value                             
+DATAMAX =                  255 / Maximum data value                             
+BZERO   =                  0.0 / Physical_value = BZERO + BSCALE * array_value  
+BSCALE  =                  1.0 / Physical_value = BZERO + BSCALE * array_value  
+END                                                                             
+SIMPLE  =                    T / FITS header                                    
+BITPIX  =                    8 / Bits per entry                                 
+NAXIS   =                    0 / Number of dimensions                           
+NAXIS3  =                    3 / length of z axis (mostly colors)               
+EQUINOX =               2000.0 / Equinox of coordinates                         
+DATAMIN =                    0 / Minimum data value                             
+DATAMAX =                65535 / Maximum data value                             
+BZERO   =                  0.0 / Physical_value = BZERO + BSCALE * array_value  
+BSCALE  =                  1.0 / Physical_value = BZERO + BSCALE * array_value  
+DATE-OBS= '2026-04-23T21:32:36'
+COMMENT 1   Written by ASTAP, Astrometric STAcking Program. www.hnsky.org
+CTYPE1  = 'RA---TAN'           / first parameter RA  ,  projection TANgential   
+CTYPE2  = 'DEC--TAN'           / second parameter DEC,  projection TANgential   
+CUNIT1  = 'deg     '           / Unit of coordinates                            
+CRPIX1  =  1.504500000000E+003 / X of reference pixel                           
+CRPIX2  =  1.504500000000E+003 / Y of reference pixel                           
+CRVAL1  =  9.797999565826E+001 / RA of reference pixel (deg)                    
+CRVAL2  =  4.949974487968E+000 / DEC of reference pixel (deg)                   
+CDELT1  = -5.851986298477E-004 / X pixel size (deg)                             
+CDELT2  =  5.855480116598E-004 / Y pixel size (deg)                             
+CROTA1  =  1.501953021339E+002 / Image twist of X axis        (deg)             
+CROTA2  =  1.501645502746E+002 / Image twist of Y axis        (deg)             
+CD1_1   =  5.077913066668E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
+CD1_2   = -2.913164391524E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
+CD2_1   = -2.908701174911E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
+CD2_2   = -5.079381913562E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
+PLTSOLVD=                    T / Astrometric solved by ASTAP_CLI v2023.05.14.   
+COMMENT 7 Solved in 50.3 sec Offset was 68.4d.
+WARNING = 'Warning scale was inaccurate! Set FOV=1.76d, scale=2.1"'
+COMMENT cmdline:"C:\Program Files\astap\astap_cli.exe" -f "D:\Photos\Astro\ASIAI
+COMMENT R\2026-04-19 NGC2244\NGC 2244 Satellite C\astro-process\aligned\Light_NG
+COMMENT C 2244 Satellite C_180.0s_Bin1_533MC_gain100_20260420-213426_150deg_-10.
+COMMENT 0C_0001.tif" -o astro-process\reference.wcs -ra 97.98001232935 -speed sl
+COMMENT ow
+END                                                                             

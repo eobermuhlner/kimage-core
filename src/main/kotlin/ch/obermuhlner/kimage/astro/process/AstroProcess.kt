@@ -75,6 +75,8 @@ import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.values.values
 import ch.obermuhlner.kimage.util.elapsed
 import org.yaml.snakeyaml.Yaml
+import ch.obermuhlner.kimage.astro.platesolve.AstapPlateSolver
+import ch.obermuhlner.kimage.astro.platesolve.PlateSolver
 import java.io.File
 import java.nio.file.Paths
 import java.util.Optional
@@ -115,6 +117,7 @@ data class PlatesolveConfig(
 
 enum class PlatesolveType {
     Astap,
+    Internal,
     Custom
 }
 
@@ -862,29 +865,33 @@ class AstroProcess(val config: ProcessConfig) {
 
         val correctedTargetConfig = resolvedTarget(config.target)
 
-        val wcsFile: File? = inputFiles[0].let { referenceInputFile ->
+        val wcsData: Map<String, String>? = inputFiles[0].let { referenceInputFile ->
             if (config.platesolve.enabled) {
                 println()
                 println("### Platesolve reference image ...")
 
-                val executable = config.platesolve.executable ?: "astap_cli"
+                val plateSolver = when (config.platesolve.platesolveType) {
+                    PlatesolveType.Astap -> AstapPlateSolver(config.platesolve.executable ?: "astap_cli")
+                    PlatesolveType.Internal -> ch.obermuhlner.kimage.astro.platesolve.InternalPlateSolver()
+                    PlatesolveType.Custom -> throw UnsupportedOperationException("Custom plate solver not yet implemented")
+                }
+
+                var image = ImageReader.read(referenceInputFile)
+                image = debayerImageIfConfigured(image, config.format.debayer.copy(cleanupBadPixels = false))
 
                 elapsed("Platesolving reference image") {
-                    val wcsFilename = Paths.get("astro-process", "reference.wcs").pathString
-                    val output = executeCommand(executable, "-f", referenceInputFile.path, "-o", wcsFilename)
-                    println(output)
-
-                    File(wcsFilename)
+                    plateSolver.solve(image, referenceInputFile, correctedTargetConfig.ra, correctedTargetConfig.dec)
                 }
             } else {
                 null
             }
         }
 
-        if (wcsFile != null && wcsFile.exists()) {
+        val wcsFile = Paths.get("astro-process", "reference.wcs").toFile()
+
+        if (wcsData != null) {
             println()
             println("Platesolved:")
-            val wcsData = WCSParser.parse(wcsFile)
             wcsData.forEach {
                 println("  wcs.${it.key} = ${it.value}")
                 infoTokens["wcs." + it.key] = it.value

@@ -295,9 +295,18 @@ target:
 ```yaml
 platesolve:
   enabled: false                # Whether to run plate solving on the reference image
-  platesolveType: "Astap"       # Solver type: Astap, Custom
-  executable: "astap_cli"       # Path to solver executable (default: astap_cli)
+  platesolveType: "Astap"       # Solver type: Astap, Internal, Custom
+  executable: "astap_cli"       # Path to Astap solver executable (required for type: Astap)
 ```
+
+#### Solver Types
+- **Astap**: Uses the external `astap_cli` tool (industry standard).
+- **Internal**: A native Kotlin solver.
+  - Automatically downloads star data from **Gaia DR3** via the VizieR API.
+  - Caches star catalog data locally in `~/.kimage-astro-process/star-catalog/`.
+  - Uses gnomonic projection and triangle-based pattern matching.
+- **Custom**: Placeholder for user-defined external solvers.
+
 
 Plate solving determines the sky coordinates (RA/DEC) of the image. When enabled, the WCS result
 is used to automatically mark deep sky objects from the NGC catalog in annotated output images.

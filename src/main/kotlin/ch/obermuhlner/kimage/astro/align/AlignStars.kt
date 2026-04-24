@@ -225,8 +225,8 @@ fun calculateTransformationMatrix(
             }.let { if (it < 0) -it - 1 else it }
 
             return sortedReferenceTriangles.subList(startIndex, endIndex).filter {
-                anglesAreSimilar(it.angles, otherTriangle.angles, angleTolerance) &&
-                        brightnessIsSimilar(it.indices.map { index -> referenceStars[index] }, otherTriangle.indices.map { index -> otherStars[index] }, brightnessToleranceFactor)
+                anglesAreSimilar(it.angles, otherTriangle.angles, angleTolerance)
+                // brightnessIsSimilar(it.indices.map { index -> referenceStars[index] }, otherTriangle.indices.map { index -> otherStars[index] }, brightnessToleranceFactor)
             }
         }
 
