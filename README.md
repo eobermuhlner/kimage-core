@@ -371,10 +371,214 @@ The software automatically handles these steps:
 3. **Stacking** - Combines aligned images (reduces noise)
 4. **Enhancement** - Applies contrast stretching, noise reduction, color balance
 
+## Pipeline Variants
+
+The enhancement stage supports several advanced branching patterns that go beyond the single linear pipeline.
+
+### Variant Processing — Compare Enhancement Settings
+
+Run multiple enhancement configurations on the same stack and produce a separate output for each.
+
+```yaml
+enhance:
+  branches:
+    - name: "soft"
+      steps:
+        - sigmoid: { midpoint: 0.3, strength: 0.8 }
+    - name: "aggressive"
+      steps:
+        - sigmoid: { midpoint: 0.2, strength: 1.5 }
+        - sharpen: { strength: 0.4 }
+
+output:
+  outputName: "{firstInput}_{branchName}"   # {branchName} is filled per branch
+```
+
+Each branch writes its own output files. The `{branchName}` token inserts the branch name into the filename. When `branches` is present, `steps` is ignored.
+
+---
+
+### Per-Frame Mode — Timelapse / Animation
+
+Skip stacking and process each aligned frame individually to produce a numbered image sequence.
+
+```yaml
+stack:
+  perFrame: true
+
+enhance:
+  steps:
+    - linearPercentile: { minPercentile: 0.0001, maxPercentile: 0.9999 }
+    - sigmoid: { midpoint: 0.35, strength: 1.0 }
+
+output:
+  outputName: "frame_{frameIndex}"    # {frameIndex} is the 1-based frame number
+  outputImageExtensions: ["png"]
+```
+
+---
+
+### Star/Background Separation — `extractStars`
+
+Separate stars from background nebulosity, process each independently, then recombine with soft masking.
+
+```yaml
+enhance:
+  steps:
+    - linearPercentile: { minPercentile: 0.0001, maxPercentile: 0.9999 }
+    - extractStars:
+        factor: 2.0                   # Star ellipse radius multiplier × FWHM
+        softMaskBlurRadius: 5         # Gaussian feather radius in pixels
+        starsBranch:
+          steps:
+            - reduceNoise: { thresholds: [0.00005] }
+        backgroundBranch:
+          steps:
+            - reduceNoise: { thresholds: [0.0005] }
+            - removeBackground: {}
+    - sigmoid: { midpoint: 0.3, strength: 1.2 }
+```
+
+Star positions are read from `astro-process/aligned/stars.yaml` (written after alignment). If that file does not exist, `findStars` runs on the stacked image.
+
+---
+
+### Per-Channel / LRGB Processing — `decompose`
+
+Decompose the image into components, process each independently, then recombine.
+
+```yaml
+enhance:
+  steps:
+    - decompose:
+        mode: LRGB        # LRGB | RGB | HSB
+        luminance:
+          steps:
+            - reduceNoise: { thresholds: [0.0002] }
+            - sharpen: { strength: 0.3 }
+        color:
+          steps:
+            - whitebalance: { type: Global }
+    - sigmoid: { midpoint: 0.4, strength: 1.0 }
+```
+
+| Mode | Branches | Sub-image | Recombine |
+|------|----------|-----------|-----------|
+| `LRGB` | `luminance` (gray), `color` (RGB) | Y channel; full RGB | Brightness replacement |
+| `RGB` | `red`, `green`, `blue` | Single-channel gray | `MatrixImage(r,g,b)` |
+| `HSB` | `hue`, `saturation`, `brightness` | Single-channel gray | HSB → RGB conversion |
+
+A null branch (omitted key) means pass-through — that component is unchanged.
+
+---
+
+### Masked/Regional Processing — `maskedProcess`
+
+Apply different enhancement steps inside and outside a spatial mask, then blend.
+
+```yaml
+enhance:
+  steps:
+    - maskedProcess:
+        mask:
+          source: Luminance     # Stars | Luminance | File | Platesolve
+          threshold: 0.3        # Luminance: pixel cutoff (0–1)
+          blur: 10              # Feather radius in pixels
+        insideMask:
+          steps:
+            - reduceNoise: { thresholds: [0.0001] }
+        outsideMask:
+          steps:
+            - reduceNoise: { thresholds: [0.0008] }
+            - removeBackground: {}
+```
+
+| Mask source | How the mask is built |
+|-------------|----------------------|
+| `Stars` | Star ellipses from `stars.yaml`, Gaussian-feathered |
+| `Luminance` | Pixels above `threshold` → 1, below → 0; Gaussian-feathered |
+| `File` | Load grayscale PNG from `maskFile` path (pixel values = weight) |
+| `Platesolve` | Ellipse from `objectName` in the NGC catalog |
+
+---
+
+### Named Sources — Narrowband, HDR, Multi-Session
+
+For workflows requiring multiple independent stacks (narrowband filters, exposure brackets, multi-night sessions), declare named sources. Each source runs its own calibrate/align/stack pipeline under `astro-process/<name>/`.
+
+**Narrowband Palette Synthesis**
+```yaml
+sources:
+  - name: "Ha"
+    format: { inputDirectory: "ha_frames/", inputImageExtension: "fit" }
+    stack: { algorithm: Median }
+  - name: "OIII"
+    format: { inputDirectory: "oiii_frames/" }
+    stack: { algorithm: Median }
+
+enhance:
+  branches:
+    - name: "SHO"
+      steps:
+        - compositeChannels: { red: "Ha", green: "OIII", blue: "OIII" }
+        - sigmoid: { midpoint: 0.3, strength: 1.2 }
+    - name: "HOO"
+      steps:
+        - compositeChannels: { red: "Ha", green: "OIII", blue: "OIII" }
+        - sigmoid: { midpoint: 0.3, strength: 1.0 }
+
+output:
+  outputName: "{firstInput}_{branchName}"
+```
+
+`compositeChannels` picks the luminance (BT.709) from RGB sources or uses the Gray channel directly from monochrome sources.
+
+**Exposure-Bracket HDR**
+```yaml
+sources:
+  - name: "short"
+    format: { maxExposureSeconds: 5 }
+    stack: { algorithm: Median }
+  - name: "long"
+    format: { minExposureSeconds: 30 }
+    stack: { algorithm: Median }
+
+enhance:
+  input: "long"         # which source to start enhancement from
+  steps:
+    - mergeWith: { image: "short", method: Hdr }
+    - sigmoid: { midpoint: 0.3, strength: 1.0 }
+```
+
+Exposure time is read from the FITS `EXPTIME` header. Files without this header are always included.
+
+**Multi-Session Merge**
+```yaml
+sources:
+  - name: "night1"
+    calibrate: { inputDir: "night1/" }
+  - name: "night2"
+    calibrate: { inputDir: "night2/" }
+
+enhance:
+  steps:
+    - stackSources:
+        images: ["night1", "night2"]
+        algorithm: WeightedAverage
+        weights: [0.6, 0.4]
+    - sigmoid: { midpoint: 0.3, strength: 1.0 }
+```
+
+`stackSources` uses any existing stacking algorithm and optional per-source weights. If `outputName` is set, the result is also stored in the registry under that name for later reference by other steps.
+
+---
+
 ## Advanced Features
 
 For power users, the software also supports:
 - **Custom Enhancement Steps** - Build your own processing pipeline
+- **Pipeline Variants** - Branches, per-frame, star/background separation, per-channel
+- **Named Sources** - Narrowband synthesis, HDR exposure blending, multi-session merge
 - **Annotation System** - Add titles, markers, and graphics to final images
 - **Token-Based Naming** - Extract metadata from filenames for organized outputs
 - **HDR Processing** - Combine multiple enhancement steps for maximum detail
@@ -430,6 +634,9 @@ format:
   inputImageExtension: "fit"    # Input file extension (fit, tif, jpg, png, etc.)
   outputImageExtension: "tif"   # Intermediate file extension
   inputDirectory: "."           # Directory containing input images
+  minExposureSeconds: null      # Include only FITS files with EXPTIME >= this value
+  maxExposureSeconds: null      # Include only FITS files with EXPTIME <= this value
+                                # (files without EXPTIME header are always included)
   filenameTokens:               # Extract metadata from filenames
     enabled: false              # Whether to parse filename tokens
     separator: "_"              # Character separating tokens in filenames
@@ -491,6 +698,8 @@ stack:
                                 # SigmaWinsorizeMedian, SigmaWinsorizeAverage
                                 # WinsorizedSigmaClipMedian, WinsorizedSigmaClipAverage
                                 # SigmaClipWeightedMedian, SmartMax
+  perFrame: false               # Skip stacking; process each aligned frame individually
+                                # Use with {frameIndex} token for timelapse/animation output
                                 # Drizzle (see below)
   kappa: 2.0                    # Sigma-clip / winsorize rejection threshold in standard deviations
                                 # (used by all SigmaClip*, SigmaWinsorize*, WinsorizedSigmaClip*, SmartMax)
@@ -558,6 +767,10 @@ Set `tempDir` to a path on a partition with sufficient space when the system tem
 ```yaml
 enhance:
   enhancedOutputDirectory: "astro-process/enhanced" # Output directory for enhanced images
+  input: null                   # Named source to start from (null = first source or "main")
+  branches: null                # If set, takes precedence over steps; each branch is an
+                                # independent step sequence producing its own output file.
+                                # Use {branchName} token to distinguish outputs.
   measure:                      # Area for measuring percentiles (optional)
     enabled: false              # Whether to use specific measurement area
     x: 0                        # X coordinate of measurement rectangle
@@ -731,6 +944,8 @@ output:
   # {inputCount}   - Number of input files processed
   # {stackedCount} - Number of successfully stacked files
   # {calibration}  - Calibration types used (e.g., "bias,dark,flat")
+  # {branchName}   - Current branch name (only set when enhance.branches is used)
+  # {frameIndex}   - 1-based frame number (only set when stack.perFrame is true)
   # Custom tokens (e.g. {targetName}, {exposureTime}, {iso}) are only available
   # when filenameTokens.enabled is true and the token name is listed under
   # format.filenameTokens.names
@@ -760,6 +975,12 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`deconvolve`** - Richardson-Lucy deconvolution to restore resolution
 - **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
+- **`extractStars`** - Separate stars and background, process independently, recombine
+- **`decompose`** - Split into LRGB/RGB/HSB components, process each, recombine
+- **`compositeChannels`** - Assemble named sources (R, G, B) into a single RGB image
+- **`mergeWith`** - HDR-blend a named source into the current image
+- **`stackSources`** - Combine named sources using any stack algorithm
+- **`maskedProcess`** - Apply different steps inside/outside a spatial mask
 
 ### Parameter Ranges and Tips
 

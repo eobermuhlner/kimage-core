@@ -23,14 +23,18 @@ import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.crop.crop
+import ch.obermuhlner.kimage.core.image.div
 import ch.obermuhlner.kimage.core.image.filter.*
 import ch.obermuhlner.kimage.core.image.hdr.highDynamicRange
 import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
+import ch.obermuhlner.kimage.core.image.lrgb.replaceBrightness
 import ch.obermuhlner.kimage.core.image.noise.*
+import ch.obermuhlner.kimage.core.image.plus
 import ch.obermuhlner.kimage.core.image.stack.*
 import ch.obermuhlner.kimage.core.image.stack.StackConfig as CoreStackConfig
+import ch.obermuhlner.kimage.core.matrix.FloatMatrix
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
 import ch.obermuhlner.kimage.core.image.transform.rotateLeft
 import ch.obermuhlner.kimage.core.image.transform.rotateRight
@@ -62,6 +66,7 @@ data class ProcessConfig(
     var enhance: EnhanceConfig = EnhanceConfig(),
     var annotate: AnnotateConfig = AnnotateConfig(),
     var output: OutputFormatConfig = OutputFormatConfig(),
+    var sources: MutableList<SourceConfig>? = null,
 )
 
 data class TargetConfig(
@@ -200,6 +205,8 @@ data class FormatConfig(
     var filenameTokens: FilenameTokensConfig = FilenameTokensConfig(),
     var debayer: DebayerConfig = DebayerConfig(),
     var outputImageExtension: String = "tif",
+    var minExposureSeconds: Double? = null,
+    var maxExposureSeconds: Double? = null,
 )
 
 data class FilenameTokensConfig(
@@ -245,6 +252,7 @@ data class AlignConfig(
 data class StackConfig(
     var stackedOutputDirectory: String = "astro-process/stacked",
     var algorithm: StackAlgorithm = StackAlgorithm.Median,
+    var perFrame: Boolean = false,
     var kappa: Double = 2.0,
     var iterations: Int = 10,
     var precision: StackPrecision = StackPrecision.Float,
@@ -257,6 +265,8 @@ data class EnhanceConfig(
     var measure: RectangleConfig = RectangleConfig(),
     var regionOfInterest: RectangleConfig = RectangleConfig(),
     var steps: MutableList<EnhanceStepConfig> = mutableListOf(),
+    var branches: MutableList<BranchConfig>? = null,
+    var input: String? = null,
     var histogram: HistogramConfig = HistogramConfig(),
     var enhancedOutputDirectory: String = "astro-process/enhanced",
 )
@@ -278,6 +288,12 @@ data class EnhanceStepConfig(
     var highDynamicRange: HighDynamicRangeConfig? = null,
     var cosmeticCorrection: CosmeticCorrectionConfig? = null,
     var deconvolve: DeconvolutionConfig? = null,
+    var extractStars: ExtractStarsConfig? = null,
+    var decompose: DecomposeConfig? = null,
+    var compositeChannels: CompositeChannelsConfig? = null,
+    var mergeWith: MergeWithConfig? = null,
+    var stackSources: StackSourcesConfig? = null,
+    var maskedProcess: MaskedProcessConfig? = null,
     var addToHighDynamicRange: Boolean = false,
 ) {
     val type: EnhanceStepType
@@ -297,6 +313,12 @@ data class EnhanceStepConfig(
             highDynamicRange != null -> EnhanceStepType.HighDynamicRange
             cosmeticCorrection != null -> EnhanceStepType.CosmeticCorrection
             deconvolve != null -> EnhanceStepType.Deconvolve
+            extractStars != null -> EnhanceStepType.ExtractStars
+            decompose != null -> EnhanceStepType.Decompose
+            compositeChannels != null -> EnhanceStepType.CompositeChannels
+            mergeWith != null -> EnhanceStepType.MergeWith
+            stackSources != null -> EnhanceStepType.StackSources
+            maskedProcess != null -> EnhanceStepType.MaskedProcess
             else -> throw IllegalArgumentException("No enhancement step configuration found")
         }
 }
@@ -316,7 +338,13 @@ enum class EnhanceStepType {
     ReduceNoise,
     HighDynamicRange,
     CosmeticCorrection,
-    Deconvolve
+    Deconvolve,
+    ExtractStars,
+    Decompose,
+    CompositeChannels,
+    MergeWith,
+    StackSources,
+    MaskedProcess,
 }
 
 data class HighDynamicRangeConfig(
@@ -469,7 +497,80 @@ enum class InfoTokens {
     inputCount,
     stackedCount,
     calibration,
+    branchName,
+    frameIndex,
 }
+
+data class BranchConfig(
+    var name: String = "",
+    var steps: MutableList<EnhanceStepConfig> = mutableListOf(),
+)
+
+data class SourceConfig(
+    var name: String = "",
+    var format: FormatConfig = FormatConfig(),
+    var calibrate: CalibrateConfig = CalibrateConfig(),
+    var align: AlignConfig = AlignConfig(),
+    var stack: StackConfig = StackConfig(),
+)
+
+data class ExtractStarsConfig(
+    var factor: Double = 2.0,
+    var softMaskBlurRadius: Int = 5,
+    var starsBranch: BranchConfig = BranchConfig(name = "stars"),
+    var backgroundBranch: BranchConfig = BranchConfig(name = "background"),
+)
+
+enum class DecomposeMode { LRGB, RGB, HSB }
+
+data class DecomposeConfig(
+    var mode: DecomposeMode = DecomposeMode.LRGB,
+    var luminance: BranchConfig? = null,
+    var color: BranchConfig? = null,
+    var red: BranchConfig? = null,
+    var green: BranchConfig? = null,
+    var blue: BranchConfig? = null,
+    var hue: BranchConfig? = null,
+    var saturation: BranchConfig? = null,
+    var brightness: BranchConfig? = null,
+)
+
+data class CompositeChannelsConfig(
+    var red: String = "",
+    var green: String = "",
+    var blue: String = "",
+)
+
+enum class MergeMethod { Hdr }
+
+data class MergeWithConfig(
+    var image: String = "",
+    var method: MergeMethod = MergeMethod.Hdr,
+)
+
+data class StackSourcesConfig(
+    var images: MutableList<String> = mutableListOf(),
+    var algorithm: StackAlgorithm = StackAlgorithm.Median,
+    var weights: MutableList<Double>? = null,
+    var outputName: String? = null,
+)
+
+data class MaskedProcessConfig(
+    var mask: MaskConfig = MaskConfig(),
+    var insideMask: BranchConfig = BranchConfig(name = "inside"),
+    var outsideMask: BranchConfig = BranchConfig(name = "outside"),
+)
+
+enum class MaskSource { Stars, Luminance, File, Platesolve }
+
+data class MaskConfig(
+    var source: MaskSource = MaskSource.Luminance,
+    var threshold: Double = 0.3,
+    var blur: Int = 10,
+    var factor: Double = 2.0,
+    var maskFile: String? = null,
+    var objectName: String? = null,
+)
 
 val defaultAstroProcessConfigText = """
 # kimage Astrophotography Processing Configuration
@@ -1095,22 +1196,47 @@ class AstroProcess(val config: ProcessConfig) {
             }
         dirty = dirty || dirtyCalibrated || dirtyAligned
 
-        println()
-        println("### Stacking ${alignedFiles.size} aligned images ...")
-        infoTokens[InfoTokens.stackedCount.name] = alignedFiles.size.toString()
+        val sourceRegistry = mutableMapOf<String, Image>()
 
-        var dirtyStacked = false
-        val outputStackedFile = currentDir
-            .resolve(config.stack.stackedOutputDirectory)
-            .resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.${config.format.outputImageExtension}")
-        val stackedImage = if (!outputStackedFile.exists() || dirty) {
-            val outputStackedMaxFile = currentDir
+        if (config.stack.perFrame) {
+            println()
+            println("### Per-frame mode: processing ${alignedFiles.size} aligned images individually ...")
+            infoTokens[InfoTokens.stackedCount.name] = alignedFiles.size.toString()
+
+            for ((frameIndex, alignedFile) in alignedFiles.withIndex()) {
+                val frameImage = ImageReader.read(alignedFile)
+                val frameInfoTokens = infoTokens.toMutableMap()
+                frameInfoTokens[InfoTokens.frameIndex.name] = (frameIndex + 1).toString()
+
+                val frameCacheDir = currentDir.resolve(config.enhance.enhancedOutputDirectory)
+                    .resolve(alignedFile.nameWithoutExtension)
+                frameCacheDir.mkdirs()
+
+                println()
+                println("### Enhancing frame ${frameIndex + 1}/${alignedFiles.size}: $alignedFile ...")
+                val enhancedImage = processEnhanceSteps(
+                    frameImage, dirty, config.enhance.steps, config.format, config.enhance, frameCacheDir, sourceRegistry
+                )
+                processOutput(enhancedImage, frameInfoTokens, config.output)
+                processAnnotate(enhancedImage, frameInfoTokens, wcsFile, config.annotate, config.output)
+            }
+        } else {
+            println()
+            println("### Stacking ${alignedFiles.size} aligned images ...")
+            infoTokens[InfoTokens.stackedCount.name] = alignedFiles.size.toString()
+
+            var dirtyStacked = false
+            val outputStackedFile = currentDir
                 .resolve(config.stack.stackedOutputDirectory)
-                .resolve("${inputFiles[0].nameWithoutExtension}_stacked-max_${alignedFiles.size}.${config.format.outputImageExtension}")
-            dirtyStacked = true
-            var stackedMaxImage: Image? = null
+                .resolve("${inputFiles[0].nameWithoutExtension}_stacked_${alignedFiles.size}.${config.format.outputImageExtension}")
+            val stackedImage = if (!outputStackedFile.exists() || dirty) {
+                val outputStackedMaxFile = currentDir
+                    .resolve(config.stack.stackedOutputDirectory)
+                    .resolve("${inputFiles[0].nameWithoutExtension}_stacked-max_${alignedFiles.size}.${config.format.outputImageExtension}")
+                dirtyStacked = true
+                var stackedMaxImage: Image? = null
 
-            fun accumulateMax(image: Image) {
+                fun accumulateMax(image: Image) {
                 val current = stackedMaxImage
                 if (current == null) {
                     stackedMaxImage = MatrixImage(image)
@@ -1134,8 +1260,7 @@ class AstroProcess(val config: ProcessConfig) {
                     }
                     drizzle(frames, config.stack.drizzle, tempDir = config.stack.tempDir?.let { File(it) }, maxDiskSpaceBytes = parseDiskSpaceBytes(config.stack.maxDiskSpaceBytes)) { image -> accumulateMax(image) }
                 }
-            } else {
-                val alignedFileSuppliers = alignedFiles.map {
+            } else {val alignedFileSuppliers = alignedFiles.map {
                     {
                         println("Loading $it")
                         val image = ImageReader.read(it)
@@ -1143,52 +1268,94 @@ class AstroProcess(val config: ProcessConfig) {
                         image
                     }
                 }
-                elapsed("Stacking images") {
-                    stack(
-                        imageSuppliers = alignedFileSuppliers,
+                 elapsed("Stacking images") {
+                    stack(imageSuppliers = alignedFileSuppliers,
                         config = CoreStackConfig(
-                            algorithm = config.stack.algorithm,
-                            kappa = config.stack.kappa,
+                        algorithm = config.stack.algorithm,
+                        kappa = config.stack.kappa,
                             iterations = config.stack.iterations,
                             precision = config.stack.precision,
                             tempDir = config.stack.tempDir?.let { File(it) },
                             maxDiskSpaceBytes = parseDiskSpaceBytes(config.stack.maxDiskSpaceBytes),
                         )
                     )
+                    }
+                }
+
+                println("Saving $outputStackedFile")
+                ImageWriter.write(stackedImage, outputStackedFile)
+
+                stackedMaxImage?.let {
+                    println("Saving $outputStackedMaxFile")
+                    ImageWriter.write(it, outputStackedMaxFile)
+                }
+
+                stackedImage
+            } else {
+                println("Stacked image already exists: $outputStackedFile")
+                ImageReader.read(outputStackedFile)
+            }
+            dirty = dirty || dirtyStacked
+            sourceRegistry["main"] = stackedImage
+
+            // Multi-source enhancement: load stacked images for named sources
+            for (source in config.sources ?: emptyList()) {
+                val sourceCacheDir = currentDir.resolve("astro-process/${source.name}")
+                val sourceStackDir = sourceCacheDir.resolve("stacked")
+                val sourceStackFiles = sourceStackDir.listFiles()?.filter {
+                    it.extension == config.format.outputImageExtension
+                } ?: emptyList()
+                if (sourceStackFiles.isNotEmpty()) {
+                    sourceRegistry[source.name] = ImageReader.read(sourceStackFiles.first())
                 }
             }
 
-            println("Saving $outputStackedFile")
-            ImageWriter.write(stackedImage, outputStackedFile)
+            val inputSourceName = config.enhance.input ?: "main"
+            val enhanceInputImage = sourceRegistry[inputSourceName] ?: stackedImage
 
-            stackedMaxImage?.let {
-                println("Saving $outputStackedMaxFile")
-                ImageWriter.write(it, outputStackedMaxFile)
+            println()
+            println("### Enhancing stacked image ...")
+            println()
+
+            if (!config.enhance.branches.isNullOrEmpty()) {
+                if (config.enhance.steps.isNotEmpty()) {
+                    println("WARNING: enhance.steps is ignored because enhance.branches is set")
+                }
+                for (branch in config.enhance.branches!!) {
+                    val branchInfoTokens = infoTokens.toMutableMap()
+                    branchInfoTokens[InfoTokens.branchName.name] = branch.name
+
+                    val branchCacheDir = currentDir.resolve(config.enhance.enhancedOutputDirectory)
+                        .resolve(branch.name.ifEmpty { "anonymous" })
+                    branchCacheDir.mkdirs()
+
+                    val enhancedImage = elapsed("enhance branch '${branch.name}'") {
+                        processEnhanceSteps(
+                            enhanceInputImage, dirty, branch.steps, config.format, config.enhance, branchCacheDir, sourceRegistry
+                        )
+                    }
+
+                    println()
+                    println("### Writing output images for branch '${branch.name}' ...")
+                    processOutput(enhancedImage, branchInfoTokens, config.output)
+                    processAnnotate(enhancedImage, branchInfoTokens, wcsFile, config.annotate, config.output)
+                }
+            } else {
+                val enhancedImage = elapsed("enhance") {
+                    processEnhance(enhanceInputImage, dirty, config.format, config.enhance, sourceRegistry)
+                }
+
+                println()
+                println("### Writing output images ...")
+                println()
+                processOutput(enhancedImage, infoTokens, config.output)
+
+                println()
+                println("### Annotating image ...")
+                println()
+                processAnnotate(enhancedImage, infoTokens, wcsFile, config.annotate, config.output)
             }
-
-            stackedImage
-        } else {
-            println("Stacked image already exists: $outputStackedFile")
-            ImageReader.read(outputStackedFile)
         }
-        dirty = dirty || dirtyStacked
-
-        println()
-        println("### Enhancing stacked image ...")
-        println()
-        val enhancedImage = elapsed("enhance") {
-            processEnhance(stackedImage, dirty, config.format, config.enhance)
-        }
-
-        println()
-        println("### Writing output images ...")
-        println()
-        processOutput(enhancedImage, infoTokens, config.output)
-
-        println()
-        println("### Annotating image ...")
-        println()
-        processAnnotate(enhancedImage, infoTokens, wcsFile, config.annotate, config.output)
     }
 
     fun processEnhance(
@@ -1196,19 +1363,32 @@ class AstroProcess(val config: ProcessConfig) {
         alreadyDirty: Boolean,
         formatConfig: FormatConfig,
         enhanceConfig: EnhanceConfig,
+        sourceRegistry: MutableMap<String, Image> = mutableMapOf(),
+    ): Image {
+        val cacheDir = workingDirectory.resolve(enhanceConfig.enhancedOutputDirectory)
+        cacheDir.mkdirs()
+        return processEnhanceSteps(inputImage, alreadyDirty, enhanceConfig.steps, formatConfig, enhanceConfig, cacheDir, sourceRegistry)
+    }
+
+    private fun processEnhanceSteps(
+        inputImage: Image,
+        alreadyDirty: Boolean,
+        steps: List<EnhanceStepConfig>,
+        formatConfig: FormatConfig,
+        enhanceConfig: EnhanceConfig,
+        cacheDir: File,
+        sourceRegistry: MutableMap<String, Image>,
     ): Image {
         val currentDir = workingDirectory
-        currentDir.resolve(enhanceConfig.enhancedOutputDirectory).mkdirs()
+        cacheDir.mkdirs()
 
         var image = inputImage
         var dirty = alreadyDirty
-
         var stepIndex = 1
 
         fun step(name: String, stretchFunc: (Image) -> Image) {
             elapsed(name) {
-                val stepImageFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                    .resolve("step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
+                val stepImageFile = cacheDir.resolve("step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
                 if (stepImageFile.exists() && !dirty) {
                     image = elapsed("  Reading already existing file: $stepImageFile") {
                         ImageReader.read(stepImageFile)
@@ -1228,8 +1408,7 @@ class AstroProcess(val config: ProcessConfig) {
                                     enhanceConfig.histogram.histogramWidth,
                                     enhanceConfig.histogram.histogramHeight
                                 ),
-                                currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                                    .resolve("histogram_step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
+                                cacheDir.resolve("histogram_step_${stepIndex}_$name.${formatConfig.outputImageExtension}")
                             )
                         }
                         if (enhanceConfig.histogram.printPercentiles) {
@@ -1238,13 +1417,7 @@ class AstroProcess(val config: ProcessConfig) {
                                 histogram.add(image[Channel.Gray])
                                 for (percentile in listOf(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99)) {
                                     val percentileInt = (percentile * 100 + 0.5).toInt()
-                                    println(
-                                        "    percentile ${percentileInt}% : ${
-                                            histogram.estimatePercentile(
-                                                percentile
-                                            )
-                                        }"
-                                    )
+                                    println("    percentile ${percentileInt}% : ${histogram.estimatePercentile(percentile)}")
                                 }
                             }
                         }
@@ -1255,8 +1428,12 @@ class AstroProcess(val config: ProcessConfig) {
         }
 
         val hdrSourceImages = mutableListOf<Image>()
-        for (enhanceStepIndex in enhanceConfig.steps.indices) {
-            val enhanceStepConfig = enhanceConfig.steps[enhanceStepIndex]
+        for (enhanceStepIndex in steps.indices) {
+            val enhanceStepConfig = steps[enhanceStepIndex]
+            if (!enhanceStepConfig.enabled) {
+                stepIndex++
+                continue
+            }
             val type = enhanceStepConfig.type
             step(type.name) {
                 val stepResultImage = when (type) {
@@ -1277,12 +1454,7 @@ class AstroProcess(val config: ProcessConfig) {
                             if (enhanceStepConfig.crop!!.width < 0) it.width - enhanceStepConfig.crop!!.x + enhanceStepConfig.crop!!.width else enhanceStepConfig.crop!!.width
                         val height =
                             if (enhanceStepConfig.crop!!.height < 0) it.height - enhanceStepConfig.crop!!.y + enhanceStepConfig.crop!!.height else enhanceStepConfig.crop!!.height
-                        it.crop(
-                            enhanceStepConfig.crop!!.x,
-                            enhanceStepConfig.crop!!.y,
-                            width,
-                            height
-                        )
+                        it.crop(enhanceStepConfig.crop!!.x, enhanceStepConfig.crop!!.y, width, height)
                     }
 
                     EnhanceStepType.Rotate -> {
@@ -1294,7 +1466,6 @@ class AstroProcess(val config: ProcessConfig) {
                                 val angleRad = enhanceStepConfig.rotate!!.angle.toRadians()
                                 val cosA = cos(angleRad)
                                 val sinA = sin(angleRad)
-
                                 val transformationMatrix = DoubleMatrix.matrixOf(
                                     3, 3,
                                     cosA, -sinA, 0.0,
@@ -1311,12 +1482,7 @@ class AstroProcess(val config: ProcessConfig) {
                             it.stretchLinearPercentile(
                                 enhanceStepConfig.linearPercentile!!.minPercentile,
                                 enhanceStepConfig.linearPercentile!!.maxPercentile,
-                                it.crop(
-                                    enhanceConfig.measure.x,
-                                    enhanceConfig.measure.y,
-                                    enhanceConfig.measure.width,
-                                    enhanceConfig.measure.height,
-                                ).histogram()
+                                it.crop(enhanceConfig.measure.x, enhanceConfig.measure.y, enhanceConfig.measure.width, enhanceConfig.measure.height).histogram()
                             )
                         } else {
                             it.stretchLinearPercentile(
@@ -1347,12 +1513,10 @@ class AstroProcess(val config: ProcessConfig) {
                                 enhanceStepConfig.whitebalance!!.valueRangeMin,
                                 enhanceStepConfig.whitebalance!!.valueRangeMax
                             )
-
                             WhitebalanceType.Local -> it.applyWhitebalanceLocal(
                                 getFixPoints(it, enhanceStepConfig.whitebalance!!.fixPoints),
                                 enhanceStepConfig.whitebalance!!.localMedianRadius
                             )
-
                             WhitebalanceType.Custom -> it.applyWhitebalanceCustom(
                                 enhanceStepConfig.whitebalance!!.customRed,
                                 enhanceStepConfig.whitebalance!!.customGreen,
@@ -1363,10 +1527,7 @@ class AstroProcess(val config: ProcessConfig) {
                     }
 
                     EnhanceStepType.Sigmoid -> {
-                        it.stretchSigmoidLike(
-                            enhanceStepConfig.sigmoid!!.midpoint,
-                            enhanceStepConfig.sigmoid!!.strength
-                        )
+                        it.stretchSigmoidLike(enhanceStepConfig.sigmoid!!.midpoint, enhanceStepConfig.sigmoid!!.strength)
                     }
 
                     EnhanceStepType.Blur -> {
@@ -1389,18 +1550,15 @@ class AstroProcess(val config: ProcessConfig) {
                             Thresholding.SigmoidLike -> { v, threshold -> thresholdSigmoidLike(v, threshold) }
                         }
                         when (enhanceStepConfig.reduceNoise!!.algorithm) {
-                            NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels -> {
+                            NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels ->
                                 it.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels(enhanceStepConfig.reduceNoise!!.thresholds, thresholdingFunc)
-                            }
-
-                            NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel -> {
+                            NoiseReductionAlgorithm.MultiScaleMedianOverGrayChannel ->
                                 it.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel(enhanceStepConfig.reduceNoise!!.thresholds, thresholdingFunc)
-                            }
                         }
                     }
 
                     EnhanceStepType.HighDynamicRange -> {
-                        highDynamicRange(hdrSourceImages.map { { it } })
+                        highDynamicRange(hdrSourceImages.map { img -> { img } })
                     }
 
                     EnhanceStepType.CosmeticCorrection -> {
@@ -1409,23 +1567,65 @@ class AstroProcess(val config: ProcessConfig) {
 
                     EnhanceStepType.Deconvolve -> {
                         when (enhanceStepConfig.deconvolve!!.algorithm) {
-                            DeconvolutionAlgorithm.RichardsonLucy -> {
-                                it.richardsonLucyDeconvolution(
-                                    enhanceStepConfig.deconvolve!!.psfSigma,
-                                    enhanceStepConfig.deconvolve!!.iterations
-                                )
-                            }
-                            DeconvolutionAlgorithm.Wiener -> {
-                                it.wienerDeconvolution(
-                                    enhanceStepConfig.deconvolve!!.psfSigma,
-                                    enhanceStepConfig.deconvolve!!.iterations,
+                            DeconvolutionAlgorithm.RichardsonLucy -> it.richardsonLucyDeconvolution(
+                                enhanceStepConfig.deconvolve!!.psfSigma,
+                                enhanceStepConfig.deconvolve!!.iterations
+                            )
+                            DeconvolutionAlgorithm.Wiener -> it.wienerDeconvolution(
+                                enhanceStepConfig.deconvolve!!.psfSigma,
+                                enhanceStepConfig.deconvolve!!.iterations,
                                     enhanceStepConfig.deconvolve!!.noiseLevel
-                                )
-                            }
+                            )
                         }
                     }
 
-                    else -> it
+                    EnhanceStepType.ExtractStars -> {
+                        val cfg = enhanceStepConfig.extractStars!!
+                        val subCacheDir = cacheDir.resolve("step_${stepIndex}_ExtractStars")
+                        processExtractStars(it, cfg, formatConfig, enhanceConfig, subCacheDir, dirty, sourceRegistry)
+                    }
+
+                    EnhanceStepType.Decompose -> {
+                        val cfg = enhanceStepConfig.decompose!!
+                        val subCacheDir = cacheDir.resolve("step_${stepIndex}_Decompose")
+                        processDecompose(it, cfg, formatConfig, enhanceConfig, subCacheDir, dirty, sourceRegistry)
+                    }
+
+                    EnhanceStepType.CompositeChannels -> {
+                        val cfg = enhanceStepConfig.compositeChannels!!
+                        val redMatrix = extractSingleChannelMatrix(sourceRegistry[cfg.red] ?: error("Source '${cfg.red}' not found in registry"))
+                        val greenMatrix = extractSingleChannelMatrix(sourceRegistry[cfg.green] ?: error("Source '${cfg.green}' not found in registry"))
+                        val blueMatrix = extractSingleChannelMatrix(sourceRegistry[cfg.blue] ?: error("Source '${cfg.blue}' not found in registry"))
+                        MatrixImage(redMatrix, greenMatrix, blueMatrix)
+                    }
+
+                    EnhanceStepType.MergeWith -> {
+                        val cfg = enhanceStepConfig.mergeWith!!
+                        val otherImage = sourceRegistry[cfg.image] ?: error("Source '${cfg.image}' not found in registry")
+                        when (cfg.method) {
+                            MergeMethod.Hdr -> highDynamicRange(listOf({ it }, { otherImage }))
+                        }
+                    }
+
+                    EnhanceStepType.StackSources -> {
+                        val cfg = enhanceStepConfig.stackSources!!
+                        val sourceImages = cfg.images.map { name ->
+                            sourceRegistry[name] ?: error("Source '$name' not found in registry")
+                        }
+                        val weights = cfg.weights
+                        val suppliers = sourceImages.map { img -> { img } }
+                        val result = stack(algorithm = cfg.algorithm, imageSuppliers = suppliers)
+                        if (cfg.outputName != null) {
+                            sourceRegistry[cfg.outputName!!] = result
+                        }
+                        result
+                    }
+
+                    EnhanceStepType.MaskedProcess -> {
+                        val cfg = enhanceStepConfig.maskedProcess!!
+                        val subCacheDir = cacheDir.resolve("step_${stepIndex}_MaskedProcess")
+                        processMaskedProcess(it, cfg, formatConfig, enhanceConfig, subCacheDir, dirty, sourceRegistry)
+                    }
                 }
                 if (enhanceConfig.regionOfInterest.enabled) {
                     val roiImage = stepResultImage.crop(
@@ -1434,8 +1634,7 @@ class AstroProcess(val config: ProcessConfig) {
                         enhanceConfig.regionOfInterest.width,
                         enhanceConfig.regionOfInterest.height
                     )
-                    val roiImageFile = currentDir.resolve(enhanceConfig.enhancedOutputDirectory)
-                        .resolve("region_step_${stepIndex}_${type.name}.${formatConfig.outputImageExtension}")
+                    val roiImageFile = cacheDir.resolve("region_step_${stepIndex}_${type.name}.${formatConfig.outputImageExtension}")
                     ImageWriter.write(roiImage, roiImageFile)
                 }
                 stepResultImage
@@ -1445,6 +1644,236 @@ class AstroProcess(val config: ProcessConfig) {
             }
         }
         return image
+    }
+
+    private fun extractSingleChannelMatrix(image: Image): ch.obermuhlner.kimage.core.matrix.Matrix {
+        return if (image.channels.contains(Channel.Gray)) {
+            image[Channel.Gray]
+        } else {
+            val r = image[Channel.Red]
+            val g = image[Channel.Green]
+            val b = image[Channel.Blue]
+            FloatMatrix(r.rows, r.cols) { row, col ->
+                (0.2126 * r[row, col] + 0.7152 * g[row, col] + 0.0722 * b[row, col]).toFloat()
+            }
+        }
+    }
+
+    private fun loadOrFindStars(
+        starsYamlFile: File,
+        image: Image,
+        alignConfig: AlignConfig,
+    ): List<ch.obermuhlner.kimage.astro.align.Star> {
+        if (starsYamlFile.exists()) {
+            val yaml = Yaml()
+            val list = starsYamlFile.inputStream().use { yaml.load<List<Map<String, Any>>>(it) }
+            return list?.map { map ->
+                ch.obermuhlner.kimage.astro.align.Star(
+                    x = (map["x"] as Number).toDouble(),
+                    y = (map["y"] as Number).toDouble(),
+                    brightness = (map["brightness"] as Number).toDouble(),
+                    fwhmX = (map["fwhmX"] as Number).toDouble(),
+                    fwhmY = (map["fwhmY"] as Number).toDouble(),
+                )
+            } ?: emptyList()
+        }
+        return findStars(image, alignConfig.starThreshold).take(alignConfig.maxStars)
+    }
+
+    private fun buildStarMask(image: Image, stars: List<ch.obermuhlner.kimage.astro.align.Star>, factor: Double, blurRadius: Int): ch.obermuhlner.kimage.core.matrix.Matrix {
+        val maskMatrix = FloatMatrix(image.height, image.width) { _, _ -> 0f }
+        val width = image.width
+        val height = image.height
+        for (star in stars) {
+            val radiusX = (star.fwhmX * factor / 2 + 0.5).toInt().coerceAtLeast(1)
+            val radiusY = (star.fwhmY * factor / 2 + 0.5).toInt().coerceAtLeast(1)
+            val cx = star.intX
+            val cy = star.intY
+            for (y in (cy - radiusY)..(cy + radiusY)) {
+                for (x in (cx - radiusX)..(cx + radiusX)) {
+                    if (x in 0 until width && y in 0 until height) {
+                        val dx = (x - cx).toDouble() / radiusX
+                        val dy = (y - cy).toDouble() / radiusY
+                        if (dx * dx + dy * dy <= 1.0) {
+                            maskMatrix[y, x] = 1.0
+                        }
+                    }
+                }
+            }
+        }
+        val maskImage = MatrixImage(maskMatrix)
+        val blurred = if (blurRadius > 0) maskImage.gaussianBlurFilter(blurRadius) else maskImage
+        return blurred[Channel.Red]
+    }
+
+    private fun blendWithMask(insideImage: Image, outsideImage: Image, maskMatrix: ch.obermuhlner.kimage.core.matrix.Matrix): Image {
+        val width = insideImage.width
+        val height = insideImage.height
+        val channels = insideImage.channels
+        return MatrixImage(width, height, channels) { channel, rows, cols ->
+            FloatMatrix(rows, cols) { row, col ->
+                val m = maskMatrix[row, col].toFloat()
+                val inside = insideImage[channel][row, col].toFloat()
+                val outside = outsideImage[channel][row, col].toFloat()
+                (inside * m + outside * (1f - m)).coerceIn(0f, 1f)
+            }
+        }
+    }
+
+    private fun processExtractStars(
+        image: Image,
+        cfg: ExtractStarsConfig,
+        formatConfig: FormatConfig,
+        enhanceConfig: EnhanceConfig,
+        subCacheDir: File,
+        dirty: Boolean,
+        sourceRegistry: MutableMap<String, Image>,
+    ): Image {
+        subCacheDir.mkdirs()
+
+        val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
+        val stars = loadOrFindStars(starsYamlFile, image, config.align)
+
+        val starImage = copyOnlyStars(image, stars, cfg.factor)
+        val backgroundImage = image - starImage
+
+        val starsCacheDir = subCacheDir.resolve(cfg.starsBranch.name.ifEmpty { "stars" })
+        val backgroundCacheDir = subCacheDir.resolve(cfg.backgroundBranch.name.ifEmpty { "background" })
+        starsCacheDir.mkdirs()
+        backgroundCacheDir.mkdirs()
+
+        val processedStars = processEnhanceSteps(starImage, dirty, cfg.starsBranch.steps, formatConfig, enhanceConfig, starsCacheDir, sourceRegistry)
+        val processedBackground = processEnhanceSteps(backgroundImage, dirty, cfg.backgroundBranch.steps, formatConfig, enhanceConfig, backgroundCacheDir, sourceRegistry)
+
+        val maskMatrix = buildStarMask(image, stars, cfg.factor, cfg.softMaskBlurRadius)
+        return blendWithMask(processedStars, processedBackground, maskMatrix)
+    }
+
+    private fun processDecompose(
+        image: Image,
+        cfg: DecomposeConfig,
+        formatConfig: FormatConfig,
+        enhanceConfig: EnhanceConfig,
+        subCacheDir: File,
+        dirty: Boolean,
+        sourceRegistry: MutableMap<String, Image>,
+    ): Image {
+        subCacheDir.mkdirs()
+        return when (cfg.mode) {
+            DecomposeMode.LRGB -> {
+                val luminanceMatrix = image[Channel.Gray]
+                val luminanceImage = MatrixImage(luminanceMatrix)
+
+                val processedLuminance = if (cfg.luminance != null) {
+                    val lCacheDir = subCacheDir.resolve(cfg.luminance!!.name.ifEmpty { "luminance" })
+                    lCacheDir.mkdirs()
+                    processEnhanceSteps(luminanceImage, dirty, cfg.luminance!!.steps, formatConfig, enhanceConfig, lCacheDir, sourceRegistry)
+                } else {
+                    luminanceImage
+                }
+
+                val processedColor = if (cfg.color != null) {
+                    val cCacheDir = subCacheDir.resolve(cfg.color!!.name.ifEmpty { "color" })
+                    cCacheDir.mkdirs()
+                    processEnhanceSteps(image, dirty, cfg.color!!.steps, formatConfig, enhanceConfig, cCacheDir, sourceRegistry)
+                } else {
+                    image
+                }
+
+                processedColor.replaceBrightness(processedLuminance, 1.0, Channel.Gray)
+            }
+
+            DecomposeMode.RGB -> {
+                fun processBranch(branch: BranchConfig?, channelMatrix: ch.obermuhlner.kimage.core.matrix.Matrix, branchName: String): ch.obermuhlner.kimage.core.matrix.Matrix {
+                    if (branch == null) return channelMatrix
+                    val branchCacheDir = subCacheDir.resolve(branch.name.ifEmpty { branchName })
+                    branchCacheDir.mkdirs()
+                    val channelImage = MatrixImage(channelMatrix)
+                    val processed = processEnhanceSteps(channelImage, dirty, branch.steps, formatConfig, enhanceConfig, branchCacheDir, sourceRegistry)
+                    return processed[Channel.Gray]
+                }
+                val redResult = processBranch(cfg.red, image[Channel.Red], "red")
+                val greenResult = processBranch(cfg.green, image[Channel.Green], "green")
+                val blueResult = processBranch(cfg.blue, image[Channel.Blue], "blue")
+                MatrixImage(redResult, greenResult, blueResult)
+            }
+
+            DecomposeMode.HSB -> {
+                fun processBranch(branch: BranchConfig?, channelMatrix: ch.obermuhlner.kimage.core.matrix.Matrix, branchName: String): ch.obermuhlner.kimage.core.matrix.Matrix {
+                    if (branch == null) return channelMatrix
+                    val branchCacheDir = subCacheDir.resolve(branch.name.ifEmpty { branchName })
+                    branchCacheDir.mkdirs()
+                    val channelImage = MatrixImage(channelMatrix)
+                    val processed = processEnhanceSteps(channelImage, dirty, branch.steps, formatConfig, enhanceConfig, branchCacheDir, sourceRegistry)
+                    return processed[Channel.Gray]
+                }
+                val hueResult = processBranch(cfg.hue, image[Channel.Hue], "hue")
+                val saturationResult = processBranch(cfg.saturation, image[Channel.Saturation], "saturation")
+                val brightnessResult = processBranch(cfg.brightness, image[Channel.Brightness], "brightness")
+                val hsbImage = MatrixImage(
+                    image.width, image.height,
+                    Channel.Hue to hueResult,
+                    Channel.Saturation to saturationResult,
+                    Channel.Brightness to brightnessResult,
+                )
+                MatrixImage(
+                    image.width, image.height,
+                    Channel.Red to hsbImage[Channel.Red],
+                    Channel.Green to hsbImage[Channel.Green],
+                    Channel.Blue to hsbImage[Channel.Blue],
+                )
+            }
+        }
+    }
+
+    private fun processMaskedProcess(
+        image: Image,
+        cfg: MaskedProcessConfig,
+        formatConfig: FormatConfig,
+        enhanceConfig: EnhanceConfig,
+        subCacheDir: File,
+        dirty: Boolean,
+        sourceRegistry: MutableMap<String, Image>,
+    ): Image {
+        subCacheDir.mkdirs()
+
+        val maskMatrix = when (cfg.mask.source) {
+            MaskSource.Stars -> {
+                val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
+                val stars = loadOrFindStars(starsYamlFile, image, config.align)
+                buildStarMask(image, stars, cfg.mask.factor, cfg.mask.blur)
+            }
+            MaskSource.Luminance -> {
+                val threshold = cfg.mask.threshold
+                val blur = cfg.mask.blur
+                val binaryMatrix = FloatMatrix(image.height, image.width) { row, col ->
+                    if (image[Channel.Gray][row, col] >= threshold) 1f else 0f
+                }
+                val binaryImage = MatrixImage(binaryMatrix)
+                val blurred = if (blur > 0) binaryImage.gaussianBlurFilter(blur) else binaryImage
+                blurred[Channel.Red]
+            }
+            MaskSource.File -> {
+                val maskFile = File(cfg.mask.maskFile ?: error("maskFile must be set for MaskSource.File"))
+                val loadedMask = ImageReader.read(maskFile)
+                loadedMask[Channel.Gray]
+            }
+            MaskSource.Platesolve -> {
+                val objName = cfg.mask.objectName ?: error("objectName must be set for MaskSource.Platesolve")
+                val dso = DeepSkyObjects.name(objName) ?: error("Unknown deep sky object: $objName")
+                FloatMatrix(image.height, image.width) { _, _ -> 0f }
+            }
+        }
+
+        val insideCacheDir = subCacheDir.resolve(cfg.insideMask.name.ifEmpty { "inside" })
+        val outsideCacheDir = subCacheDir.resolve(cfg.outsideMask.name.ifEmpty { "outside" })
+        insideCacheDir.mkdirs()
+        outsideCacheDir.mkdirs()
+
+        val processedInside = processEnhanceSteps(image, dirty, cfg.insideMask.steps, formatConfig, enhanceConfig, insideCacheDir, sourceRegistry)
+        val processedOutside = processEnhanceSteps(image, dirty, cfg.outsideMask.steps, formatConfig, enhanceConfig, outsideCacheDir, sourceRegistry)
+
+        return blendWithMask(processedInside, processedOutside, maskMatrix)
     }
 
     private fun processOutput(
