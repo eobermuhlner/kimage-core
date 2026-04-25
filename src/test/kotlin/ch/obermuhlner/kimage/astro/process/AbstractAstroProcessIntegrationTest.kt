@@ -7,6 +7,7 @@ import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import java.io.File
+import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -34,6 +35,9 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var noiseReadLevel = 0.01
 
     var photonNoiseScale = 0.1
+
+    var starWidth = 0.5
+    var starBleed = 1.5
 
 
     fun initTestRun() {
@@ -137,28 +141,33 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         val matrix = DoubleMatrix(height, width) { row, col ->
             val biasNoise = random.nextGaussian(noiseBiasLevel, noiseBiasSigma)
             val readNoise = random.nextGaussian(noiseReadLevel, noiseReadSigma)
-
-            val star = starPositions.find { (sx, sy) ->
-                val tx = sx + jitterX
-                val ty = sy + jitterY
-                tx == col && ty == row
-            }
-            val starValue = star?.brightness ?: 0.0
             val skyValue = 0.1
 
-            val dx = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
-            val dy = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
-            val r = sqrt(dx * dx + dy * dy)
+            val dxV = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
+            val dyV = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
+            val r = sqrt(dxV * dxV + dyV * dyV)
             val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
 
-            val rawSignal = (starValue + skyValue) * vignette
+            var totalStarSignal = 0.0
+            for (star in starPositions) {
+                val starX = star.x + jitterX
+                val starY = star.y + jitterY
+                val dxStar = col.toDouble() - starX.toDouble()
+                val dyStar = row.toDouble() - starY.toDouble()
+                val dist = sqrt(dxStar * dxStar + dyStar * dyStar)
+                val effectiveWidth = starWidth * (1.0 + star.brightness * starBleed)
+                val gaussianPSF = exp(-(dist * dist) / (2.0 * (effectiveWidth * effectiveWidth)))
+                totalStarSignal += star.brightness * gaussianPSF
+            }
 
-            val photonNoise = if (addSignal) random.nextGaussian(0.0, sqrt(rawSignal + 1e-10) * photonNoiseScale) else 0.0
+            val rawSignal = (totalStarSignal + skyValue) * vignette
 
-            val biasValue = if (addBiasNoise) biasNoise else 0.0
-            val readValue = if (addReadNoise) readNoise else 0.0
-            val signalValue = if (addSignal) rawSignal + photonNoise else 0.0
-            val value = (biasValue + readValue + signalValue)
+            val photonNoise: Double = if (addSignal) random.nextGaussian(0.0, sqrt(rawSignal + 1e-10) * photonNoiseScale) else 0.0
+
+            val biasValue: Double = if (addBiasNoise) biasNoise else 0.0
+            val readValue: Double = if (addReadNoise) readNoise else 0.0
+            val signalValue: Double = if (addSignal) rawSignal + photonNoise else 0.0
+            val value = biasValue + readValue + signalValue
             value.coerceIn(0.0, 1.0)
         }
         return MatrixImage(
