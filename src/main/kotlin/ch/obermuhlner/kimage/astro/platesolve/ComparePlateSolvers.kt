@@ -28,7 +28,7 @@ fun main() {
     
     println("\n--- Solving with Internal Solver (Gaia DR3) ---")
     val internalSolver = InternalPlateSolver(VizieRStarCatalog("I/355/gaiadr3"))
-    val internalResult = internalSolver.solve(image, imageFile, searchRa, searchDec, 1.0)
+    val internalResult = internalSolver.solve(image, imageFile, searchRa, searchDec, 2.0)
 
     println("\n=== Comparison ===")
     val keys = ( (astapResult?.keys ?: emptySet()) + (internalResult?.keys ?: emptySet()) ).sorted()

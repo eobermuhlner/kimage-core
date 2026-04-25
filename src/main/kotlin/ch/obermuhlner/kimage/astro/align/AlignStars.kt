@@ -244,6 +244,8 @@ fun calculateTransformationMatrix(
         var bestLocalInliers = 0
         var bestLocalScore = -1.0
         var bestLocalError = Double.MAX_VALUE
+        var matchedQuads = 0
+        var rankConsistentQuads = 0
 
         for (iteration in start until end) {
             val randomIndex = threadRandom.nextInt(otherQuads.size)
@@ -251,6 +253,7 @@ fun calculateTransformationMatrix(
 
             val matchingQuads = findPotentialMatches(otherQuad, sortedReferenceQuads, angleTolerance)
             if (matchingQuads.isEmpty()) continue
+            matchedQuads += matchingQuads.size
 
             for (refQuad in matchingQuads) {
                 val quadOther = otherQuad.indices.map { otherStars[it] }
@@ -259,6 +262,7 @@ fun calculateTransformationMatrix(
                 if (!isRankConsistent(quadOther, quadReference)) {
                     continue
                 }
+                rankConsistentQuads++
 
                 val transformation = computeTransformationMatrix(quadOther.take(3), quadReference.take(3), imageWidth, imageHeight)
                 if (transformation != null) {
@@ -282,6 +286,7 @@ fun calculateTransformationMatrix(
                 }
             }
         }
+        println("Thread $threadIdx: iterations ${end - start}, matched quads $matchedQuads, rank consistent $rankConsistentQuads, best inliers $bestLocalInliers, best score $bestLocalScore")
         if (bestLocalTransformation != null) {
             Result(bestLocalTransformation, bestLocalInliers, bestLocalScore, bestLocalError)
         } else {
@@ -335,17 +340,39 @@ private fun calculateScore(transformedStars: List<Star>, referenceStars: List<St
 }
 
 private fun isRankConsistent(stars1: List<Star>, stars2: List<Star>): Boolean {
-    val ranks1 = stars1.mapIndexed { index, star -> index to star.brightness }
-        .sortedBy { it.second }
-        .map { it.first }
-    val ranks2 = stars2.mapIndexed { index, star -> index to star.brightness }
-        .sortedBy { it.second }
-        .map { it.first }
-    return ranks1 == ranks2
+    fun getRankMatrix(stars: List<Star>): Array<IntArray> {
+        val n = stars.size
+        val matrix = Array(n) { IntArray(n) }
+        val tolerance = 0.1 // 10% brightness tolerance
+        for (i in 0 until n) {
+            for (j in 0 until n) {
+                matrix[i][j] = when {
+                    stars[i].brightness > stars[j].brightness * (1.0 + tolerance) -> 1
+                    stars[i].brightness < stars[j].brightness * (1.0 - tolerance) -> -1
+                    else -> 0
+                }
+            }
+        }
+        return matrix
+    }
+
+    val m1 = getRankMatrix(stars1)
+    val m2 = getRankMatrix(stars2)
+    
+    for (i in stars1.indices) {
+        for (j in stars1.indices) {
+            if (m1[i][j] != 0 && m2[i][j] != 0 && m1[i][j] != m2[i][j]) {
+                return false
+            }
+        }
+    }
+    return true
 }
 
 private fun computeQuadFeatures(stars: List<Star>): List<QuadFeature> {
-    val n = stars.size
+    val maxStarsForQuads = 50
+    val topStars = stars.take(maxStarsForQuads)
+    val n = topStars.size
     val quadFeatures = mutableListOf<QuadFeature>()
 
     for (i in 0 until n - 3) {
@@ -353,11 +380,12 @@ private fun computeQuadFeatures(stars: List<Star>): List<QuadFeature> {
             for (k in j + 1 until n - 1) {
                 for (l in k + 1 until n) {
                     val indices = listOf(i, j, k, l)
-                    quadFeatures.add(computeQuadFeature(stars, indices))
+                    quadFeatures.add(computeQuadFeature(topStars, indices))
                 }
             }
         }
     }
+    println("Computed ${quadFeatures.size} quads from $n stars")
     return quadFeatures
 }
 
@@ -602,4 +630,56 @@ fun alignStarImage(referenceImage: Image, otherImage: Image): Image? {
     val otherStars = findStars(otherImage)
     val transform = calculateTransformationMatrix(referenceStars, otherStars, referenceImage.width, referenceImage.height) ?: return null
     return applyTransformationToImage(referenceImage, transform)
+}
+
+fun triangleArea(a: Star, b: Star, c: Star): Double {
+    return 0.5 * abs(a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y))
+}
+
+fun lawOfCosinesAngle(a: Double, b: Double, c: Double): Double {
+    val cosC = (a * a + b * b - c * c) / (2 * a * b)
+    return acos(cosC.coerceIn(-1.0, 1.0))
+}
+
+fun computeTriangleAngles(a: Star, b: Star, c: Star): List<Double> {
+    val distAB = distance(a, b)
+    val distBC = distance(b, c)
+    val distCA = distance(c, a)
+
+    return listOf(
+        lawOfCosinesAngle(distAB, distCA, distBC),
+        lawOfCosinesAngle(distAB, distBC, distCA),
+        lawOfCosinesAngle(distBC, distCA, distAB)
+    ).sorted()
+}
+
+fun anglesAreSimilar(angles1: List<Double>, angles2: List<Double>, tolerance: Double): Boolean {
+    if (angles1.size != angles2.size) return false
+    for (i in angles1.indices) {
+        if (abs(angles1[i] - angles2[i]) > tolerance) return false
+    }
+    return true
+}
+
+fun computeTriangleFeatures(stars: List<Star>): List<TriangleFeature> {
+    val n = stars.size
+    val features = mutableListOf<TriangleFeature>()
+
+    for (i in 0 until n - 2) {
+        for (j in i + 1 until n - 1) {
+            for (k in j + 1 until n) {
+                val angles = computeTriangleAngles(stars[i], stars[j], stars[k])
+                val orientation = 0 // Not implemented yet
+                features.add(TriangleFeature(listOf(i, j, k), angles, orientation))
+            }
+        }
+    }
+
+    return features
+}
+
+fun interpolate(q11: Double, q21: Double, q12: Double, q22: Double, dx: Double, dy: Double): Double {
+    val r1 = q11 * (1 - dx) + q21 * dx
+    val r2 = q12 * (1 - dx) + q22 * dx
+    return r1 * (1 - dy) + r2 * dy
 }

@@ -17,12 +17,12 @@ class InternalPlateSolver(
             return null
         }
 
-        val radius = searchRadius ?: 0.5 // Very tight radius
+        val radius = searchRadius ?: 2.0
 
         // 1. Fetch catalog stars
         val allCatalogStars = catalog.getStars(searchRa, searchDec, radius)
-        val catalogStars = selectUniformStars(allCatalogStars, 0.0, 0.0, 4, 4, 3)
-            .take(30)
+        val catalogStars = selectUniformStars(allCatalogStars, 0.0, 0.0, 4, 4, 15)
+            .take(150)
         println("Catalog stars used: ${catalogStars.size}")
 
 
@@ -38,13 +38,14 @@ class InternalPlateSolver(
 
         // 3. Find stars in the image
         val allImageStars = findStars(image)
-        val imageStars = selectUniformStars(allImageStars, image.width.toDouble(), image.height.toDouble(), 4, 4, 3)
-            .take(30)
+        val imageStars = selectUniformStars(allImageStars, image.width.toDouble(), image.height.toDouble(), 4, 4, 15)
+            .take(150)
         if (imageStars.isEmpty()) {
             println("No stars found in image")
             return null
         }
         println("Image stars used: ${imageStars.size}")
+
         // 4. Calculate transformation matrix
         // We pass 0, 0 for dimensions to avoid centering pixels using radian-based logic.
         val transformScaled = calculateTransformationMatrix(
@@ -52,9 +53,9 @@ class InternalPlateSolver(
             imageStars,
             0,
             0,
-            angleTolerance = 0.001,
-            maxIterations = 20000,
-            positionTolerance = 0.1, // ~2 pixels
+            angleTolerance = 0.01,
+            maxIterations = 100000,
+            positionTolerance = 0.2, // ~4 pixels
             minScale = 0.001, // ~0.02 arcsec/pixel
             maxScale = 10.0 // ~200 arcsec/pixel
         ) ?: return null

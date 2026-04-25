@@ -35,7 +35,7 @@ CD1_2   = -2.913164391524E-004 / CD matrix to convert (x,y) to (Ra, Dec)
 CD2_1   = -2.908701174911E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
 CD2_2   = -5.079381913562E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
 PLTSOLVD=                    T / Astrometric solved by ASTAP_CLI v2023.05.14.   
-COMMENT 7 Solved in 49.9 sec Offset was 68.4d.
+COMMENT 7 Solved in 50.5 sec Offset was 68.4d.
 WARNING = 'Warning scale was inaccurate! Set FOV=1.76d, scale=2.1"'
 COMMENT cmdline:"C:\Program Files\astap\astap_cli.exe" -f "D:\Photos\Astro\ASIAI
 COMMENT R\2026-04-19 NGC2244\NGC 2244 Satellite C\astro-process\aligned\Light_NG

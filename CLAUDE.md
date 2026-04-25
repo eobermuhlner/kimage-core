@@ -110,7 +110,7 @@ Cross-cutting conventions worth noting when editing:
 Pipeline stages, each reading from the previous stage's output directory:
 
 1. **Calibrate** (`astro.align.CalibrationImage.processCalibrationImages`) — bias/dark/darkflat/flat master frames, then apply to lights.
-2. **Align** (`astro.align.AlignStars`) — `findStars` → triangle feature matching → `calculateTransformationMatrix` → `applyTransformationToImage`.
+2. **Align** (`astro.align.AlignStars`) — `findStars` → quad feature matching → `calculateTransformationMatrix` → `applyTransformationToImage`.
 3. **Stack** (`core.image.stack.Stack`) — `StackAlgorithm` enum picks median / average / sigma-clip / winsorize / smart-max etc.
 4. **Enhance** — ordered list of `EnhanceStepConfig`s; each step has exactly one non-null sub-config (`crop`, `sigmoid`, `reduceNoise`, …) which `EnhanceStepConfig.type` resolves to an `EnhanceStepType`. Steps flagged `addToHighDynamicRange` are captured for the later `highDynamicRange` combine step.
 5. **Annotate** (`astro.annotate.*`) — optional WCS-aware decoration using `DeepSkyObjects` (backed by `src/main/resources/NGC.csv`) and `AnnotateZoom`.

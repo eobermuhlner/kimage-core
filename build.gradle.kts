@@ -37,6 +37,6 @@ kotlin {
 }
 
 application {
-    mainClass.set("ch.obermuhlner.kimage.astro.platesolve.ComparePlateSolversKt")
+    mainClass.set("ch.obermuhlner.kimage.astro.process.AstroProcessKt")
     applicationName = "kimage-astro-process"
 }

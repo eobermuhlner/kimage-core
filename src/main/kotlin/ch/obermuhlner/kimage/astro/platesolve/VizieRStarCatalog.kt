@@ -28,12 +28,14 @@ class VizieRStarCatalog(
     }
 
     override fun getStars(ra: Double, dec: Double, radius: Double): List<Star> {
-        val query = "-c.ra=$ra&-c.dec=$dec&-c.rd=$radius&-out.max=1000&-out=_RA&-out=_DE"
+        val magColumn = if (catalogId.contains("gaiadr3")) "phot_g_mean_mag" else "mag"
+        val query = "-c.ra=$ra&-c.dec=$dec&-c.rd=$radius&-out.max=1000&-out=_RA&-out=_DE&-out=$magColumn"
         val cacheFile = File(cacheDir, "vizier_${catalogId.replace("/", "_")}_${ra}_${dec}_${radius}.csv")
 
         if (!cacheFile.exists()) {
             println("Downloading star catalog data for RA=$ra Dec=$dec Radius=$radius...")
             val urlString = "https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=$catalogId&$query"
+            println("VizieR URL: $urlString")
             try {
                 val connection = URL(urlString).openConnection()
                 connection.connect()
@@ -45,7 +47,9 @@ class VizieRStarCatalog(
             }
         }
 
-        return parseVizieRTSV(cacheFile)
+        val stars = parseVizieRTSV(cacheFile)
+        println("Parsed ${stars.size} stars from catalog")
+        return stars
     }
 
     private fun parseVizieRTSV(file: File): List<Star> {

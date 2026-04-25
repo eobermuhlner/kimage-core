@@ -304,7 +304,7 @@ platesolve:
 - **Internal**: A native Kotlin solver.
   - Automatically downloads star data from **Gaia DR3** via the VizieR API.
   - Caches star catalog data locally in `~/.kimage-astro-process/star-catalog/`.
-  - Uses gnomonic projection and triangle-based pattern matching.
+  - Uses gnomonic projection and robust quad-based pattern matching.
 - **Custom**: Placeholder for user-defined external solvers.
 
 
