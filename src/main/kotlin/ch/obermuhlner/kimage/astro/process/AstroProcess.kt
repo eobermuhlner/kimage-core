@@ -1480,7 +1480,7 @@ class AstroProcess(val config: ProcessConfig) {
                     markerConfig.info2
                 ))
             }
-            val wcsConverter  = wcsFile?.let {
+            val wcsConverter = wcsFile?.takeIf { it.exists() }?.let {
                 val wcsData = WCSParser.parse(wcsFile)
                 WCSConverter(wcsData)
             }
