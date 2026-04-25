@@ -53,9 +53,9 @@ fun toImage(bufferedImage: BufferedImage): Image {
     for (y in 0 until bufferedImage.height) {
         for (x in 0 until bufferedImage.width) {
             bufferedImage.raster.getPixel(x, y, pixel)
-            pixel[0] = pixel[0] / 256
-            pixel[1] = pixel[1] / 256
-            pixel[2] = pixel[2] / 256
+            pixel[0] = pixel[0] / 255.0
+            pixel[1] = pixel[1] / 255.0
+            pixel[2] = pixel[2] / 255.0
             result.setPixel(x, y, pixel)
         }
     }
