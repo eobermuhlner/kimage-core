@@ -8,6 +8,7 @@ import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import java.io.File
 import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,17 +17,23 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
 
     var testDir: File = File(".")
     var random: Random = Random(1)
-    var width = 20
-    var height = 20
+    var width = 50
+    var height = 50
+    var starDensity = 0.02
     val starPositions = mutableListOf<MockStar>()
 
     var flatLevel = 0.8
     var flatSigma = 0.1
 
-    var noiseBiasSigma = 0.01
-    var noiseBiasLevel = 0.02
-    var noiseReadSigma = 0.05
-    var noiseReadLevel = 0.1
+    var vignetteStrength = 0.5
+    var vignetteRadius = 1.0
+
+    var noiseBiasSigma = 0.001
+    var noiseBiasLevel = 0.01
+    var noiseReadSigma = 0.005
+    var noiseReadLevel = 0.01
+
+    var photonNoiseScale = 0.1
 
 
     fun initTestRun() {
@@ -36,7 +43,6 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
 
         val starFieldWidth = width * 3
         val starFieldHeight = height * 2
-        val starDensity = 0.05
         val starCount = (starFieldWidth * starFieldHeight * starDensity).toInt()
         for (i in 0 until starCount) {
             starPositions.add(MockStar(
@@ -86,12 +92,14 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
+        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
+        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ) {
         directory.mkdirs()
         for (index in 1..count) {
             val jitterX = random.nextInt(-jitter, jitter + 1)
             val jitterY = random.nextInt(-jitter, jitter + 1)
-            val image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal)
+            val image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal, vignetteStrength, vignetteRadius)
             val file = File(directory, "${prefix}${index}.png")
             writeTestImage(file, image)
         }
@@ -101,10 +109,12 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         directory: File,
         prefix: String,
         count: Int,
+        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
+        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ) {
         directory.mkdirs()
         for (index in 1..count) {
-            val image = createRandomFlatImage(width, height)
+            val image = createRandomFlatImage(width, height, vignetteStrength, vignetteRadius)
             val file = File(directory, "${prefix}${index}.png")
             writeTestImage(file, image)
         }
@@ -119,7 +129,11 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
+        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
+        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ): MatrixImage {
+        val centerX = width / 2.0
+        val centerY = height / 2.0
         val matrix = DoubleMatrix(height, width) { row, col ->
             val biasNoise = random.nextGaussian(noiseBiasLevel, noiseBiasSigma)
             val readNoise = random.nextGaussian(noiseReadLevel, noiseReadSigma)
@@ -130,11 +144,20 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
                 tx == col && ty == row
             }
             val starValue = star?.brightness ?: 0.0
-            val skyValue = 0.01
+            val skyValue = 0.1
+
+            val dx = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
+            val dy = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
+            val r = sqrt(dx * dx + dy * dy)
+            val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
+
+            val rawSignal = (starValue + skyValue) * vignette
+
+            val photonNoise = if (addSignal) random.nextGaussian(0.0, sqrt(rawSignal + 1e-10) * photonNoiseScale) else 0.0
 
             val biasValue = if (addBiasNoise) biasNoise else 0.0
             val readValue = if (addReadNoise) readNoise else 0.0
-            val signalValue = if (addSignal) starValue + skyValue else 0.0
+            val signalValue = if (addSignal) rawSignal + photonNoise else 0.0
             val value = (biasValue + readValue + signalValue)
             value.coerceIn(0.0, 1.0)
         }
@@ -149,9 +172,17 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     fun createRandomFlatImage(
         width: Int,
         height: Int,
+        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
+        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ): MatrixImage {
+        val centerX = width / 2.0
+        val centerY = height / 2.0
         val matrix = DoubleMatrix(height, width) { row, col ->
-            random.nextGaussian(flatLevel, flatSigma)
+            val dx = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
+            val dy = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
+            val r = sqrt(dx * dx + dy * dy)
+            val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
+            random.nextGaussian(flatLevel, flatSigma) * vignette
         }
         return MatrixImage(
             width, height,
