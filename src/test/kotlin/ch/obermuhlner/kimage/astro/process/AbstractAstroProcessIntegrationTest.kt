@@ -37,7 +37,8 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var photonNoiseScale = 0.1
 
     var starWidth = 0.5
-    var starBleed = 1.5
+    var starBleed = 2.5
+    var starBeta = 2.5
 
 
     fun initTestRun() {
@@ -156,8 +157,9 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
                 val dyStar = row.toDouble() - starY.toDouble()
                 val dist = sqrt(dxStar * dxStar + dyStar * dyStar)
                 val effectiveWidth = starWidth * (1.0 + star.brightness * starBleed)
-                val gaussianPSF = exp(-(dist * dist) / (2.0 * (effectiveWidth * effectiveWidth)))
-                totalStarSignal += star.brightness * gaussianPSF
+                val gamma = 1.0 / effectiveWidth
+                val moffatPSF = (1.0 + (dist * gamma).pow(2.0)).pow(-starBeta)
+                totalStarSignal += star.brightness * moffatPSF
             }
 
             val rawSignal = (totalStarSignal + skyValue) * vignette
