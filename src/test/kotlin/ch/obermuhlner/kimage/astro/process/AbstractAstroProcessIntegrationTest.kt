@@ -9,8 +9,11 @@ import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -40,6 +43,12 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var starWidth = 0.5
     var starBleed = 2.5
     var starBeta = 2.5
+
+    var satelliteTrailProbability = 0.7
+    var satelliteTrailBrightnessMin = 0.1
+    var satelliteTrailBrightnessMax = 1.0
+    var satelliteTrailWidthMin = 0.1
+    var satelliteTrailWidthMax = 1.1
 
 
     fun initTestRun() {
@@ -90,6 +99,15 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         val brightness: Double,
     )
 
+    data class MockSatelliteTrail(
+        val x0: Double,
+        val y0: Double,
+        val x1: Double,
+        val y1: Double,
+        val brightness: Double,
+        val width: Double,
+    )
+
     fun createRandomAstroImages(
         directory: File,
         prefix: String,
@@ -105,7 +123,9 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
             val effectiveJitter = if (index == 1) 0.0 else jitter
             val jitterX = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
             val jitterY = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
-            var image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal)
+            val trailCount = random.nextPoisson(satelliteTrailProbability)
+            val trails = List(trailCount) { createRandomSatelliteTrail() }
+            var image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal, trails)
             if (bayerPattern != null) {
                 image = image.bayer(bayerPattern)
             }
@@ -114,7 +134,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         }
     }
 
-    fun createRandomBayerImages(
+fun createRandomBayerImages(
         directory: File,
         prefix: String,
         count: Int,
@@ -132,6 +152,24 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
             writeTestImage(file, bayerImage)
         }
     }
+
+    private fun createRandomSatelliteTrail(): MockSatelliteTrail {
+        val edge = random.nextInt(4)
+        val x0: Double
+        val y0: Double
+        val x1: Double
+        val y1: Double
+        when (edge) {
+            0 -> { x0 = random.nextDouble(0.0, width.toDouble()); y0 = 0.0; x1 = random.nextDouble(0.0, width.toDouble()); y1 = height.toDouble() }
+            1 -> { x0 = width.toDouble(); y0 = random.nextDouble(0.0, height.toDouble()); x1 = 0.0; y1 = random.nextDouble(0.0, height.toDouble()) }
+            2 -> { x0 = random.nextDouble(0.0, width.toDouble()); y0 = height.toDouble(); x1 = random.nextDouble(0.0, width.toDouble()); y1 = 0.0 }
+            else -> { x0 = 0.0; y0 = random.nextDouble(0.0, height.toDouble()); x1 = width.toDouble(); y1 = random.nextDouble(0.0, height.toDouble()) }
+        }
+        return MockSatelliteTrail(x0, y0, x1, y1,
+            random.nextDouble(satelliteTrailBrightnessMin, satelliteTrailBrightnessMax),
+            random.nextDouble(satelliteTrailWidthMin, satelliteTrailWidthMax))
+    }
+}
 
     fun createRandomFlatImages(
         directory: File,
@@ -155,6 +193,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
+        satelliteTrails: List<MockSatelliteTrail> = emptyList(),
     ): MatrixImage {
         val centerX = width / 2.0
         val centerY = height / 2.0
@@ -183,11 +222,22 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
 
             val rawSignal = (totalStarSignal + skyValue) * vignette
 
+            var totalTrailSignal = 0.0
+            for (trail in satelliteTrails) {
+                val dx = trail.x1 - trail.x0
+                val dy = trail.y1 - trail.y0
+                val len = sqrt(dx * dx + dy * dy)
+                if (len > 1e-10) {
+                    val dist = abs(dx * (trail.y0 - row) - (trail.x0 - col) * dy) / len
+                    totalTrailSignal += trail.brightness * exp(-0.5 * (dist / trail.width).pow(2.0))
+                }
+            }
+
             val photonNoise: Double = if (addSignal) random.nextGaussian(0.0, sqrt(rawSignal + 1e-10) * photonNoiseScale) else 0.0
 
             val biasValue: Double = if (addBiasNoise) biasNoise else 0.0
             val readValue: Double = if (addReadNoise) readNoise else 0.0
-            val signalValue: Double = if (addSignal) rawSignal + photonNoise else 0.0
+            val signalValue: Double = if (addSignal) rawSignal + photonNoise + totalTrailSignal else 0.0
             val value = biasValue + readValue + signalValue
             value.coerceIn(0.0, 1.0)
         }
@@ -239,7 +289,17 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         return mean + stdDev * u * mul
     }
 
-    private fun Random.nextPoisson(lambda: Double = 1.0): Double {
-        return nextGaussian(lambda, sqrt(lambda))
+    private fun Random.nextPoisson(lambda: Double): Int {
+        return if (lambda < 30.0) {
+            // Knuth's exact algorithm
+            val l = exp(-lambda)
+            var k = 0
+            var p = 1.0
+            do { k++; p *= nextDouble() } while (p > l)
+            k - 1
+        } else {
+            // Gaussian approximation accurate for large lambda
+            nextGaussian(lambda, sqrt(lambda)).roundToInt().coerceAtLeast(0)
+        }
     }
 }
