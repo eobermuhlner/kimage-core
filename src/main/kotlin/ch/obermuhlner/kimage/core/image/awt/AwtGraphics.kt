@@ -14,6 +14,8 @@ fun graphics(image: Image, marginTop: Int, marginLeft: Int, marginBottom: Int, m
     val graphics = result.createGraphics()
 
     graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF)
+    graphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF)
 
     graphics.background = java.awt.Color.BLACK
     graphics.clearRect(0, 0, width, height)
