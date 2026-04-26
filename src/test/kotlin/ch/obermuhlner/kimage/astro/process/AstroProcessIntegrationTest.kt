@@ -133,7 +133,6 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         assertTrue(redGreenDiff > 0.0, "Red and Green channels should be different (not grayscale)")
         assertTrue(redBlueDiff > 0.0, "Red and Blue channels should be different (not grayscale)")
     }
-    }
 
     @Test
     fun `processAstro runs with minimal config and light frames`() {

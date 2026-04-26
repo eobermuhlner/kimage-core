@@ -55,7 +55,6 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var sensorStuckPixelCount = 0
     var sensorBadColumnCount = 0
 
-
     fun initTestRun() {
         testDir = prepareTestRunDirectory()
         random = Random(42)
@@ -168,18 +167,19 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         }
     }
 
-fun createRandomBayerImages(
+    fun createRandomBayerImages(
         directory: File,
         prefix: String,
         count: Int,
         pattern: BayerPattern = BayerPattern.RGGB,
-        jitter: Int = 3,
+        jitter: Double = 3.0,
         addBiasNoise: Boolean = true,
     ) {
         directory.mkdirs()
         for (index in 1..count) {
-            val jitterX = random.nextInt(-jitter, jitter + 1)
-            val jitterY = random.nextInt(-jitter, jitter + 1)
+            val effectiveJitter = if (index == 1) 0.0 else jitter
+            val jitterX = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
+            val jitterY = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
             val rgbImage = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise)
             val bayerImage = rgbImage.bayer(pattern)
             val file = File(directory, "${prefix}${index}.png")
@@ -203,7 +203,6 @@ fun createRandomBayerImages(
             random.nextDouble(satelliteTrailBrightnessMin, satelliteTrailBrightnessMax),
             random.nextDouble(satelliteTrailWidthMin, satelliteTrailWidthMax))
     }
-}
 
     fun createRandomFlatImages(
         directory: File,
@@ -275,27 +274,24 @@ fun createRandomBayerImages(
                 val readValue: Double = if (addReadNoise) readNoise else 0.0
                 var signalValue: Double = if (addSignal) rawSignal + photonNoise + totalTrailSignal else 0.0
 
-                // Apply sensor artifacts
                 if (row to col in sensorArtifacts.hotPixels) {
-                    signalValue = 1.0 // Hot pixels are fully saturated
+                    signalValue = 1.0
                 }
                 if (row to col in sensorArtifacts.deadPixels) {
-                    signalValue = 0.0 // Dead pixels are completely dark
+                    signalValue = 0.0
                 }
                 if (sensorArtifacts.badColumns.contains(col)) {
-                    signalValue = 0.0 // Bad columns are dark
+                    signalValue = 0.0
                 }
                 val stuckInThisChannel = sensorArtifacts.stuckPixels.any { it.first == col && it.second == row && it.third == channel }
                 if (stuckInThisChannel) {
-                    signalValue = 1.0 // Stuck pixels are at max value
+                    signalValue = 1.0
                 }
 
                 (biasValue + readValue + signalValue).coerceIn(0.0, 1.0)
             }
         }
 
-        // Stars have a colorIndex (0=blue, 1=red) that modulates per-channel brightness.
-        // Green is always between min(R,B) and max(R,B) so no star ever appears green.
         val redMatrix = channelMatrix(0.10, { star -> star.brightness * (0.3 + 0.7 * star.colorIndex) }, Channel.Red)
         val greenMatrix = channelMatrix(0.10, { star ->
             val r = 0.3 + 0.7 * star.colorIndex
@@ -329,7 +325,6 @@ fun createRandomBayerImages(
             }
         }
 
-        // Different per-channel flat levels simulate sensor spectral sensitivity variation
         return MatrixImage(
             width, height,
             Channel.Red to channelMatrix(flatLevel * 0.90),
@@ -338,7 +333,7 @@ fun createRandomBayerImages(
         )
     }
 
-        private fun writeTestImage(file: File, image: MatrixImage) {
+    private fun writeTestImage(file: File, image: MatrixImage) {
         ImageWriter.write(image, file)
     }
 
@@ -359,14 +354,12 @@ fun createRandomBayerImages(
 
     private fun Random.nextPoisson(lambda: Double): Int {
         return if (lambda < 30.0) {
-            // Knuth's exact algorithm
             val l = exp(-lambda)
             var k = 0
             var p = 1.0
             do { k++; p *= nextDouble() } while (p > l)
             k - 1
         } else {
-            // Gaussian approximation accurate for large lambda
             nextGaussian(lambda, sqrt(lambda)).roundToInt().coerceAtLeast(0)
         }
     }
