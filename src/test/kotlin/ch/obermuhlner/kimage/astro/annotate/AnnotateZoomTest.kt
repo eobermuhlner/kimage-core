@@ -130,6 +130,7 @@ class AnnotateZoomTest : AbstractImageProcessingTest() {
         val image = MatrixImage(width, height, Channel.Red, Channel.Green, Channel.Blue)
 
         return graphics(image, 0, 0, 0, 0) { graphics, width, height, offsetX, offsetY ->
+            graphics.font = AnnotateZoom.loadBundledFont(12f)
             graphics.color = java.awt.Color.MAGENTA
             graphics.drawString("a", offsetY + 50, offsetY + 50 + graphics.fontMetrics.descent)
             graphics.color = java.awt.Color.YELLOW
