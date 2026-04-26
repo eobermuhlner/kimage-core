@@ -94,7 +94,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         directory: File,
         prefix: String,
         count: Int,
-        jitter: Int = 3,
+        jitter: Double = 3.0,
         bayerPattern: BayerPattern? = null,
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
@@ -102,9 +102,9 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     ) {
         directory.mkdirs()
         for (index in 1..count) {
-            val effectiveJitter = if (index == 1) 0 else jitter
-            val jitterX = random.nextInt(-effectiveJitter, effectiveJitter + 1)
-            val jitterY = random.nextInt(-effectiveJitter, effectiveJitter + 1)
+            val effectiveJitter = if (index == 1) 0.0 else jitter
+            val jitterX = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
+            val jitterY = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
             var image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal)
             if (bayerPattern != null) {
                 image = image.bayer(bayerPattern)
@@ -150,8 +150,8 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         width: Int,
         height: Int,
         starPositions: List<MockStar>,
-        jitterX: Int = 0,
-        jitterY: Int = 0,
+        jitterX: Double = 0.0,
+        jitterY: Double = 0.0,
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
@@ -172,8 +172,8 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
             for (star in starPositions) {
                 val starX = star.x + jitterX
                 val starY = star.y + jitterY
-                val dxStar = col.toDouble() - starX.toDouble()
-                val dyStar = row.toDouble() - starY.toDouble()
+                val dxStar = col.toDouble() - starX
+                val dyStar = row.toDouble() - starY
                 val dist = sqrt(dxStar * dxStar + dyStar * dyStar)
                 val effectiveWidth = starWidth * (1.0 + star.brightness * starBleed)
                 val gamma = 1.0 / effectiveWidth

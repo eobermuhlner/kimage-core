@@ -177,8 +177,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     @Test
     fun `processAstro runs with bayered light frames`() {
         initTestRun()
-
-        createRandomAstroImages(testDir, "light", 3, jitter = 0, bayerPattern = BayerPattern.RGGB)
+        starWidth = 0.8
+        createRandomAstroImages(testDir, "light", 3, jitter = 0.0, bayerPattern = BayerPattern.RGGB)
 
         val config = ProcessConfig(
             format = FormatConfig(
