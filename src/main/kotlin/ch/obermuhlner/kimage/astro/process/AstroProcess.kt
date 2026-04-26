@@ -252,7 +252,7 @@ data class DebayerConfig(
     var enabled: Boolean = true,
     var cleanupBadPixels: Boolean = true,
     var bayerPattern: BayerPattern = BayerPattern.RGGB,
-    var interpolation: DebayerInterpolation = DebayerInterpolation.AHD,
+    var interpolation: DebayerInterpolation = DebayerInterpolation.AMaZE,
 )
 
 data class CalibrateConfig(

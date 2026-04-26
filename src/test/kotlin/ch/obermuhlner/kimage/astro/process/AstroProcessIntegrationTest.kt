@@ -220,7 +220,11 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Drizzle,
-                drizzle = DrizzleConfig(scale = 2.0, pixfrac = 0.7, kernel = DrizzleKernel.Square)
+                drizzle = DrizzleConfig(
+                    scale = 2.0,
+                    pixfrac = 0.7,
+                    kernel = DrizzleKernel.Square,
+                )
             ),
             enhance = EnhanceConfig(
                 steps = mutableListOf()
@@ -249,6 +253,43 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             calibrate = CalibrateConfig(
                 enabled = false,
                 normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(
+                algorithm = StackAlgorithm.Median
+            ),
+            enhance = EnhanceConfig(
+                steps = mutableListOf()
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with bayered light frames debayering with Bilinear`() {
+        initTestRun()
+        //starWidth = 0.8
+        createRandomAstroImages(testDir, "light", 3, jitter = 0.0, bayerPattern = BayerPattern.RGGB)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(
+                    enabled = true,
+                    bayerPattern = BayerPattern.RGGB,
+                    cleanupBadPixels = false,
+                    interpolation = DebayerInterpolation.Bilinear
+                )
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             ),
             align = AlignConfig(),
             stack = StackConfig(
@@ -306,7 +347,7 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
-    fun `processAstro runs with drizzle stacking and crop`() {
+    fun `processAstro runs with drizzle stacking and crop and sigma clip rejection`() {
         initTestRun()
         createRandomAstroImages(testDir, "light", 5, addBiasNoise = false)
 
@@ -327,7 +368,16 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
                     scale = 2.0,
                     pixfrac = 0.7,
                     kernel = DrizzleKernel.Square,
-                    crop = DrizzleCropConfig(enabled = true, x = 10, y = 10, width = 30, height = 30)
+                    rejection = DrizzleRejection.SigmaClip,
+                    kappa = 2.0,
+                    iterations = 3,
+                    crop = DrizzleCropConfig(
+                        enabled = true,
+                        x = 10,
+                        y = 10,
+                        width = 30,
+                        height = 30,
+                    )
                 )
             ),
             enhance = EnhanceConfig(
