@@ -23,7 +23,8 @@ enum class DebayerInterpolation {
     Nearest,
     Bilinear,
     AHD,
-    GLI
+    GLI,
+    AMaZE
 }
 
 fun Image.debayerCleanupBadPixels(
@@ -485,6 +486,139 @@ fun Image.debayer(
                     redMatrixXY[x, y] = r * red
                     greenMatrixXY[x, y] = g * green
                     blueMatrixXY[x, y] = b * blue
+                }
+            }
+        }
+        DebayerInterpolation.AMaZE -> {
+            val bmos = mosaic.asBoundedXY()
+
+            fun cfa(x: Int, y: Int): Double = bmos[x, y] ?: 0.0
+            fun inBounds(x: Int, y: Int): Boolean = bmos.isInBounds(x, y)
+            fun isRSite(x: Int, y: Int): Boolean = x % 2 == rX && y % 2 == rY
+            fun isBSite(x: Int, y: Int): Boolean = x % 2 == bX && y % 2 == bY
+
+            val gPlane = Array(height) { DoubleArray(width) }
+            val rPlane = Array(height) { DoubleArray(width) }
+            val bPlane = Array(height) { DoubleArray(width) }
+
+            // Fill known CFA values
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    when {
+                        isRSite(x, y) -> rPlane[y][x] = cfa(x, y)
+                        isBSite(x, y) -> bPlane[y][x] = cfa(x, y)
+                        else          -> gPlane[y][x] = cfa(x, y)
+                    }
+                }
+            }
+
+            // Step 1: Interpolate green at R/B sites using gradient-weighted directional estimates
+            // with Laplacian correction to account for local same-channel gradient
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    if (isRSite(x, y) || isBSite(x, y)) {
+                        val p = cfa(x, y)
+
+                        val canH = inBounds(x - 1, y) && inBounds(x + 1, y)
+                        val canV = inBounds(x, y - 1) && inBounds(x, y + 1)
+
+                        val gL = cfa(x - 1, y); val gR = cfa(x + 1, y)
+                        val gU = cfa(x, y - 1); val gD = cfa(x, y + 1)
+                        val pL2 = if (inBounds(x - 2, y)) cfa(x - 2, y) else p
+                        val pR2 = if (inBounds(x + 2, y)) cfa(x + 2, y) else p
+                        val pU2 = if (inBounds(x, y - 2)) cfa(x, y - 2) else p
+                        val pD2 = if (inBounds(x, y + 2)) cfa(x, y + 2) else p
+
+                        val gh: Double
+                        val dh: Double
+                        if (canH) {
+                            gh = (gL + gR) / 2.0 + (2.0 * p - pL2 - pR2) / 4.0
+                            dh = (gL - gR).absoluteValue + (p - pL2).absoluteValue + (p - pR2).absoluteValue
+                        } else {
+                            gh = if (inBounds(x - 1, y)) gL else gR
+                            dh = Double.MAX_VALUE / 2.0
+                        }
+
+                        val gv: Double
+                        val dv: Double
+                        if (canV) {
+                            gv = (gU + gD) / 2.0 + (2.0 * p - pU2 - pD2) / 4.0
+                            dv = (gU - gD).absoluteValue + (p - pU2).absoluteValue + (p - pD2).absoluteValue
+                        } else {
+                            gv = if (inBounds(x, y - 1)) gU else gD
+                            dv = Double.MAX_VALUE / 2.0
+                        }
+
+                        val wh = 1.0 / (1.0 + dh)
+                        val wv = 1.0 / (1.0 + dv)
+                        gPlane[y][x] = clamp((wh * gh + wv * gv) / (wh + wv), 0.0, 1.0)
+                    }
+                }
+            }
+
+            // Color-difference planes at known R/B sites (G now known everywhere after step 1)
+            val grDiff = Array(height) { y -> DoubleArray(width) { x -> if (isRSite(x, y)) gPlane[y][x] - rPlane[y][x] else 0.0 } }
+            val gbDiff = Array(height) { y -> DoubleArray(width) { x -> if (isBSite(x, y)) gPlane[y][x] - bPlane[y][x] else 0.0 } }
+
+            // Step 2: Interpolate R/B at green sites using color-difference planes
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    if (!isRSite(x, y) && !isBSite(x, y)) {
+                        val g = gPlane[y][x]
+
+                        if (y % 2 == rY) { // Green in R-row: R neighbors are horizontal, B neighbors are vertical
+                            val grDiffs = mutableListOf<Double>()
+                            if (inBounds(x - 1, y) && isRSite(x - 1, y)) grDiffs += grDiff[y][x - 1]
+                            if (inBounds(x + 1, y) && isRSite(x + 1, y)) grDiffs += grDiff[y][x + 1]
+                            rPlane[y][x] = clamp(g - (if (grDiffs.isEmpty()) 0.0 else grDiffs.average()), 0.0, 1.0)
+
+                            val gbDiffs = mutableListOf<Double>()
+                            if (inBounds(x, y - 1) && isBSite(x, y - 1)) gbDiffs += gbDiff[y - 1][x]
+                            if (inBounds(x, y + 1) && isBSite(x, y + 1)) gbDiffs += gbDiff[y + 1][x]
+                            bPlane[y][x] = clamp(g - (if (gbDiffs.isEmpty()) 0.0 else gbDiffs.average()), 0.0, 1.0)
+                        } else { // Green in B-row: B neighbors are horizontal, R neighbors are vertical
+                            val gbDiffs = mutableListOf<Double>()
+                            if (inBounds(x - 1, y) && isBSite(x - 1, y)) gbDiffs += gbDiff[y][x - 1]
+                            if (inBounds(x + 1, y) && isBSite(x + 1, y)) gbDiffs += gbDiff[y][x + 1]
+                            bPlane[y][x] = clamp(g - (if (gbDiffs.isEmpty()) 0.0 else gbDiffs.average()), 0.0, 1.0)
+
+                            val grDiffs = mutableListOf<Double>()
+                            if (inBounds(x, y - 1) && isRSite(x, y - 1)) grDiffs += grDiff[y - 1][x]
+                            if (inBounds(x, y + 1) && isRSite(x, y + 1)) grDiffs += grDiff[y + 1][x]
+                            rPlane[y][x] = clamp(g - (if (grDiffs.isEmpty()) 0.0 else grDiffs.average()), 0.0, 1.0)
+                        }
+                    }
+                }
+            }
+
+            // Step 3: Interpolate opposite channel at R/B sites from diagonal color differences
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    val g = gPlane[y][x]
+                    if (isRSite(x, y)) {
+                        val diffs = mutableListOf<Double>()
+                        for ((dx, dy) in listOf(-1 to -1, 1 to -1, -1 to 1, 1 to 1)) {
+                            val cx = x + dx; val cy = y + dy
+                            if (inBounds(cx, cy) && isBSite(cx, cy)) diffs += gbDiff[cy][cx]
+                        }
+                        bPlane[y][x] = clamp(g - (if (diffs.isEmpty()) 0.0 else diffs.average()), 0.0, 1.0)
+                    } else if (isBSite(x, y)) {
+                        val diffs = mutableListOf<Double>()
+                        for ((dx, dy) in listOf(-1 to -1, 1 to -1, -1 to 1, 1 to 1)) {
+                            val cx = x + dx; val cy = y + dy
+                            if (inBounds(cx, cy) && isRSite(cx, cy)) diffs += grDiff[cy][cx]
+                        }
+                        rPlane[y][x] = clamp(g - (if (diffs.isEmpty()) 0.0 else diffs.average()), 0.0, 1.0)
+                    }
+                }
+            }
+
+            // Copy to output
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    redMatrixXY[x, y] = rPlane[y][x] * red
+                    greenMatrixXY[x, y] = gPlane[y][x] * green
+                    blueMatrixXY[x, y] = bPlane[y][x] * blue
                 }
             }
         }

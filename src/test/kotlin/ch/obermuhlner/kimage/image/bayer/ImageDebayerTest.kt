@@ -42,6 +42,15 @@ class ImageDebayerTest : AbstractImageProcessingTest() {
     }
 
     @Test
+    fun `should debayer with AMaZE interpolation`() {
+        val image = readTestImage()
+        for (bayerPattern in BayerPattern.entries) {
+            val debayered = image.bayer(bayerPattern).debayer(bayerPattern, DebayerInterpolation.AMaZE)
+            assertReferenceImage("amaze_${bayerPattern.name}", debayered)
+        }
+    }
+
+    @Test
     fun `should GLI debayer edge pixels without artifacts`() {
         val grayMatrix = DoubleMatrix(6, 6)
         for (y in 0 until 6) {
