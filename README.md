@@ -14,14 +14,25 @@ Automated astrophotography processing: calibrate, align, stack, and enhance your
 # 1. Navigate to your image directory
 cd /path/to/your/images
 
-# 2. Initialize default configuration
+# 2. Initialize configuration (scans directory automatically)
 kimage-astro-process init
 
 # 3. Process your images
 kimage-astro-process process
 ```
 
-That's it! Your processed images will appear in `astro-process/output/`.
+`init` scans your directory and prints what it found before writing the config:
+```
+Smart init detected:
+  Light frames : 42 *.fit in '.'
+  Debayer      : enabled (pattern: RGGB)
+  Calibration  : bias='bias', dark='dark', flat='flat', darkflat='darkflat'
+  Sigmoid      : midpoint=0.0080
+  Target       : M42
+Created kimage-astro-process.yaml
+```
+
+Review the summary, then open `kimage-astro-process.yaml` and adjust anything that looks wrong before running `process`. Your processed images will appear in `astro-process/output/`.
 
 ### For Quick Testing
 Enable quick mode to process only 3 images:
@@ -35,10 +46,28 @@ quickCount: 3
 
 | Command | Purpose |
 |---------|---------|
-| `init` | Create default configuration file |
+| `init` | Scan directory and create a tailored configuration file |
 | `process` | Run the complete processing pipeline |
 | `config` | Show current configuration |
 | `stars` | Analyze star quality and focus |
+
+## What `init` Detects
+
+`init` inspects your working directory before writing `kimage-astro-process.yaml`:
+
+| What | How it's detected | Result in config |
+|---|---|---|
+| **Input file extension** | Counts image files by extension; picks the most common | `format.inputImageExtension` |
+| **Light frame subdirectory** | Looks for a `light/` or `lights/` folder (any case) | `format.inputDirectory` |
+| **Calibration directories** | Checks for `bias/biases/`, `dark/darks/`, `flat/flats/`, `darkflat/darkflats/dark_flat/` (case-insensitive) | `calibrate.*Directory` |
+| **Bayer pattern** | Reads `BAYERPAT` FITS header from the first light frame | `format.debayer.bayerPattern` |
+| **Debayer on/off** | Disabled for TIFF/PNG/JPEG (already RGB); disabled for 3-channel FITS | `format.debayer.enabled` |
+| **Sigmoid midpoint** | Samples up to 3 light frames, computes median background level, clamps to [0.001, 0.3] | First `sigmoid.midpoint` in enhance steps |
+| **Target name** | Reads `OBJECT` FITS header from the first light frame | `annotate.decorate.title` |
+
+Calibration is never explicitly disabled — the pipeline skips any calibration stage whose directory does not exist. If `init` writes a non-default directory name (e.g. `darkDirectory: darks`), it found that directory on disk; otherwise it writes the default name and the stage is silently skipped when that directory is absent.
+
+If the detection is wrong, just edit `kimage-astro-process.yaml` before running `process`.
 
 ## Basic Workflow
 
@@ -61,8 +90,12 @@ your-project/
 ├── dark/*.fit                  # Dark frames (optional)
 ├── darkflat/*.fit              # Dark flat frames (optional)
 ├── flat/*.fit                  # Flat frames (optional)
-└── kimage-astro-process.yaml   # Configuration file
+└── kimage-astro-process.yaml   # Configuration file (created by init)
 ```
+
+`init` also recognises these common variants automatically:
+- Light frames in a `light/` or `lights/` subdirectory (any capitalisation)
+- Calibration directories named `biases/`, `darks/`, `flats/`, `darkflats/`, `dark_flat/`, `dark_flats/` (case-insensitive)
 
 ## Essential Configuration
 
@@ -240,6 +273,8 @@ align:
 
 ### Final Image Brightness
 
+`init` estimates a starting `midpoint` from the median background level of your frames. If the result is still too dark or too bright, tweak it manually:
+
 **Problem: Final image too dark**
 1. Make sure black pixel artifacts at borders are cropped away
 2. Decrease the `midpoint` in the first `sigmoid` step:
@@ -248,7 +283,7 @@ enhance:
   steps:
     # ... other steps ...
     - sigmoid:
-        midpoint: 0.005      # Lower value = brighter (try 0.005 instead of 0.01)
+        midpoint: 0.005      # Lower value = brighter
         strength: 1.1
 ```
 
@@ -259,7 +294,7 @@ enhance:
   steps:
     # ... other steps ...
     - sigmoid:
-        midpoint: 0.02       # Higher value = darker (try 0.02 instead of 0.01)
+        midpoint: 0.02       # Higher value = darker
         strength: 1.1
 ```
 

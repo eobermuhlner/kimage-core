@@ -666,7 +666,10 @@ fun main(args: Array<String>) {
             println(yaml.dumpAsMap(config))
         }
         "init" -> {
-            configFile.writeText(defaultAstroProcessConfigText)
+            val detection = detectSmartInitConfig()
+            printDetectionSummary(detection)
+            configFile.writeText(generateSmartConfigText(detection))
+            println("Created ${configFile.name}")
         }
         "stars" -> {
             AstroProcess(config).imageAnalysis()
