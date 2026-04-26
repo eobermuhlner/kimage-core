@@ -222,7 +222,6 @@ fun calculateTransformationMatrix(
     minScale: Double = 0.0,
     maxScale: Double = Double.MAX_VALUE
 ): Matrix? {
-val random = Random(123)
     var bestTransformation: Matrix? = null
     var bestInliers = 0
     var bestError = Double.MAX_VALUE
@@ -236,14 +235,16 @@ val random = Random(123)
 
     data class Result(val transformation: Matrix, val inliers: Int, val score: Double, val error: Double)
 
+    // Seed must stay hardcoded to keep alignment deterministic.
+    val random = Random(123)
+
     val nThreads = Runtime.getRuntime().availableProcessors()
     val iterationsPerThread = maxIterations / nThreads
 
     val results = (0 until nThreads).map { threadIdx ->
         val start = threadIdx * iterationsPerThread
         val end = if (threadIdx == nThreads - 1) maxIterations else (threadIdx + 1) * iterationsPerThread
-        val threadRandom = Random(threadIdx)
-        
+
         var bestLocalTransformation: Matrix? = null
         var bestLocalInliers = 0
         var bestLocalScore = -1.0
@@ -252,7 +253,7 @@ val random = Random(123)
         var rankConsistentQuads = 0
 
         for (iteration in start until end) {
-            val randomIndex = threadRandom.nextInt(otherQuads.size)
+            val randomIndex = random.nextInt(otherQuads.size)
             val otherQuad = otherQuads[randomIndex]
 
             val matchingQuads = findPotentialMatches(otherQuad, sortedReferenceQuads, angleTolerance)
