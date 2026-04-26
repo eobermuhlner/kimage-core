@@ -388,7 +388,7 @@ format:
     enabled: true               # Whether to debayer raw camera files
     cleanupBadPixels: true      # Remove bad/hot pixels during debayering
     bayerPattern: "RGGB"        # Bayer pattern: RGGB, GRBG, GBRG, BGGR
-    interpolation: "AHD"      # Debayer algorithm: None, SuperPixel, SuperPixelHalf, Monochrome, Nearest, Bilinear, AHD, GLI
+    interpolation: "AHD"      # Debayer algorithm: None, SuperPixel, SuperPixelHalf, Monochrome, Nearest, Bilinear, AHD, GLI, AMaZE, VNG, PPG
 ```
 
 ### Calibration Configuration
@@ -399,7 +399,7 @@ calibrate:
   debayer:                      # Debayering for calibration frames
     enabled: true
     bayerPattern: "RGGB"
-    interpolation: "AHD"
+    interpolation: "AHD"        # Debayer algorithm: None, SuperPixel, SuperPixelHalf, Monochrome, Nearest, Bilinear, AHD, GLI, AMaZE, VNG, PPG
   biasDirectory: "bias"         # Directory containing bias frames
   flatDirectory: "flat"         # Directory containing flat frames
   darkflatDirectory: "darkflat" # Directory containing dark flat frames
@@ -488,7 +488,7 @@ enhance:
         enabled: true
         cleanupBadPixels: true
         bayerPattern: "RGGB"
-        interpolation: "AHD"
+        interpolation: "AHD"    # Debayer algorithm: None, SuperPixel, SuperPixelHalf, Monochrome, Nearest, Bilinear, AHD, GLI, AMaZE, VNG, PPG
     # Rotation Step
     - rotate:
         angle: 0.0              # Rotation angle: 90, 180, 270, or any angle in degrees
@@ -660,6 +660,16 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`highDynamicRange`** - Combine multiple enhancement results
 
 ### Parameter Ranges and Tips
+
+**Debayer Algorithms:**
+- `None` / `Nearest` / `SuperPixel` / `SuperPixelHalf` — fast but low quality; useful for quick preview or alignment passes
+- `Bilinear` — simple 4-neighbour average; fast, slight colour blurring at edges
+- `Monochrome` — converts Bayer mosaic to luminance only (no colour separation)
+- `AHD` — Adaptive Homogeneity-Directed; good quality, edge-aware; the default
+- `GLI` — Gradient-Limited Interpolation; similar to AHD with gradient-guided green channel
+- `VNG` — Variable Number of Gradients; selects only low-gradient directions per pixel, reducing zipper artefacts at fine edges; good balance of quality and sharpness
+- `PPG` — Patterned Pixel Grouping; uses hue-transit (ratio) correction for natural colour transitions; works well for high-saturation subjects
+- `AMaZE` — highest quality; multi-pass Laplacian-corrected colour-difference interpolation; slowest but best detail and colour accuracy
 
 **Star Detection:**
 - `starThreshold`: 0.1 (more stars, noisier) to 0.5 (fewer stars, cleaner)

@@ -2,6 +2,8 @@ package ch.obermuhlner.kimage.astro.process
 
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.MatrixImage
+import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
+import ch.obermuhlner.kimage.core.image.bayer.bayer
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
@@ -107,6 +109,25 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
             val image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal, vignetteStrength, vignetteRadius)
             val file = File(directory, "${prefix}${index}.png")
             writeTestImage(file, image)
+        }
+    }
+
+    fun createRandomBayerImages(
+        directory: File,
+        prefix: String,
+        count: Int,
+        pattern: BayerPattern = BayerPattern.RGGB,
+        jitter: Int = 3,
+        addBiasNoise: Boolean = true,
+    ) {
+        directory.mkdirs()
+        for (index in 1..count) {
+            val jitterX = random.nextInt(-jitter, jitter + 1)
+            val jitterY = random.nextInt(-jitter, jitter + 1)
+            val rgbImage = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise)
+            val bayerImage = rgbImage.bayer(pattern)
+            val file = File(directory, "${prefix}${index}.png")
+            writeTestImage(file, bayerImage)
         }
     }
 

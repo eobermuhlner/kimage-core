@@ -51,6 +51,28 @@ class ImageDebayerTest : AbstractImageProcessingTest() {
     }
 
     @Test
+    fun `should VNG debayer produce non-trivial output`() {
+        val image = readTestImage()
+        val bayerImage = image.bayer(BayerPattern.RGGB)
+        val vngImage = bayerImage.debayer(BayerPattern.RGGB, DebayerInterpolation.VNG)
+
+        val greenValues = vngImage[Channel.Green].values().toList()
+        assertTrue(greenValues.any { it > 0.01 }, "VNG should produce non-zero output")
+        assertReferenceImage("vng_rggb", vngImage)
+    }
+
+    @Test
+    fun `should PPG debayer produce non-trivial output`() {
+        val image = readTestImage()
+        val bayerImage = image.bayer(BayerPattern.RGGB)
+        val ppgImage = bayerImage.debayer(BayerPattern.RGGB, DebayerInterpolation.PPG)
+
+        val greenValues = ppgImage[Channel.Green].values().toList()
+        assertTrue(greenValues.any { it > 0.01 }, "PPG should produce non-zero output")
+        assertReferenceImage("ppg_rggb", ppgImage)
+    }
+
+    @Test
     fun `should GLI debayer edge pixels without artifacts`() {
         val grayMatrix = DoubleMatrix(6, 6)
         for (y in 0 until 6) {

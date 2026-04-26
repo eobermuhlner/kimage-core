@@ -1,5 +1,7 @@
 package ch.obermuhlner.kimage.astro.process
 
+import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
+import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.stack.DrizzleConfig
 import ch.obermuhlner.kimage.core.image.stack.DrizzleCropConfig
 import ch.obermuhlner.kimage.core.image.stack.DrizzleKernel
@@ -8,6 +10,70 @@ import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import org.junit.jupiter.api.Test
 
 class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
+
+    @Test
+    fun `processAstro debayers light frames using VNG interpolation`() {
+        initTestRun()
+        createRandomBayerImages(testDir, "light", 5, BayerPattern.RGGB)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(
+                    enabled = true,
+                    cleanupBadPixels = false,
+                    bayerPattern = BayerPattern.RGGB,
+                    interpolation = DebayerInterpolation.VNG,
+                )
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf()),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro debayers light frames using PPG interpolation`() {
+        initTestRun()
+        createRandomBayerImages(testDir, "light", 5, BayerPattern.RGGB)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(
+                    enabled = true,
+                    cleanupBadPixels = false,
+                    bayerPattern = BayerPattern.RGGB,
+                    interpolation = DebayerInterpolation.PPG,
+                )
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf()),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
 
     @Test
     fun `processAstro runs with minimal config and light frames`() {

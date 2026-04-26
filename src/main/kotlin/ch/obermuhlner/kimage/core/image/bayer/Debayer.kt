@@ -24,7 +24,9 @@ enum class DebayerInterpolation {
     Bilinear,
     AHD,
     GLI,
-    AMaZE
+    AMaZE,
+    VNG,
+    PPG
 }
 
 fun Image.debayerCleanupBadPixels(
@@ -609,6 +611,267 @@ fun Image.debayer(
                             if (inBounds(cx, cy) && isRSite(cx, cy)) diffs += grDiff[cy][cx]
                         }
                         rPlane[y][x] = clamp(g - (if (diffs.isEmpty()) 0.0 else diffs.average()), 0.0, 1.0)
+                    }
+                }
+            }
+
+            // Copy to output
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    redMatrixXY[x, y] = rPlane[y][x] * red
+                    greenMatrixXY[x, y] = gPlane[y][x] * green
+                    blueMatrixXY[x, y] = bPlane[y][x] * blue
+                }
+            }
+        }
+        DebayerInterpolation.VNG -> {
+            val bmos = mosaic.asBoundedXY()
+            fun cfa(x: Int, y: Int): Double = bmos[x, y] ?: 0.0
+            fun isRSite(x: Int, y: Int) = x % 2 == rX && y % 2 == rY
+            fun isBSite(x: Int, y: Int) = x % 2 == bX && y % 2 == bY
+
+            val dirs = arrayOf(
+                0 to -1, 1 to -1, 1 to 0, 1 to 1,
+                0 to 1, -1 to 1, -1 to 0, -1 to -1
+            )
+
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    val isR = isRSite(x, y)
+                    val isB = isBSite(x, y)
+
+                    val grads = DoubleArray(8)
+                    val rEsts = DoubleArray(8)
+                    val gEsts = DoubleArray(8)
+                    val bEsts = DoubleArray(8)
+
+                    for (i in dirs.indices) {
+                        val (ddx, ddy) = dirs[i]
+                        val nx1 = x + ddx; val ny1 = y + ddy
+                        val nxN1 = x - ddx; val nyN1 = y - ddy
+                        val nx2 = x + 2 * ddx; val ny2 = y + 2 * ddy
+
+                        val crossGrad = if (bmos.isInBounds(nx1, ny1) && bmos.isInBounds(nxN1, nyN1))
+                            (cfa(nx1, ny1) - cfa(nxN1, nyN1)).absoluteValue
+                        else Double.MAX_VALUE / 4.0
+                        val sameStep = if (bmos.isInBounds(nx2, ny2))
+                            (cfa(x, y) - cfa(nx2, ny2)).absoluteValue
+                        else 0.0
+                        grads[i] = crossGrad + sameStep
+
+                        val isAxisDir = ddx == 0 || ddy == 0
+                        val perpDx = ddy
+                        val perpDy = ddx
+
+                        when {
+                            isR -> {
+                                rEsts[i] = cfa(x, y)
+                                if (isAxisDir) {
+                                    gEsts[i] = if (bmos.isInBounds(nx1, ny1)) cfa(nx1, ny1) else cfa(x, y)
+                                    bEsts[i] = listOf(bmos[nx1 + perpDx, ny1 + perpDy], bmos[nx1 - perpDx, ny1 - perpDy]).average()
+                                        .let { if (it.isNaN()) cfa(x, y) else it }
+                                } else {
+                                    bEsts[i] = if (bmos.isInBounds(nx1, ny1)) cfa(nx1, ny1) else cfa(x, y)
+                                    gEsts[i] = listOf(bmos[x + ddx, y], bmos[x, y + ddy]).average()
+                                        .let { if (it.isNaN()) cfa(x, y) else it }
+                                }
+                            }
+                            isB -> {
+                                bEsts[i] = cfa(x, y)
+                                if (isAxisDir) {
+                                    gEsts[i] = if (bmos.isInBounds(nx1, ny1)) cfa(nx1, ny1) else cfa(x, y)
+                                    rEsts[i] = listOf(bmos[nx1 + perpDx, ny1 + perpDy], bmos[nx1 - perpDx, ny1 - perpDy]).average()
+                                        .let { if (it.isNaN()) cfa(x, y) else it }
+                                } else {
+                                    rEsts[i] = if (bmos.isInBounds(nx1, ny1)) cfa(nx1, ny1) else cfa(x, y)
+                                    gEsts[i] = listOf(bmos[x + ddx, y], bmos[x, y + ddy]).average()
+                                        .let { if (it.isNaN()) cfa(x, y) else it }
+                                }
+                            }
+                            else -> { // Green pixel
+                                gEsts[i] = cfa(x, y)
+                                if (isAxisDir) {
+                                    when {
+                                        bmos.isInBounds(nx1, ny1) && isRSite(nx1, ny1) -> {
+                                            rEsts[i] = cfa(nx1, ny1)
+                                            bEsts[i] = listOf(bmos[x + perpDx, y + perpDy], bmos[x - perpDx, y - perpDy]).average()
+                                                .let { if (it.isNaN()) cfa(x, y) else it }
+                                        }
+                                        bmos.isInBounds(nx1, ny1) && isBSite(nx1, ny1) -> {
+                                            bEsts[i] = cfa(nx1, ny1)
+                                            rEsts[i] = listOf(bmos[x + perpDx, y + perpDy], bmos[x - perpDx, y - perpDy]).average()
+                                                .let { if (it.isNaN()) cfa(x, y) else it }
+                                        }
+                                        else -> { rEsts[i] = cfa(x, y); bEsts[i] = cfa(x, y) }
+                                    }
+                                } else {
+                                    // Diagonal from Green hits another Green; estimate R/B from axis neighbors
+                                    var rSum = 0.0; var rCnt = 0; var bSum = 0.0; var bCnt = 0
+                                    for ((px, py) in listOf(x - 1 to y, x + 1 to y, x to y - 1, x to y + 1)) {
+                                        if (bmos.isInBounds(px, py)) {
+                                            when {
+                                                isRSite(px, py) -> { rSum += cfa(px, py); rCnt++ }
+                                                isBSite(px, py) -> { bSum += cfa(px, py); bCnt++ }
+                                            }
+                                        }
+                                    }
+                                    rEsts[i] = if (rCnt > 0) rSum / rCnt else cfa(x, y)
+                                    bEsts[i] = if (bCnt > 0) bSum / bCnt else cfa(x, y)
+                                }
+                            }
+                        }
+                    }
+
+                    val minGrad = grads.min()
+                    val threshold = minGrad * 1.5
+
+                    var rAcc = 0.0; var gAcc = 0.0; var bAcc = 0.0; var cnt = 0
+                    for (i in dirs.indices) {
+                        if (grads[i] <= threshold + 1e-10) {
+                            rAcc += rEsts[i]; gAcc += gEsts[i]; bAcc += bEsts[i]; cnt++
+                        }
+                    }
+                    if (cnt == 0) {
+                        for (i in dirs.indices) { rAcc += rEsts[i]; gAcc += gEsts[i]; bAcc += bEsts[i] }
+                        cnt = 8
+                    }
+
+                    redMatrixXY[x, y] = clamp(rAcc / cnt * red, 0.0, 1.0)
+                    greenMatrixXY[x, y] = clamp(gAcc / cnt * green, 0.0, 1.0)
+                    blueMatrixXY[x, y] = clamp(bAcc / cnt * blue, 0.0, 1.0)
+                }
+            }
+        }
+        DebayerInterpolation.PPG -> {
+            val bmos = mosaic.asBoundedXY()
+            fun cfa(x: Int, y: Int): Double = bmos[x, y] ?: 0.0
+            fun inBounds(x: Int, y: Int): Boolean = bmos.isInBounds(x, y)
+            fun isRSite(x: Int, y: Int) = x % 2 == rX && y % 2 == rY
+            fun isBSite(x: Int, y: Int) = x % 2 == bX && y % 2 == bY
+
+            val gPlane = Array(height) { DoubleArray(width) }
+            val rPlane = Array(height) { DoubleArray(width) }
+            val bPlane = Array(height) { DoubleArray(width) }
+
+            // Step 1: Copy known CFA values to colour planes
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    when {
+                        isRSite(x, y) -> rPlane[y][x] = cfa(x, y)
+                        isBSite(x, y) -> bPlane[y][x] = cfa(x, y)
+                        else -> gPlane[y][x] = cfa(x, y)
+                    }
+                }
+            }
+
+            // Step 2: Interpolate G at R/B sites using gradient-weighted Malvar formula
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    if (isRSite(x, y) || isBSite(x, y)) {
+                        val p = cfa(x, y)
+                        val gL = cfa(x - 1, y); val gR = cfa(x + 1, y)
+                        val gU = cfa(x, y - 1); val gD = cfa(x, y + 1)
+                        val pL2 = if (inBounds(x - 2, y)) cfa(x - 2, y) else p
+                        val pR2 = if (inBounds(x + 2, y)) cfa(x + 2, y) else p
+                        val pU2 = if (inBounds(x, y - 2)) cfa(x, y - 2) else p
+                        val pD2 = if (inBounds(x, y + 2)) cfa(x, y + 2) else p
+
+                        val canH = inBounds(x - 1, y) && inBounds(x + 1, y)
+                        val canV = inBounds(x, y - 1) && inBounds(x, y + 1)
+
+                        val gh: Double; val dh: Double
+                        if (canH) {
+                            gh = (gL + gR) / 2.0 + (2.0 * p - pL2 - pR2) / 4.0
+                            dh = (gL - gR).absoluteValue + (p - pL2).absoluteValue + (p - pR2).absoluteValue
+                        } else {
+                            gh = if (inBounds(x - 1, y)) gL else gR
+                            dh = Double.MAX_VALUE / 2.0
+                        }
+
+                        val gv: Double; val dv: Double
+                        if (canV) {
+                            gv = (gU + gD) / 2.0 + (2.0 * p - pU2 - pD2) / 4.0
+                            dv = (gU - gD).absoluteValue + (p - pU2).absoluteValue + (p - pD2).absoluteValue
+                        } else {
+                            gv = if (inBounds(x, y - 1)) gU else gD
+                            dv = Double.MAX_VALUE / 2.0
+                        }
+
+                        val wh = 1.0 / (1.0 + dh)
+                        val wv = 1.0 / (1.0 + dv)
+                        gPlane[y][x] = clamp((wh * gh + wv * gv) / (wh + wv), 0.0, 1.0)
+                    }
+                }
+            }
+
+            // Step 3: Interpolate R/B at Green sites using hue-transit (ratio) correction
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    if (!isRSite(x, y) && !isBSite(x, y)) {
+                        val g = gPlane[y][x]
+                        if (y % 2 == rY) { // Green in R-row: R is horizontal, B is vertical
+                            val rRatios = mutableListOf<Double>()
+                            for ((nx, ny) in listOf(x - 1 to y, x + 1 to y)) {
+                                if (inBounds(nx, ny) && isRSite(nx, ny)) {
+                                    val gAtR = gPlane[ny][nx]
+                                    if (gAtR > 1e-10) rRatios.add(rPlane[ny][nx] / gAtR)
+                                }
+                            }
+                            rPlane[y][x] = clamp(g * (if (rRatios.isEmpty()) 1.0 else rRatios.average()), 0.0, 1.0)
+
+                            val bRatios = mutableListOf<Double>()
+                            for ((nx, ny) in listOf(x to y - 1, x to y + 1)) {
+                                if (inBounds(nx, ny) && isBSite(nx, ny)) {
+                                    val gAtB = gPlane[ny][nx]
+                                    if (gAtB > 1e-10) bRatios.add(bPlane[ny][nx] / gAtB)
+                                }
+                            }
+                            bPlane[y][x] = clamp(g * (if (bRatios.isEmpty()) 1.0 else bRatios.average()), 0.0, 1.0)
+                        } else { // Green in B-row: B is horizontal, R is vertical
+                            val bRatios = mutableListOf<Double>()
+                            for ((nx, ny) in listOf(x - 1 to y, x + 1 to y)) {
+                                if (inBounds(nx, ny) && isBSite(nx, ny)) {
+                                    val gAtB = gPlane[ny][nx]
+                                    if (gAtB > 1e-10) bRatios.add(bPlane[ny][nx] / gAtB)
+                                }
+                            }
+                            bPlane[y][x] = clamp(g * (if (bRatios.isEmpty()) 1.0 else bRatios.average()), 0.0, 1.0)
+
+                            val rRatios = mutableListOf<Double>()
+                            for ((nx, ny) in listOf(x to y - 1, x to y + 1)) {
+                                if (inBounds(nx, ny) && isRSite(nx, ny)) {
+                                    val gAtR = gPlane[ny][nx]
+                                    if (gAtR > 1e-10) rRatios.add(rPlane[ny][nx] / gAtR)
+                                }
+                            }
+                            rPlane[y][x] = clamp(g * (if (rRatios.isEmpty()) 1.0 else rRatios.average()), 0.0, 1.0)
+                        }
+                    }
+                }
+            }
+
+            // Step 4: Interpolate opposite channel at R/B sites via diagonal hue-transit
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    val g = gPlane[y][x]
+                    if (isRSite(x, y)) {
+                        val bRatios = mutableListOf<Double>()
+                        for ((nx, ny) in listOf(x - 1 to y - 1, x + 1 to y - 1, x - 1 to y + 1, x + 1 to y + 1)) {
+                            if (inBounds(nx, ny) && isBSite(nx, ny)) {
+                                val gAtB = gPlane[ny][nx]
+                                if (gAtB > 1e-10) bRatios.add(bPlane[ny][nx] / gAtB)
+                            }
+                        }
+                        bPlane[y][x] = clamp(g * (if (bRatios.isEmpty()) 1.0 else bRatios.average()), 0.0, 1.0)
+                    } else if (isBSite(x, y)) {
+                        val rRatios = mutableListOf<Double>()
+                        for ((nx, ny) in listOf(x - 1 to y - 1, x + 1 to y - 1, x - 1 to y + 1, x + 1 to y + 1)) {
+                            if (inBounds(nx, ny) && isRSite(nx, ny)) {
+                                val gAtR = gPlane[ny][nx]
+                                if (gAtR > 1e-10) rRatios.add(rPlane[ny][nx] / gAtR)
+                            }
+                        }
+                        rPlane[y][x] = clamp(g * (if (rRatios.isEmpty()) 1.0 else rRatios.average()), 0.0, 1.0)
                     }
                 }
             }
