@@ -44,7 +44,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var starBleed = 2.5
     var starBeta = 2.5
 
-    var satelliteTrailProbability = 0.7
+    var satelliteTrailProbability = 0.3
     var satelliteTrailBrightnessMin = 0.1
     var satelliteTrailBrightnessMax = 1.0
     var satelliteTrailWidthMin = 0.1
@@ -63,6 +63,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
             starPositions.add(MockStar(
                 random.nextInt(starFieldWidth) - width,
                 random.nextInt(starFieldHeight) - height,
+                random.nextDouble(0.0, 1.0),
                 random.nextDouble(0.0, 1.0)))
         }
     }
@@ -97,6 +98,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         val x: Int,
         val y: Int,
         val brightness: Double,
+        val colorIndex: Double = 0.5,
     )
 
     data class MockSatelliteTrail(
@@ -197,55 +199,67 @@ fun createRandomBayerImages(
     ): MatrixImage {
         val centerX = width / 2.0
         val centerY = height / 2.0
-        val matrix = DoubleMatrix(height, width) { row, col ->
-            val biasNoise = random.nextGaussian(noiseBiasLevel, noiseBiasSigma)
-            val readNoise = random.nextGaussian(noiseReadLevel, noiseReadSigma)
-            val skyValue = 0.1
 
-            val dxV = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
-            val dyV = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
-            val r = sqrt(dxV * dxV + dyV * dyV)
-            val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
+        fun channelMatrix(skyValue: Double, starBrightnessFactor: (MockStar) -> Double): DoubleMatrix {
+            return DoubleMatrix(height, width) { row, col ->
+                val biasNoise = random.nextGaussian(noiseBiasLevel, noiseBiasSigma)
+                val readNoise = random.nextGaussian(noiseReadLevel, noiseReadSigma)
 
-            var totalStarSignal = 0.0
-            for (star in starPositions) {
-                val starX = star.x + jitterX
-                val starY = star.y + jitterY
-                val dxStar = col.toDouble() - starX
-                val dyStar = row.toDouble() - starY
-                val dist = sqrt(dxStar * dxStar + dyStar * dyStar)
-                val effectiveWidth = starWidth * (1.0 + star.brightness * starBleed)
-                val gamma = 1.0 / effectiveWidth
-                val moffatPSF = (1.0 + (dist * gamma).pow(2.0)).pow(-starBeta)
-                totalStarSignal += star.brightness * moffatPSF
-            }
+                val dxV = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
+                val dyV = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
+                val r = sqrt(dxV * dxV + dyV * dyV)
+                val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
 
-            val rawSignal = (totalStarSignal + skyValue) * vignette
-
-            var totalTrailSignal = 0.0
-            for (trail in satelliteTrails) {
-                val dx = trail.x1 - trail.x0
-                val dy = trail.y1 - trail.y0
-                val len = sqrt(dx * dx + dy * dy)
-                if (len > 1e-10) {
-                    val dist = abs(dx * (trail.y0 - row) - (trail.x0 - col) * dy) / len
-                    totalTrailSignal += trail.brightness * exp(-0.5 * (dist / trail.width).pow(2.0))
+                var totalStarSignal = 0.0
+                for (star in starPositions) {
+                    val starX = star.x + jitterX
+                    val starY = star.y + jitterY
+                    val dxStar = col.toDouble() - starX
+                    val dyStar = row.toDouble() - starY
+                    val dist = sqrt(dxStar * dxStar + dyStar * dyStar)
+                    val effectiveWidth = starWidth * (1.0 + star.brightness * starBleed)
+                    val gamma = 1.0 / effectiveWidth
+                    val moffatPSF = (1.0 + (dist * gamma).pow(2.0)).pow(-starBeta)
+                    totalStarSignal += starBrightnessFactor(star) * moffatPSF
                 }
+
+                val rawSignal = (totalStarSignal + skyValue) * vignette
+
+                var totalTrailSignal = 0.0
+                for (trail in satelliteTrails) {
+                    val dx = trail.x1 - trail.x0
+                    val dy = trail.y1 - trail.y0
+                    val len = sqrt(dx * dx + dy * dy)
+                    if (len > 1e-10) {
+                        val dist = abs(dx * (trail.y0 - row) - (trail.x0 - col) * dy) / len
+                        totalTrailSignal += trail.brightness * exp(-0.5 * (dist / trail.width).pow(2.0))
+                    }
+                }
+
+                val photonNoise: Double = if (addSignal) random.nextGaussian(0.0, sqrt(rawSignal + 1e-10) * photonNoiseScale) else 0.0
+
+                val biasValue: Double = if (addBiasNoise) biasNoise else 0.0
+                val readValue: Double = if (addReadNoise) readNoise else 0.0
+                val signalValue: Double = if (addSignal) rawSignal + photonNoise + totalTrailSignal else 0.0
+                (biasValue + readValue + signalValue).coerceIn(0.0, 1.0)
             }
-
-            val photonNoise: Double = if (addSignal) random.nextGaussian(0.0, sqrt(rawSignal + 1e-10) * photonNoiseScale) else 0.0
-
-            val biasValue: Double = if (addBiasNoise) biasNoise else 0.0
-            val readValue: Double = if (addReadNoise) readNoise else 0.0
-            val signalValue: Double = if (addSignal) rawSignal + photonNoise + totalTrailSignal else 0.0
-            val value = biasValue + readValue + signalValue
-            value.coerceIn(0.0, 1.0)
         }
+
+        // Stars have a colorIndex (0=blue, 1=red) that modulates per-channel brightness.
+        // Green is always between min(R,B) and max(R,B) so no star ever appears green.
+        val redMatrix = channelMatrix(0.10) { star -> star.brightness * (0.3 + 0.7 * star.colorIndex) }
+        val greenMatrix = channelMatrix(0.10) { star ->
+            val r = 0.3 + 0.7 * star.colorIndex
+            val b = 0.3 + 0.7 * (1.0 - star.colorIndex)
+            star.brightness * (minOf(r, b) + 0.4 * abs(r - b))
+        }
+        val blueMatrix = channelMatrix(0.10) { star -> star.brightness * (0.3 + 0.7 * (1.0 - star.colorIndex)) }
+
         return MatrixImage(
             width, height,
-            Channel.Red to matrix,
-            Channel.Green to matrix,
-            Channel.Blue to matrix
+            Channel.Red to redMatrix,
+            Channel.Green to greenMatrix,
+            Channel.Blue to blueMatrix
         )
     }
 
@@ -255,18 +269,23 @@ fun createRandomBayerImages(
     ): MatrixImage {
         val centerX = width / 2.0
         val centerY = height / 2.0
-        val matrix = DoubleMatrix(height, width) { row, col ->
-            val dx = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
-            val dy = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
-            val r = sqrt(dx * dx + dy * dy)
-            val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
-            random.nextGaussian(flatLevel, flatSigma) * vignette
+
+        fun channelMatrix(channelFlatLevel: Double): DoubleMatrix {
+            return DoubleMatrix(height, width) { row, col ->
+                val dx = ((col - centerX) / centerX).coerceIn(-1.0, 1.0)
+                val dy = ((row - centerY) / centerY).coerceIn(-1.0, 1.0)
+                val r = sqrt(dx * dx + dy * dy)
+                val vignette = (1.0 - vignetteStrength * r.pow(2.0 / vignetteRadius)).coerceIn(0.0, 1.0)
+                random.nextGaussian(channelFlatLevel, flatSigma) * vignette
+            }
         }
+
+        // Different per-channel flat levels simulate sensor spectral sensitivity variation
         return MatrixImage(
             width, height,
-            Channel.Red to matrix,
-            Channel.Green to matrix,
-            Channel.Blue to matrix
+            Channel.Red to channelMatrix(flatLevel * 0.90),
+            Channel.Green to channelMatrix(flatLevel * 1.00),
+            Channel.Blue to channelMatrix(flatLevel * 0.85)
         )
     }
 

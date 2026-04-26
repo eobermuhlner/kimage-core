@@ -1,5 +1,6 @@
 package ch.obermuhlner.kimage.astro.process
 
+import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
 import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.stack.DrizzleConfig
@@ -7,6 +8,8 @@ import ch.obermuhlner.kimage.core.image.stack.DrizzleCropConfig
 import ch.obermuhlner.kimage.core.image.stack.DrizzleKernel
 import ch.obermuhlner.kimage.core.image.stack.DrizzleRejection
 import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
+import kotlin.math.abs
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
@@ -73,6 +76,63 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         )
 
         assertAstroProcess(config)
+    }
+
+    @Test
+    fun `createRandomAstroImage star color reflects colorIndex`() {
+        initTestRun()
+        val savedPhotonNoiseScale = photonNoiseScale
+        photonNoiseScale = 0.0
+
+        // neutral star (colorIndex=0.5): green must not dominate
+        val neutralImage = createRandomAstroImage(width, height,
+            listOf(MockStar(width / 2, height / 2, 1.0, 0.5)),
+            addBiasNoise = false, addReadNoise = false)
+        val nR = neutralImage.getPixel(width / 2, height / 2, Channel.Red)
+        val nG = neutralImage.getPixel(width / 2, height / 2, Channel.Green)
+        val nB = neutralImage.getPixel(width / 2, height / 2, Channel.Blue)
+        assertTrue(nG <= maxOf(nR, nB) + 0.01,
+            "Neutral star (colorIndex=0.5): green should not dominate, got R=$nR G=$nG B=$nB")
+
+        // blue star (colorIndex=0.0): blue must be the brightest channel
+        val blueImage = createRandomAstroImage(width, height,
+            listOf(MockStar(width / 2, height / 2, 1.0, 0.0)),
+            addBiasNoise = false, addReadNoise = false)
+        val bR = blueImage.getPixel(width / 2, height / 2, Channel.Red)
+        val bG = blueImage.getPixel(width / 2, height / 2, Channel.Green)
+        val bB = blueImage.getPixel(width / 2, height / 2, Channel.Blue)
+        assertTrue(bB > bG && bB > bR,
+            "Blue star (colorIndex=0.0): blue should dominate, got R=$bR G=$bG B=$bB")
+
+        // red star (colorIndex=1.0): red must be the brightest channel
+        val redImage = createRandomAstroImage(width, height,
+            listOf(MockStar(width / 2, height / 2, 1.0, 1.0)),
+            addBiasNoise = false, addReadNoise = false)
+        val rR = redImage.getPixel(width / 2, height / 2, Channel.Red)
+        val rG = redImage.getPixel(width / 2, height / 2, Channel.Green)
+        val rB = redImage.getPixel(width / 2, height / 2, Channel.Blue)
+        assertTrue(rR > rG && rR > rB,
+            "Red star (colorIndex=1.0): red should dominate, got R=$rR G=$rG B=$rB")
+
+        photonNoiseScale = savedPhotonNoiseScale
+    }
+
+    @Test
+    fun `createRandomAstroImage generates distinct RGB channels`() {
+        initTestRun()
+        val image = createRandomAstroImage(width, height, starPositions)
+
+        var redGreenDiff = 0.0
+        var redBlueDiff = 0.0
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                redGreenDiff += abs(image.getPixel(x, y, Channel.Red) - image.getPixel(x, y, Channel.Green))
+                redBlueDiff += abs(image.getPixel(x, y, Channel.Red) - image.getPixel(x, y, Channel.Blue))
+            }
+        }
+        assertTrue(redGreenDiff > 0.0, "Red and Green channels should be different (not grayscale)")
+        assertTrue(redBlueDiff > 0.0, "Red and Blue channels should be different (not grayscale)")
+    }
     }
 
     @Test
@@ -177,7 +237,7 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     @Test
     fun `processAstro runs with bayered light frames`() {
         initTestRun()
-        starWidth = 0.8
+        //starWidth = 0.8
         createRandomAstroImages(testDir, "light", 3, jitter = 0.0, bayerPattern = BayerPattern.RGGB)
 
         val config = ProcessConfig(
