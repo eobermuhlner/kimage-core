@@ -242,7 +242,11 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     fun `processAstro runs with bayered light frames`() {
         initTestRun()
         //starWidth = 0.8
-        createRandomAstroImages(testDir, "light", 3, jitter = 0.0, bayerPattern = BayerPattern.RGGB)
+        sensorHotPixelCount = 2
+        sensorDeadPixelCount = 1
+        sensorStuckPixelCount = 2
+        sensorBadColumnCount = 1
+        createRandomAstroImages(testDir, "light", 10, jitter = 3.0, bayerPattern = BayerPattern.RGGB)
 
         val config = ProcessConfig(
             format = FormatConfig(
@@ -274,7 +278,11 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     fun `processAstro runs with bayered light frames debayering with Bilinear`() {
         initTestRun()
         //starWidth = 0.8
-        createRandomAstroImages(testDir, "light", 3, jitter = 0.0, bayerPattern = BayerPattern.RGGB)
+        sensorHotPixelCount = 2
+        sensorDeadPixelCount = 1
+        sensorStuckPixelCount = 2
+        sensorBadColumnCount = 1
+        createRandomAstroImages(testDir, "light", 10, jitter = 3.0, bayerPattern = BayerPattern.RGGB)
 
         val config = ProcessConfig(
             format = FormatConfig(
@@ -289,6 +297,47 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(
+                algorithm = StackAlgorithm.Median
+            ),
+            enhance = EnhanceConfig(
+                steps = mutableListOf()
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with bayered light frames and calibration frames`() {
+        initTestRun()
+        //starWidth = 0.8
+        sensorHotPixelCount = 2
+        sensorDeadPixelCount = 1
+        sensorStuckPixelCount = 2
+        sensorBadColumnCount = 1
+        createRandomAstroImages(testDir, "light", 10, jitter = 3.0, bayerPattern = BayerPattern.RGGB)
+        createRandomAstroImages(testDir.resolve("dark"), "dark", 10, addSignal = false)
+        createRandomAstroImages(testDir.resolve("bias"), "bias", 10, addReadNoise = false, addSignal = false)
+        createRandomFlatImages(testDir.resolve("flat"), "flat", 10)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = true, bayerPattern = BayerPattern.RGGB, cleanupBadPixels = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = true,
+                searchParentDirectories = false,
+                debayer = DebayerConfig(enabled = false),
                 normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             ),
             align = AlignConfig(),

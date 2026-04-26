@@ -50,6 +50,11 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var satelliteTrailWidthMin = 0.1
     var satelliteTrailWidthMax = 1.1
 
+    var sensorHotPixelCount = 0
+    var sensorDeadPixelCount = 0
+    var sensorStuckPixelCount = 0
+    var sensorBadColumnCount = 0
+
 
     fun initTestRun() {
         testDir = prepareTestRunDirectory()
@@ -110,6 +115,32 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         val width: Double,
     )
 
+    data class SensorArtifacts(
+        val hotPixels: List<Pair<Int, Int>> = emptyList(),
+        val deadPixels: List<Pair<Int, Int>> = emptyList(),
+        val stuckPixels: List<Triple<Int, Int, Channel>> = emptyList(),
+        val badColumns: List<Int> = emptyList(),
+    )
+
+    private fun generateSensorArtifacts(): SensorArtifacts {
+        val hotPixels = (0 until sensorHotPixelCount).map {
+            random.nextInt(height) to random.nextInt(width)
+        }
+        val deadPixels = (0 until sensorDeadPixelCount).map {
+            random.nextInt(height) to random.nextInt(width)
+        }
+        val stuckPixels = (0 until sensorStuckPixelCount).map {
+            val x = random.nextInt(width)
+            val y = random.nextInt(height)
+            val channel = Channel.entries[random.nextInt(Channel.entries.size)]
+            Triple(x, y, channel)
+        }
+        val badColumns = (0 until sensorBadColumnCount).map {
+            random.nextInt(width)
+        }
+        return SensorArtifacts(hotPixels, deadPixels, stuckPixels, badColumns)
+    }
+
     fun createRandomAstroImages(
         directory: File,
         prefix: String,
@@ -121,13 +152,14 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         addSignal: Boolean = true,
     ) {
         directory.mkdirs()
+        val sensorArtifacts = generateSensorArtifacts()
         for (index in 1..count) {
             val effectiveJitter = if (index == 1) 0.0 else jitter
             val jitterX = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
             val jitterY = if (effectiveJitter == 0.0) 0.0 else random.nextDouble(-effectiveJitter, effectiveJitter)
             val trailCount = random.nextPoisson(satelliteTrailProbability)
             val trails = List(trailCount) { createRandomSatelliteTrail() }
-            var image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal, trails)
+            var image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal, trails, sensorArtifacts)
             if (bayerPattern != null) {
                 image = image.bayer(bayerPattern)
             }
@@ -196,11 +228,12 @@ fun createRandomBayerImages(
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
         satelliteTrails: List<MockSatelliteTrail> = emptyList(),
+        sensorArtifacts: SensorArtifacts = SensorArtifacts(),
     ): MatrixImage {
         val centerX = width / 2.0
         val centerY = height / 2.0
 
-        fun channelMatrix(skyValue: Double, starBrightnessFactor: (MockStar) -> Double): DoubleMatrix {
+        fun channelMatrix(skyValue: Double, starBrightnessFactor: (MockStar) -> Double, channel: Channel): DoubleMatrix {
             return DoubleMatrix(height, width) { row, col ->
                 val biasNoise = random.nextGaussian(noiseBiasLevel, noiseBiasSigma)
                 val readNoise = random.nextGaussian(noiseReadLevel, noiseReadSigma)
@@ -240,20 +273,36 @@ fun createRandomBayerImages(
 
                 val biasValue: Double = if (addBiasNoise) biasNoise else 0.0
                 val readValue: Double = if (addReadNoise) readNoise else 0.0
-                val signalValue: Double = if (addSignal) rawSignal + photonNoise + totalTrailSignal else 0.0
+                var signalValue: Double = if (addSignal) rawSignal + photonNoise + totalTrailSignal else 0.0
+
+                // Apply sensor artifacts
+                if (row to col in sensorArtifacts.hotPixels) {
+                    signalValue = 1.0 // Hot pixels are fully saturated
+                }
+                if (row to col in sensorArtifacts.deadPixels) {
+                    signalValue = 0.0 // Dead pixels are completely dark
+                }
+                if (sensorArtifacts.badColumns.contains(col)) {
+                    signalValue = 0.0 // Bad columns are dark
+                }
+                val stuckInThisChannel = sensorArtifacts.stuckPixels.any { it.first == col && it.second == row && it.third == channel }
+                if (stuckInThisChannel) {
+                    signalValue = 1.0 // Stuck pixels are at max value
+                }
+
                 (biasValue + readValue + signalValue).coerceIn(0.0, 1.0)
             }
         }
 
         // Stars have a colorIndex (0=blue, 1=red) that modulates per-channel brightness.
         // Green is always between min(R,B) and max(R,B) so no star ever appears green.
-        val redMatrix = channelMatrix(0.10) { star -> star.brightness * (0.3 + 0.7 * star.colorIndex) }
-        val greenMatrix = channelMatrix(0.10) { star ->
+        val redMatrix = channelMatrix(0.10, { star -> star.brightness * (0.3 + 0.7 * star.colorIndex) }, Channel.Red)
+        val greenMatrix = channelMatrix(0.10, { star ->
             val r = 0.3 + 0.7 * star.colorIndex
             val b = 0.3 + 0.7 * (1.0 - star.colorIndex)
             star.brightness * (minOf(r, b) + 0.4 * abs(r - b))
-        }
-        val blueMatrix = channelMatrix(0.10) { star -> star.brightness * (0.3 + 0.7 * (1.0 - star.colorIndex)) }
+        }, Channel.Green)
+        val blueMatrix = channelMatrix(0.10, { star -> star.brightness * (0.3 + 0.7 * (1.0 - star.colorIndex)) }, Channel.Blue)
 
         return MatrixImage(
             width, height,
