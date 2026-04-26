@@ -175,6 +175,38 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `processAstro runs with bayered light frames`() {
+        initTestRun()
+
+        createRandomAstroImages(testDir, "light", 3, jitter = 0, bayerPattern = BayerPattern.RGGB)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = true, bayerPattern = BayerPattern.RGGB, cleanupBadPixels = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(
+                algorithm = StackAlgorithm.Median
+            ),
+            enhance = EnhanceConfig(
+                steps = mutableListOf()
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
     fun `processAstro runs with drizzle stacking and sigma clip rejection`() {
         initTestRun()
         createRandomAstroImages(testDir, "light", 5, addBiasNoise = false)

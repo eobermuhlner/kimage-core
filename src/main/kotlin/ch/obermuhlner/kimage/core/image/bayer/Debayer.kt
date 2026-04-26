@@ -87,10 +87,11 @@ fun Image.debayer(
         BayerPattern.GRBG -> PointXY(0, 1)
     }
 
-    val mosaic = if (badpixelCoords.isEmpty()) {
-        this[Channel.Gray]
-    } else {
-        this[Channel.Gray].cleanupBayerBadPixels(badpixelCoords)
+    val mosaic = when {
+        badpixelCoords.isEmpty() && this.hasChannel(Channel.Gray) -> this[Channel.Gray]
+        badpixelCoords.isEmpty() && this.hasChannel(Channel.Red) -> this[Channel.Red]
+        this.hasChannel(Channel.Gray) -> this[Channel.Gray].cleanupBayerBadPixels(badpixelCoords)
+        else -> this[Channel.Red].cleanupBayerBadPixels(badpixelCoords)
     }
     val mosaicXY = mosaic.asXY()
 

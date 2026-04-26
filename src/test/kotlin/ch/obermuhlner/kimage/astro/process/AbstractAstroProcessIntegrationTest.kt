@@ -9,7 +9,6 @@ import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import java.io.File
-import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -96,17 +95,20 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         prefix: String,
         count: Int,
         jitter: Int = 3,
+        bayerPattern: BayerPattern? = null,
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
-        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
-        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ) {
         directory.mkdirs()
         for (index in 1..count) {
-            val jitterX = random.nextInt(-jitter, jitter + 1)
-            val jitterY = random.nextInt(-jitter, jitter + 1)
-            val image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal, vignetteStrength, vignetteRadius)
+            val effectiveJitter = if (index == 1) 0 else jitter
+            val jitterX = random.nextInt(-effectiveJitter, effectiveJitter + 1)
+            val jitterY = random.nextInt(-effectiveJitter, effectiveJitter + 1)
+            var image = createRandomAstroImage(width, height, starPositions, jitterX, jitterY, addBiasNoise, addReadNoise, addSignal)
+            if (bayerPattern != null) {
+                image = image.bayer(bayerPattern)
+            }
             val file = File(directory, "${prefix}${index}.png")
             writeTestImage(file, image)
         }
@@ -135,12 +137,10 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         directory: File,
         prefix: String,
         count: Int,
-        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
-        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ) {
         directory.mkdirs()
         for (index in 1..count) {
-            val image = createRandomFlatImage(width, height, vignetteStrength, vignetteRadius)
+            val image = createRandomFlatImage(width, height)
             val file = File(directory, "${prefix}${index}.png")
             writeTestImage(file, image)
         }
@@ -155,8 +155,6 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         addBiasNoise: Boolean = true,
         addReadNoise: Boolean = true,
         addSignal: Boolean = true,
-        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
-        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ): MatrixImage {
         val centerX = width / 2.0
         val centerY = height / 2.0
@@ -204,8 +202,6 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     fun createRandomFlatImage(
         width: Int,
         height: Int,
-        vignetteStrength: Double = this@AbstractAstroProcessIntegrationTest.vignetteStrength,
-        vignetteRadius: Double = this@AbstractAstroProcessIntegrationTest.vignetteRadius,
     ): MatrixImage {
         val centerX = width / 2.0
         val centerY = height / 2.0
