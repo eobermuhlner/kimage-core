@@ -91,6 +91,59 @@ align:
   positionTolerance: 2.0        # Pixel tolerance for alignment
 ```
 
+### Drizzle Stacking (Advanced)
+
+Drizzle recovers resolution beyond the Nyquist limit when your frames have sub-pixel dithering between exposures. Instead of stacking pre-aligned images on a shared grid, each input pixel is forward-projected onto a supersampled output grid, distributing its flux proportionally across the output pixels it overlaps.
+
+Enable drizzle by setting `algorithm: Drizzle` in the `stack` block:
+
+```yaml
+stack:
+  algorithm: Drizzle
+  drizzle:
+    scale: 2.0          # Output grid scale (1× = native, 2× = double resolution)
+    pixfrac: 0.7        # Drop size as a fraction of input pixel (0.0–1.0)
+    kernel: Square      # Kernel shape: Square (top-hat) or Gaussian
+    rejection: SigmaClip  # Bad-pixel rejection: None, SigmaClip, or Winsorize
+    kappa: 2.0          # Rejection threshold in standard deviations (used by SigmaClip/Winsorize)
+    iterations: 5       # Number of sigma-clip iterations (SigmaClip only)
+    crop:               # Optional: drizzle only a sub-region of the output (reference-frame coords)
+      enabled: true
+      x: 100            # Left edge of the crop window in reference-frame pixels
+      y: 100            # Top edge
+      width: 800        # Width of the crop window
+      height: 600       # Height of the crop window
+```
+
+**When to use it:**
+- Your imaging session used dithering between frames (random sub-pixel offsets)
+- You want a higher-resolution result than individual frames provide
+- Your target has fine detail that is being lost to aliasing
+
+**When NOT to use it:**
+- Frames were not dithered — with identical offsets, drizzle offers no benefit over Median
+- You have very few frames — at least 5–10 dithered frames are recommended
+
+**Parameter guidance:**
+- `scale: 2.0` — the most common choice; doubles linear resolution, quadruples file size
+- `pixfrac: 0.7` — balances resolution gain against noise: lower values sharpen but increase noise, higher values blur slightly but lower noise
+- `kernel: Square` — conserves flux exactly and is preferred for photometric work; `Gaussian` produces smoother blending
+
+**Bad-pixel rejection:**
+
+Without rejection (`rejection: None`, the default), every input pixel contributes to the output — hot pixels and cosmic rays from any single frame will bleed into the result. Enable rejection when your frames may contain outliers:
+
+- `rejection: SigmaClip` — iteratively clips values more than `kappa` standard deviations from the per-pixel median; recommended for most sessions
+- `rejection: Winsorize` — clamps outliers to the sigma boundary rather than removing them; preserves more data but is less aggressive
+- `kappa: 2.0` — lower values reject more aggressively (try 1.5–2.5); higher values are more lenient
+- `iterations: 5` — more iterations refine the clip boundary but rarely change results beyond 3–5
+
+**Cropping the drizzle output:**
+
+Use `crop` to drizzle only a sub-region instead of the full frame — useful for focusing on a specific object, reducing memory use, or avoiding noisy edges. Coordinates are in reference-frame pixels (the aligned coordinate system, before scale is applied). The output image size will be `width × scale` by `height × scale`.
+
+> **Note:** Drizzle is only effective when frames are dithered. Without dithering, use Median or a sigma-clipping algorithm instead.
+
 ### Enhancement Steps (Advanced)
 Enhancement uses a flexible step-by-step approach. Common steps include:
 
@@ -269,6 +322,7 @@ For power users, the software also supports:
 - **Background Removal** - Remove gradients and light pollution
 - **Plate Solving** - Automatically determine sky coordinates using ASTAP and mark NGC objects
 - **Stacking Algorithms** - Choose from Median, SigmaClip, Winsorize, SmartMax, and more
+- **Drizzle Stacking** - Recover resolution beyond the native pixel scale from dithered frames
 
 <details>
 <summary>Click to see full configuration reference</summary>
@@ -378,7 +432,30 @@ stack:
                                 # SigmaWinsorizeMedian, SigmaWinsorizeAverage
                                 # WinsorizedSigmaClipMedian, WinsorizedSigmaClipAverage
                                 # SigmaClipWeightedMedian, SmartMax
+                                # Drizzle (see below)
+  drizzle:                      # Used only when algorithm: Drizzle
+    scale: 2.0                  # Output grid scale factor (1.0 = native, 2.0 = double resolution)
+    pixfrac: 0.7                # Drop size as fraction of input pixel side (0.0–1.0]
+    kernel: Square              # Kernel shape: Square (top-hat, flux-conserving) or Gaussian
+    rejection: None             # Bad-pixel rejection: None, SigmaClip, or Winsorize
+    kappa: 2.0                  # Rejection threshold in standard deviations (SigmaClip/Winsorize)
+    iterations: 5               # Sigma-clip iterations (SigmaClip only; 3–5 is usually enough)
+    crop:                       # Drizzle only a sub-region (reference-frame coords, before scaling)
+      enabled: false            # Set true to activate
+      x: 0                     # Left edge of crop window
+      y: 0                     # Top edge of crop window
+      width: 0                 # Width of crop window
+      height: 0                # Height of crop window
 ```
+
+**Drizzle notes:**
+- Requires dithered frames (sub-pixel offsets between exposures) to be effective
+- `scale: 2.0` doubles linear dimensions — a 24 MP sensor produces a ~96 MP result
+- `pixfrac: 0.7` is a good starting point; lower values increase resolution but raise noise
+- `kernel: Square` is recommended for most astrophotography (exact flux conservation)
+- `kernel: Gaussian` produces smoother blending, useful when rotation between frames is significant
+- `rejection: SigmaClip` with `kappa: 2.0` rejects hot pixels and cosmic rays; use `Winsorize` for a softer clamp
+- `rejection: None` (default) is equivalent to classic one-pass drizzle with no outlier removal
 
 ### Enhancement Configuration
 ```yaml

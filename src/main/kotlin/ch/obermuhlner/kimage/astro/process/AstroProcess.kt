@@ -54,7 +54,10 @@ import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoid
 import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoidLike
 import ch.obermuhlner.kimage.core.image.noise.thresholdSoft
 import ch.obermuhlner.kimage.core.image.plus
+import ch.obermuhlner.kimage.core.image.stack.DrizzleConfig
+import ch.obermuhlner.kimage.core.image.stack.DrizzleKernel
 import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
+import ch.obermuhlner.kimage.core.image.stack.drizzle
 import ch.obermuhlner.kimage.core.image.stack.max
 import ch.obermuhlner.kimage.core.image.stack.stack
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
@@ -282,6 +285,7 @@ data class AlignConfig(
 data class StackConfig(
     var stackedOutputDirectory: String = "astro-process/stacked",
     var algorithm: StackAlgorithm = StackAlgorithm.Median,
+    var drizzle: DrizzleConfig = DrizzleConfig(),
 )
 
 data class EnhanceConfig(
@@ -1075,6 +1079,7 @@ class AstroProcess(val config: ProcessConfig) {
                 val light = ImageReader.read(calibratedFile)
 
                 val alignedImage = if (calibratedFile == referenceCalibratedFile) {
+                    saveTransformMatrix(DoubleMatrix.identity(3), transformFileFor(outputFile))
                     ImageReader.read(referenceCalibratedFile)
                 } else {
                     val imageStars = elapsed("Finding image stars") { findStars(light, config.align.starThreshold) }
@@ -1089,6 +1094,7 @@ class AstroProcess(val config: ProcessConfig) {
                     }
                     if (transform != null) {
                         println(message = formatTransformation(decomposeTransformationMatrix(transform)))
+                        saveTransformMatrix(transform, transformFileFor(outputFile))
 
                         elapsed("Applying transformation to image") {
                             applyTransformationToImage(light, transform)
@@ -1126,19 +1132,35 @@ class AstroProcess(val config: ProcessConfig) {
             dirtyStacked = true
             var stackedMaxImage: Image? = null
 
-            val alignedFileSuppliers = alignedFiles.map {
-                {
-                    println("Loading $it")
-                    val image = ImageReader.read(it)
-                    stackedMaxImage = stackedMaxImage?.let { max(it, image) } ?: image
-                    image
+            val stackedImage = if (config.stack.algorithm == StackAlgorithm.Drizzle) {
+                elapsed("Drizzle stacking images") {
+                    val calibratedByName = calibratedFiles.associateBy { it.nameWithoutExtension }
+                    val frames = alignedFiles.map { alignedFile ->
+                        val calibratedFile = calibratedByName[alignedFile.nameWithoutExtension]
+                            ?: error("No calibrated file found for ${alignedFile.name}")
+                        println("Loading $calibratedFile for drizzle")
+                        val image = ImageReader.read(calibratedFile)
+                        stackedMaxImage = stackedMaxImage?.let { max(it, image) } ?: image
+                        val transform = loadTransformMatrix(transformFileFor(alignedFile))
+                        image to transform
+                    }
+                    drizzle(frames, config.stack.drizzle)
                 }
-            }
-            val stackedImage = elapsed("Stacking images") {
-                stack(
-                    algorithm = config.stack.algorithm,
-                    imageSuppliers = alignedFileSuppliers
-                )
+            } else {
+                val alignedFileSuppliers = alignedFiles.map {
+                    {
+                        println("Loading $it")
+                        val image = ImageReader.read(it)
+                        stackedMaxImage = stackedMaxImage?.let { max(it, image) } ?: image
+                        image
+                    }
+                }
+                elapsed("Stacking images") {
+                    stack(
+                        algorithm = config.stack.algorithm,
+                        imageSuppliers = alignedFileSuppliers
+                    )
+                }
             }
 
             println("Saving $outputStackedFile")
@@ -1602,6 +1624,26 @@ class AstroProcess(val config: ProcessConfig) {
         }
 
         return resolved
+    }
+
+    private fun transformFileFor(imageFile: File): File =
+        imageFile.resolveSibling("${imageFile.nameWithoutExtension}.transform")
+
+    private fun saveTransformMatrix(transform: ch.obermuhlner.kimage.core.matrix.Matrix, file: File) {
+        val sb = StringBuilder()
+        for (row in 0 until transform.rows) {
+            sb.append((0 until transform.cols).joinToString(" ") { col -> transform[row, col].toString() })
+            sb.append("\n")
+        }
+        file.writeText(sb.toString())
+    }
+
+    private fun loadTransformMatrix(file: File): ch.obermuhlner.kimage.core.matrix.Matrix {
+        val lines = file.readLines().filter { it.isNotBlank() }
+        val values = lines.map { line -> line.trim().split(" ").map { it.toDouble() } }
+        val rows = values.size
+        val cols = values[0].size
+        return DoubleMatrix(rows, cols) { row, col -> values[row][col] }
     }
 
     private fun executeCommand(vararg arguments: String): String {

@@ -33,6 +33,7 @@ class ImageStackTest: AbstractImageProcessingTest() {
         val imageSuppliers = images.map { img -> { img }}
 
         for (stackAlgorithm in StackAlgorithm.entries) {
+            if (stackAlgorithm == StackAlgorithm.Drizzle) continue
             val stacked = stack(imageSuppliers, stackAlgorithm)
             assertReferenceImage("stacked_$stackAlgorithm", stacked)
         }

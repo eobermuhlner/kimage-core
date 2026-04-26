@@ -38,6 +38,7 @@ enum class StackAlgorithm {
     WinsorizedSigmaClipMedian,
     WinsorizedSigmaClipAverage,
     SigmaClipWeightedMedian,
+    Drizzle,
 }
 
 fun stack(
@@ -135,6 +136,8 @@ fun stack(
                 }
             }, 0, clippedLength)
         }
+
+        StackAlgorithm.Drizzle -> error("Drizzle algorithm must be invoked via drizzle() directly, not stack()")
     }
 
     val resultImage = MatrixImage(baseImage.width, baseImage.height, channels)
