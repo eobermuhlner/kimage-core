@@ -130,13 +130,12 @@ class AnnotateZoomTest : AbstractImageProcessingTest() {
         val image = MatrixImage(width, height, Channel.Red, Channel.Green, Channel.Blue)
 
         return graphics(image, 0, 0, 0, 0) { graphics, width, height, offsetX, offsetY ->
-            graphics.font = AnnotateZoom.loadBundledFont(12f)
             graphics.color = java.awt.Color.MAGENTA
-            graphics.drawString("a", offsetY + 50, offsetY + 50 + graphics.fontMetrics.descent)
+            graphics.fillRect(offsetY + 30, offsetY + 30, 20, 20)
             graphics.color = java.awt.Color.YELLOW
-            graphics.drawString("b", offsetY + 50, offsetY + 100 + graphics.fontMetrics.descent)
+            graphics.fillRect(offsetY + 30, offsetY + 80, 20, 20)
             graphics.color = java.awt.Color.ORANGE
-            graphics.drawString("c", offsetY + 200, offsetY + 100 + graphics.fontMetrics.descent)
+            graphics.fillRect(offsetY + 180, offsetY + 80, 20, 20)
         }
     }
 }
