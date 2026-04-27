@@ -8,6 +8,9 @@ import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.White
 import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.PointXY
+import ch.obermuhlner.kimage.core.image.awt.CrossPlatformFontMetrics
+import ch.obermuhlner.kimage.core.image.awt.drawStringCP
+import ch.obermuhlner.kimage.core.image.awt.fontMetricsCP
 import ch.obermuhlner.kimage.core.image.awt.graphics
 import ch.obermuhlner.kimage.core.image.awt.toBufferedImage
 import ch.obermuhlner.kimage.core.image.crop.cropCenter
@@ -34,8 +37,9 @@ class AnnotateZoom {
         fun loadBundledFont(size: Float): Font {
             if (bundledFont == null) {
                 bundledFont = try {
-                    val inputStream = AnnotateZoom::class.java.getResourceAsStream("/DejaVuSans.ttf")
-                    Font.createFont(Font.TRUETYPE_FONT, inputStream.also { it.close() })
+                    AnnotateZoom::class.java.getResourceAsStream("/DejaVuSans.ttf")?.use { inputStream ->
+                        Font.createFont(Font.TRUETYPE_FONT, inputStream)
+                    } ?: Font("SansSerif", Font.PLAIN, 1)
                 } catch (e: IOException) {
                     Font("SansSerif", Font.PLAIN, 1)
                 } catch (e: FontFormatException) {
@@ -293,19 +297,19 @@ class AnnotateZoom {
             graphics.font = loadBundledFont(1f)
             if (title.isNotBlank() || subtitle.isNotBlank()) {
                 graphics.font = graphics.font.deriveFont(titleFontSize.toFloat())
-                titleFontHeight = graphics.fontMetrics.height
+                titleFontHeight = graphics.fontMetricsCP.height
             }
 
             if (text.isNotBlank()) {
                 graphics.font = graphics.font.deriveFont(textFontSize.toFloat())
-                textFontHeight = graphics.fontMetrics.height
+                textFontHeight = graphics.fontMetricsCP.height
             }
 
             graphics.font = graphics.font.deriveFont(thumbnailLabelFontSize.toFloat())
-            thumbnailLabelFontHeight = graphics.fontMetrics.height
+            thumbnailLabelFontHeight = graphics.fontMetricsCP.height
 
             graphics.font = graphics.font.deriveFont(thumbnailInfoFontSize.toFloat())
-            thumbnailInfoFontHeight = graphics.fontMetrics.height
+            thumbnailInfoFontHeight = graphics.fontMetricsCP.height
         }
 
         val textHeight = textFontHeight * text.lines().size
@@ -411,17 +415,18 @@ class AnnotateZoom {
                     MarkerLabelStyle.Name -> marker.name
                     MarkerLabelStyle.None -> ""
                 }
+                val markerMetrics = graphics.fontMetricsCP
                 when (markerStyle) {
                     MarkerStyle.Square -> {
                         graphics.drawShadow { dx, dy ->
-                            graphics.drawString(markerLabel, offsetX + marker.x - marker.size / 2 + dx, offsetY + marker.y - marker.size / 2 - graphics.fontMetrics.descent + dy)
+                            graphics.drawStringCP(markerLabel, offsetX + marker.x - marker.size / 2 + dx, offsetY + marker.y - marker.size / 2 - markerMetrics.descent + dy)
                         }
                     }
 
                     else -> {
-                        val stringWidth = graphics.fontMetrics.stringWidth(markerLabel)
+                        val stringWidth = markerMetrics.stringWidth(markerLabel)
                         graphics.drawShadow { dx, dy ->
-                            graphics.drawString(markerLabel, offsetX + marker.x - stringWidth / 2 + dx, offsetY + marker.y - marker.size / 2 - graphics.fontMetrics.descent + dy)
+                            graphics.drawStringCP(markerLabel, offsetX + marker.x - stringWidth / 2 + dx, offsetY + marker.y - marker.size / 2 - markerMetrics.descent + dy)
                         }
                     }
                 }
@@ -469,24 +474,25 @@ class AnnotateZoom {
                 graphics.color = java.awt.Color(thumbnailLabelColor.toInt(16))
                 setAdaptiveFont(graphics, thumbnailLabelFont, marker.name, thumbnailSize)
                 graphics.drawShadow { dx, dy ->
-                    graphics.drawString(marker.name, thumbnailX + dx, thumbnailY - thumbnailInfoFontHeight - thumbnailInfoFontHeight - graphics.fontMetrics.descent + dy)
+                    graphics.drawStringCP(marker.name, thumbnailX + dx, thumbnailY - thumbnailInfoFontHeight - thumbnailInfoFontHeight - graphics.fontMetricsCP.descent + dy)
                 }
 
                 graphics.color = java.awt.Color(thumbnailInfoColor.toInt(16))
                 setAdaptiveFont(graphics, thumbnailInfoFont, marker.info1, thumbnailSize)
                 graphics.drawShadow { dx, dy ->
-                    graphics.drawString(marker.info1, thumbnailX + dx, thumbnailY - graphics.fontMetrics.height - graphics.fontMetrics.descent + dy)
+                    val m = graphics.fontMetricsCP
+                    graphics.drawStringCP(marker.info1, thumbnailX + dx, thumbnailY - m.height - m.descent + dy)
                 }
                 setAdaptiveFont(graphics, thumbnailInfoFont, marker.info2, thumbnailSize)
                 graphics.drawShadow { dx, dy ->
-                    graphics.drawString(marker.info2, thumbnailX + dx, thumbnailY - graphics.fontMetrics.descent + dy)
+                    graphics.drawStringCP(marker.info2, thumbnailX + dx, thumbnailY - graphics.fontMetricsCP.descent + dy)
                 }
 
                 if (markerLabelStyle == MarkerLabelStyle.Index) {
                     graphics.color = java.awt.Color(thumbnailIndexColor.toInt(16))
                     setAdaptiveFont(graphics, thumbnailIndexFont, markerLabel, thumbnailSize / 4)
                     graphics.drawShadow { dx, dy ->
-                        graphics.drawString(markerLabel, thumbnailX + baseStrokeSize.roundToInt() + dx, thumbnailY + baseStrokeSize.roundToInt() + graphics.fontMetrics.height + dy)
+                        graphics.drawStringCP(markerLabel, thumbnailX + baseStrokeSize.roundToInt() + dx, thumbnailY + baseStrokeSize.roundToInt() + graphics.fontMetricsCP.height + dy)
                     }
                 }
 
@@ -548,7 +554,7 @@ class AnnotateZoom {
             if (title.isNotBlank() || subtitle.isNotBlank()) {
                 setAdaptiveFont(graphics, titleFont, title, inputImage.width)
                 textY += titleFontHeight
-                var titleWidth = graphics.fontMetrics.stringWidth(title)
+                var titleWidth = graphics.fontMetricsCP.stringWidth(title)
                 var subtitleWidth = inputImage.width - titleWidth
                 if (subtitleWidth < inputImage.width / 3) {
                     subtitleWidth = inputImage.width / 3
@@ -557,14 +563,14 @@ class AnnotateZoom {
                 graphics.color = java.awt.Color(titleColor.toInt(16))
                 setAdaptiveFont(graphics, titleFont, title, titleWidth)
                 graphics.drawShadow { dx, dy ->
-                    graphics.drawString(title, offsetX + dx, textY + dy)
+                    graphics.drawStringCP(title, offsetX + dx, textY + dy)
                 }
 
                 graphics.color = java.awt.Color(subtitleColor.toInt(16))
                 setAdaptiveFont(graphics, titleFont, subtitle, subtitleWidth)
-                subtitleWidth = graphics.fontMetrics.stringWidth(subtitle)
+                subtitleWidth = graphics.fontMetricsCP.stringWidth(subtitle)
                 graphics.drawShadow { dx, dy ->
-                    graphics.drawString(subtitle, offsetX + inputImage.width - subtitleWidth + dx, textY + dy)
+                    graphics.drawStringCP(subtitle, offsetX + inputImage.width - subtitleWidth + dx, textY + dy)
                 }
             }
 
@@ -574,7 +580,7 @@ class AnnotateZoom {
                     textY += textFontHeight
                     graphics.font = textFont
                     graphics.drawShadow { dx, dy ->
-                        graphics.drawString(textLine, offsetX + dx, textY + dy)
+                        graphics.drawStringCP(textLine, offsetX + dx, textY + dy)
                     }
                 }
             }
@@ -587,7 +593,7 @@ class AnnotateZoom {
 
     fun setAdaptiveFont(graphics: Graphics2D, font: Font, text: String, maxWidth: Int) {
         graphics.font = font
-        val width = graphics.fontMetrics.stringWidth(text)
+        val width = graphics.fontMetricsCP.stringWidth(text)
         if (width > maxWidth) {
             val correctedFontSize = font.size.toDouble() * maxWidth / width
             graphics.font = font.deriveFont(correctedFontSize.toFloat())
