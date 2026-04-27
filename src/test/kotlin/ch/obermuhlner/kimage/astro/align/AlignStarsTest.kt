@@ -468,6 +468,33 @@ class AlignStarsTest {
     }
 
     @Test
+    fun `applyTransformationToImage with identity preserves last column and row`() {
+        val width = 5
+        val height = 5
+        val red = DoubleMatrix.matrixOf(height, width) { _, _ -> 0.5 }
+        val image = MatrixImage(width, height,
+            Channel.Red to red,
+            Channel.Green to red,
+            Channel.Blue to red
+        )
+        val identity = DoubleMatrix.matrixOf(3, 3,
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0
+        )
+        val result = applyTransformationToImage(image, identity)
+
+        for (y in 0 until height) {
+            assertEquals(0.5, result[width - 1, y, Channel.Red], 1e-5,
+                "Last column at y=$y should not be black")
+        }
+        for (x in 0 until width) {
+            assertEquals(0.5, result[x, height - 1, Channel.Red], 1e-5,
+                "Last row at x=$x should not be black")
+        }
+    }
+
+    @Test
     fun testInterpolate() {
         val result = interpolate(1.0, 2.0, 3.0, 4.0, 0.5, 0.5)
         assertEquals(2.5, result, 1e-6)

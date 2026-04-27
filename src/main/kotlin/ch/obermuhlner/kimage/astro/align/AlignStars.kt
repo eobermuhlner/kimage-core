@@ -595,15 +595,24 @@ fun applyTransformationToImage(inputImage: Image, transformationMatrix: Matrix):
             val inV = inverse.times(outV)
             val x = inV[0, 0] + centerX
             val y = inV[1, 0] + centerY
-            if (x >= 0 && x < width - 1 && y >= 0 && y < height - 1) {
+            if (x >= 0 && x < width && y >= 0 && y < height) {
                 val x0 = floor(x).toInt()
                 val y0 = floor(y).toInt()
-                val dx = x - x0
-                val dy = y - y0
-                fun interp(c: Matrix) = c[y0, x0]*(1-dx)*(1-dy) + c[y0, x0+1]*dx*(1-dy) + c[y0+1, x0]*(1-dx)*dy + c[y0+1, x0+1]*dx*dy
-                transformedRed[yPrime, xPrime] = interp(redChannel)
-                transformedGreen[yPrime, xPrime] = interp(greenChannel)
-                transformedBlue[yPrime, xPrime] = interp(blueChannel)
+                if (x0 < width - 1 && y0 < height - 1) {
+                    val dx = x - x0
+                    val dy = y - y0
+                    fun interp(c: Matrix) = c[y0, x0]*(1-dx)*(1-dy) + c[y0, x0+1]*dx*(1-dy) + c[y0+1, x0]*(1-dx)*dy + c[y0+1, x0+1]*dx*dy
+                    transformedRed[yPrime, xPrime] = interp(redChannel)
+                    transformedGreen[yPrime, xPrime] = interp(greenChannel)
+                    transformedBlue[yPrime, xPrime] = interp(blueChannel)
+                } else {
+                    // Boundary pixel: nearest-neighbour instead of black
+                    val xi = x0.coerceIn(0, width - 1)
+                    val yi = y0.coerceIn(0, height - 1)
+                    transformedRed[yPrime, xPrime] = redChannel[yi, xi]
+                    transformedGreen[yPrime, xPrime] = greenChannel[yi, xi]
+                    transformedBlue[yPrime, xPrime] = blueChannel[yi, xi]
+                }
             }
         }
     }

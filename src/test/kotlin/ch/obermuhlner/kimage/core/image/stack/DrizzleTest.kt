@@ -237,6 +237,36 @@ class DrizzleTest {
     }
 
     @Test
+    fun `boundary pixels are not black with crop at image edge and default pixfrac`() {
+        // Crop covers the full image so there are no input pixels outside the crop to
+        // "leak" into the last output column/row.  The drizzle kernel must itself reach
+        // the boundary from the last interior input pixel.
+        val width = 20
+        val height = 20
+        val value = 0.5
+        val image = uniformImage(width, height, value)
+
+        val scale = 2.0
+
+        val config = DrizzleConfig(
+            scale = scale,
+            pixfrac = 0.7,
+            kernel = DrizzleKernel.Square,
+            crop = DrizzleCropConfig(enabled = true, x = 0, y = 0, width = width, height = height)
+        )
+        val result = drizzle(listOf(image to identityMatrix()), config)
+
+        for (y in 2 until result.height - 2) {
+            assertTrue(result[result.width - 1, y, Channel.Red] > 0.0,
+                "Right column pixel [${result.width - 1},$y] should not be black")
+        }
+        for (x in 2 until result.width - 2) {
+            assertTrue(result[x, result.height - 1, Channel.Red] > 0.0,
+                "Bottom row pixel [$x,${result.height - 1}] should not be black")
+        }
+    }
+
+    @Test
     fun `crop disabled produces same output size as no crop`() {
         val width = 16
         val height = 16

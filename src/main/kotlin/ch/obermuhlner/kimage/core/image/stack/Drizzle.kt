@@ -207,8 +207,8 @@ private inline fun forEachOverlap(
         for (xIn in 0 until image.width) {
             val dx = xIn.toDouble() - centerX
 
-            val xOut = (m00 * dx + m01 * dy + m02 + centerX - cropOffsetX) * scale
-            val yOut = (m10 * dx + m11 * dy + m12 + centerY - cropOffsetY) * scale
+            val xOut = (m00 * dx + m01 * dy + m02 + centerX - cropOffsetX) * scale + (scale - 1.0) / 2.0
+            val yOut = (m10 * dx + m11 * dy + m12 + centerY - cropOffsetY) * scale + (scale - 1.0) / 2.0
 
             val oyMin = floor(yOut - halfSize).toInt()
             val oyMax = ceil(yOut + halfSize).toInt()
