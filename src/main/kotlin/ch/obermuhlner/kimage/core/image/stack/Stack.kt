@@ -16,12 +16,19 @@ import ch.obermuhlner.kimage.core.math.sigmaWinsorizeInplace
 import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.math.weightedAverage
 import ch.obermuhlner.kimage.core.matrix.stack.max
+import ch.obermuhlner.kimage.core.matrix.stack.maxInPlace
 import kotlin.math.abs
 import kotlin.math.sqrt
 
 fun max(firstImage: Image, vararg otherImages: Image): Image {
     return MatrixImage(firstImage.width, firstImage.height, firstImage.channels) { channel, _, _ ->
         max(firstImage[channel], *otherImages.map { it[channel] }.toTypedArray())
+    }
+}
+
+fun maxInPlace(result: MatrixImage, other: Image) {
+    for (channel in result.channels) {
+        maxInPlace(result[channel], other[channel])
     }
 }
 

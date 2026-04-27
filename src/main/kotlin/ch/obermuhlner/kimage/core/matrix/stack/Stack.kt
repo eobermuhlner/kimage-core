@@ -16,3 +16,9 @@ fun max(firstMatrix: Matrix, vararg otherMatrices: Matrix): Matrix {
 
     return m
 }
+
+fun maxInPlace(result: Matrix, other: Matrix) {
+    result.applyEach { row, col, value ->
+        max(value, other[row, col])
+    }
+}

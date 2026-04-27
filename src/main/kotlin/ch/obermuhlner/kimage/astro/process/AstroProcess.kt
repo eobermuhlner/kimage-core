@@ -1,67 +1,35 @@
 package ch.obermuhlner.kimage.astro.process
 
-import ch.obermuhlner.kimage.astro.align.Star
-import ch.obermuhlner.kimage.astro.align.applyTransformationToImage
-import ch.obermuhlner.kimage.astro.align.calculateTransformationMatrix
-import ch.obermuhlner.kimage.astro.align.decomposeTransformationMatrix
-import ch.obermuhlner.kimage.astro.align.findStars
-import ch.obermuhlner.kimage.astro.align.formatTransformation
-import ch.obermuhlner.kimage.astro.align.processCalibrationImages
+import ch.obermuhlner.kimage.astro.align.*
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom
-import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme
+import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.*
 import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.ColorTheme.Green
-import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.Marker
-import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerLabelStyle
-import ch.obermuhlner.kimage.astro.annotate.AnnotateZoom.MarkerStyle
 import ch.obermuhlner.kimage.astro.annotate.DeepSkyObjects
 import ch.obermuhlner.kimage.astro.annotate.WCSConverter
 import ch.obermuhlner.kimage.astro.annotate.WCSParser
-import ch.obermuhlner.kimage.astro.background.createFixPointEightCorners
-import ch.obermuhlner.kimage.astro.background.createFixPointFourCorners
-import ch.obermuhlner.kimage.astro.background.createFixPointGrid
-import ch.obermuhlner.kimage.astro.background.getFixPointValues
-import ch.obermuhlner.kimage.astro.background.interpolate
+import ch.obermuhlner.kimage.astro.background.*
 import ch.obermuhlner.kimage.astro.color.histogram
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionConfig
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionMode
 import ch.obermuhlner.kimage.astro.cosmetic.cosmeticCorrect
-import ch.obermuhlner.kimage.core.image.Channel
-import ch.obermuhlner.kimage.core.image.Image
-import ch.obermuhlner.kimage.core.image.PointXY
+import ch.obermuhlner.kimage.astro.platesolve.AstapPlateSolver
+import ch.obermuhlner.kimage.core.image.*
 import ch.obermuhlner.kimage.core.image.awt.graphics
 import ch.obermuhlner.kimage.core.image.bayer.BayerPattern
 import ch.obermuhlner.kimage.core.image.bayer.DebayerInterpolation
 import ch.obermuhlner.kimage.core.image.bayer.debayer
 import ch.obermuhlner.kimage.core.image.bayer.findBayerBadPixels
 import ch.obermuhlner.kimage.core.image.crop.crop
-import ch.obermuhlner.kimage.core.image.div
-import ch.obermuhlner.kimage.core.image.filter.gaussianBlur3Filter
-import ch.obermuhlner.kimage.core.image.filter.laplacianFilter
-import ch.obermuhlner.kimage.core.image.filter.richardsonLucyDeconvolution
-import ch.obermuhlner.kimage.core.image.filter.sharpenFilter
-import ch.obermuhlner.kimage.core.image.filter.unsharpMaskFilter
+import ch.obermuhlner.kimage.core.image.filter.*
 import ch.obermuhlner.kimage.core.image.hdr.highDynamicRange
 import ch.obermuhlner.kimage.core.image.histogram.histogramImage
 import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
-import ch.obermuhlner.kimage.core.image.minus
-import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTransformOverAllChannels
-import ch.obermuhlner.kimage.core.image.noise.reduceNoiseUsingMultiScaleMedianTransformOverGrayChannel
-import ch.obermuhlner.kimage.core.image.noise.thresholdHard
-import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoid
-import ch.obermuhlner.kimage.core.image.noise.thresholdSigmoidLike
-import ch.obermuhlner.kimage.core.image.noise.thresholdSoft
-import ch.obermuhlner.kimage.core.image.plus
-import ch.obermuhlner.kimage.core.image.stack.DrizzleConfig
-import ch.obermuhlner.kimage.core.image.stack.DrizzleKernel
-import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
-import ch.obermuhlner.kimage.core.image.stack.drizzle
-import ch.obermuhlner.kimage.core.image.stack.max
-import ch.obermuhlner.kimage.core.image.stack.stack
+import ch.obermuhlner.kimage.core.image.noise.*
+import ch.obermuhlner.kimage.core.image.stack.*
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
-import ch.obermuhlner.kimage.core.image.times
 import ch.obermuhlner.kimage.core.image.transform.rotateLeft
 import ch.obermuhlner.kimage.core.image.transform.rotateRight
 import ch.obermuhlner.kimage.core.image.values.applyEach
@@ -69,26 +37,15 @@ import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceGlobal
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceLocal
-import ch.obermuhlner.kimage.core.math.Histogram
-import ch.obermuhlner.kimage.core.math.clamp
-import ch.obermuhlner.kimage.core.math.median
-import ch.obermuhlner.kimage.core.math.stddev
-import ch.obermuhlner.kimage.core.math.toRadians
+import ch.obermuhlner.kimage.core.math.*
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.core.matrix.values.values
 import ch.obermuhlner.kimage.util.elapsed
 import org.yaml.snakeyaml.Yaml
-import ch.obermuhlner.kimage.astro.platesolve.AstapPlateSolver
-import ch.obermuhlner.kimage.astro.platesolve.PlateSolver
 import java.io.File
 import java.nio.file.Paths
-import java.util.Optional
-import kotlin.io.path.pathString
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.min
-import kotlin.math.sin
+import java.util.*
+import kotlin.math.*
 
 data class ProcessConfig(
     var quick: Boolean = false,
@@ -1135,26 +1092,36 @@ class AstroProcess(val config: ProcessConfig) {
             dirtyStacked = true
             var stackedMaxImage: Image? = null
 
+            fun accumulateMax(image: Image) {
+                val current = stackedMaxImage
+                if (current == null) {
+                    stackedMaxImage = MatrixImage(image)
+                } else {
+                    maxInPlace(current as MatrixImage, image)
+                }
+            }
+
             val stackedImage = if (config.stack.algorithm == StackAlgorithm.Drizzle) {
                 elapsed("Drizzle stacking images") {
                     val calibratedByName = calibratedFiles.associateBy { it.nameWithoutExtension }
                     val frames = alignedFiles.map { alignedFile ->
                         val calibratedFile = calibratedByName[alignedFile.nameWithoutExtension]
                             ?: error("No calibrated file found for ${alignedFile.name}")
-                        println("Loading $calibratedFile for drizzle")
-                        val image = ImageReader.read(calibratedFile)
-                        stackedMaxImage = stackedMaxImage?.let { max(it, image) } ?: image
                         val transform = loadTransformMatrix(transformFileFor(alignedFile))
-                        image to transform
+                        val imageSupplier: () -> Image = {
+                            println("Loading $calibratedFile for drizzle")
+                            ImageReader.read(calibratedFile)
+                        }
+                        imageSupplier to transform
                     }
-                    drizzle(frames, config.stack.drizzle)
+                    drizzle(frames, config.stack.drizzle) { image -> accumulateMax(image) }
                 }
             } else {
                 val alignedFileSuppliers = alignedFiles.map {
                     {
                         println("Loading $it")
                         val image = ImageReader.read(it)
-                        stackedMaxImage = stackedMaxImage?.let { max(it, image) } ?: image
+                        accumulateMax(image)
                         image
                     }
                 }

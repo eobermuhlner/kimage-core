@@ -45,24 +45,36 @@ data class DrizzleConfig(
  *
  * When rejection != None, each frame is drizzled independently (two-pass) so hot pixels
  * and cosmic rays are excluded before the final combine.
+ *
+ * Images are loaded lazily one at a time so arbitrarily large frame sets do not require
+ * all images to reside in the heap simultaneously. [onImageLoaded] is called with each
+ * image immediately after it is loaded, before the reference is released.
  */
 fun drizzle(
-    frames: List<Pair<Image, Matrix>>,
+    frames: List<Pair<() -> Image, Matrix>>,
     config: DrizzleConfig = DrizzleConfig(),
+    onImageLoaded: ((Image) -> Unit)? = null,
 ): Image {
     require(frames.isNotEmpty()) { "frames must not be empty" }
 
     return if (config.rejection == DrizzleRejection.None) {
-        drizzleSinglePass(frames, config)
+        drizzleSinglePass(frames, config, onImageLoaded)
     } else {
-        drizzleTwoPass(frames, config)
+        drizzleTwoPass(frames, config, onImageLoaded)
     }
 }
 
+/** Convenience overload that accepts pre-loaded images (wraps each in a supplier). */
+fun drizzle(
+    frames: List<Pair<Image, Matrix>>,
+    config: DrizzleConfig = DrizzleConfig(),
+): Image = drizzle(frames.map { (img, m) -> ({ img } to m) }, config)
+
 // ── Single-pass (no rejection) ────────────────────────────────────────────────
 
-private fun drizzleSinglePass(frames: List<Pair<Image, Matrix>>, config: DrizzleConfig): Image {
-    val firstImage = frames[0].first
+private fun drizzleSinglePass(frames: List<Pair<() -> Image, Matrix>>, config: DrizzleConfig, onImageLoaded: ((Image) -> Unit)?): Image {
+    val firstImage = frames[0].first()
+    onImageLoaded?.invoke(firstImage)
     val channels = firstImage.channels
     val cropOffsetX = if (config.crop.enabled) config.crop.x.toDouble() else 0.0
     val cropOffsetY = if (config.crop.enabled) config.crop.y.toDouble() else 0.0
@@ -76,13 +88,20 @@ private fun drizzleSinglePass(frames: List<Pair<Image, Matrix>>, config: Drizzle
     // Weight is channel-independent: same spatial overlap for all channels
     val weightAccum = FloatMatrix(outH, outW)
 
-    for ((image, transformationMatrix) in frames) {
+    fun accumulate(image: Image, transformationMatrix: Matrix) {
         forEachOverlap(image, transformationMatrix, config.kernel, centerX, centerY, config.scale, halfSize, cropOffsetX, cropOffsetY, outW, outH) { oy, ox, xIn, yIn, w ->
             weightAccum[oy, ox] += w
             for (ci in channels.indices) {
                 fluxAccum[ci][oy, ox] += image.getPixel(xIn, yIn, channels[ci]) * w
             }
         }
+    }
+
+    accumulate(firstImage, frames[0].second)
+    for (i in 1 until frames.size) {
+        val image = frames[i].first()
+        onImageLoaded?.invoke(image)
+        accumulate(image, frames[i].second)
     }
 
     val resultMatrices = channels.mapIndexed { ci, _ ->
@@ -96,8 +115,9 @@ private fun drizzleSinglePass(frames: List<Pair<Image, Matrix>>, config: Drizzle
 
 // ── Two-pass (with rejection) ─────────────────────────────────────────────────
 
-private fun drizzleTwoPass(frames: List<Pair<Image, Matrix>>, config: DrizzleConfig): Image {
-    val firstImage = frames[0].first
+private fun drizzleTwoPass(frames: List<Pair<() -> Image, Matrix>>, config: DrizzleConfig, onImageLoaded: ((Image) -> Unit)?): Image {
+    val firstImage = frames[0].first()
+    onImageLoaded?.invoke(firstImage)
     val channels = firstImage.channels
     val cropOffsetX = if (config.crop.enabled) config.crop.x.toDouble() else 0.0
     val cropOffsetY = if (config.crop.enabled) config.crop.y.toDouble() else 0.0
@@ -113,9 +133,7 @@ private fun drizzleTwoPass(frames: List<Pair<Image, Matrix>>, config: DrizzleCon
     val perFrameFlux   = HugeMultiDimensionalFloatArray(frames.size, channels.size, numPixels)
     val perFrameWeight = HugeMultiDimensionalFloatArray(frames.size, 1, numPixels)
 
-    // Pass 1: drizzle each frame into its own per-frame accumulator
-    for ((fi, framePair) in frames.withIndex()) {
-        val (image, transformationMatrix) = framePair
+    fun accumulateFrame(fi: Int, image: Image, transformationMatrix: Matrix) {
         forEachOverlap(image, transformationMatrix, config.kernel, centerX, centerY, config.scale, halfSize, cropOffsetX, cropOffsetY, outW, outH) { oy, ox, xIn, yIn, w ->
             val pixelIndex = oy * outW + ox
             // Weight accumulated once per spatial contribution (not per channel)
@@ -125,6 +143,14 @@ private fun drizzleTwoPass(frames: List<Pair<Image, Matrix>>, config: DrizzleCon
                 perFrameFlux[fi, ci, pixelIndex] = perFrameFlux[fi, ci, pixelIndex] + (flux * w).toFloat()
             }
         }
+    }
+
+    // Pass 1: drizzle each frame into its own per-frame accumulator (load one image at a time)
+    accumulateFrame(0, firstImage, frames[0].second)
+    for (fi in 1 until frames.size) {
+        val image = frames[fi].first()
+        onImageLoaded?.invoke(image)
+        accumulateFrame(fi, image, frames[fi].second)
     }
 
     // Pass 2: for each output pixel, collect per-frame normalised values, reject, average
