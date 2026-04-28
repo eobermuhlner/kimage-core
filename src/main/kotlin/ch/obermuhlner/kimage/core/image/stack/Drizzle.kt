@@ -35,7 +35,6 @@ data class DrizzleConfig(
     var kappa: Double = 2.0,
     var iterations: Int = 5,
     var crop: DrizzleCropConfig = DrizzleCropConfig(),
-    var tempDir: String? = null,
 )
 
 /**
@@ -55,6 +54,7 @@ data class DrizzleConfig(
 fun drizzle(
     frames: List<Pair<() -> Image, Matrix>>,
     config: DrizzleConfig = DrizzleConfig(),
+    tempDir: File? = null,
     onImageLoaded: ((Image) -> Unit)? = null,
 ): Image {
     require(frames.isNotEmpty()) { "frames must not be empty" }
@@ -62,7 +62,7 @@ fun drizzle(
     return if (config.rejection == DrizzleRejection.None) {
         drizzleSinglePass(frames, config, onImageLoaded)
     } else {
-        drizzleTwoPass(frames, config, onImageLoaded)
+        drizzleTwoPass(frames, config, tempDir, onImageLoaded)
     }
 }
 
@@ -70,7 +70,8 @@ fun drizzle(
 fun drizzle(
     frames: List<Pair<Image, Matrix>>,
     config: DrizzleConfig = DrizzleConfig(),
-): Image = drizzle(frames.map { (img, m) -> ({ img } to m) }, config)
+    tempDir: File? = null,
+): Image = drizzle(frames.map { (img, m) -> ({ img } to m) }, config, tempDir)
 
 // ── Single-pass (no rejection) ────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ private fun drizzleSinglePass(frames: List<Pair<() -> Image, Matrix>>, config: D
 
 // ── Two-pass (with rejection) ─────────────────────────────────────────────────
 
-private fun drizzleTwoPass(frames: List<Pair<() -> Image, Matrix>>, config: DrizzleConfig, onImageLoaded: ((Image) -> Unit)?): Image {
+private fun drizzleTwoPass(frames: List<Pair<() -> Image, Matrix>>, config: DrizzleConfig, tempDir: File?, onImageLoaded: ((Image) -> Unit)?): Image {
     val firstImage = frames[0].first()
     onImageLoaded?.invoke(firstImage)
     val channels = firstImage.channels
@@ -132,9 +133,8 @@ private fun drizzleTwoPass(frames: List<Pair<() -> Image, Matrix>>, config: Driz
 
     // Per-frame flux:   [frameIndex, channelIndex, pixelIndex]
     // Per-frame weight: [frameIndex, 0,            pixelIndex]  (channel-independent)
-    val tempDirFile = config.tempDir?.let { File(it) }
-    val perFrameFlux   = HugeMultiDimensionalFloatArray(frames.size, channels.size, numPixels, tempDir = tempDirFile)
-    val perFrameWeight = HugeMultiDimensionalFloatArray(frames.size, 1, numPixels, tempDir = tempDirFile)
+    val perFrameFlux   = HugeMultiDimensionalFloatArray(frames.size, channels.size, numPixels, tempDir = tempDir)
+    val perFrameWeight = HugeMultiDimensionalFloatArray(frames.size, 1, numPixels, tempDir = tempDir)
 
     try {
         fun accumulateFrame(fi: Int, image: Image, transformationMatrix: Matrix) {

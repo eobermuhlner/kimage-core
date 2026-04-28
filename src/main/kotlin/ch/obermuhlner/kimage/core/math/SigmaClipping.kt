@@ -131,6 +131,37 @@ fun FloatArray.huberWinsorizedSigmaClip(kappa: Float, iterations: Int = 1, offse
     return array.copyOfRange(0, clippedLength)
 }
 
+fun DoubleArray.huberWinsorizeInplace(offset: Int = 0, length: Int = size-offset, standardDeviationType: StandardDeviation = StandardDeviation.Population): DoubleArray {
+    val huberEpsilon = 0.0005
+    val huberKappa = 1.5
+    val huberSigmaFactor = 1.345
+    var median = medianInplace(offset, length)
+    var sigma = stddev(standardDeviationType, offset, length)
+    do {
+        val low = median - sigma * huberKappa
+        val high = median + sigma * huberKappa
+        winsorizeInplace(low, high, offset, length)
+
+        median = medianInplace(offset, length)
+        val lastSigma = sigma
+        sigma = huberSigmaFactor * stddev(standardDeviationType, offset, length)
+        val change = abs(sigma - lastSigma) / lastSigma
+    } while (change > huberEpsilon)
+
+    return this
+}
+
+fun DoubleArray.huberWinsorizedSigmaClipInplace(kappa: Double, iterations: Int = 1, offset: Int = 0, length: Int = size-offset, standardDeviationType: StandardDeviation = StandardDeviation.Population, histogram: Histogram? = null): Int {
+    huberWinsorizeInplace(offset, length, standardDeviationType)
+    return sigmaClipInplace(kappa, iterations, offset, length, standardDeviationType, histogram = histogram)
+}
+
+fun DoubleArray.huberWinsorizedSigmaClip(kappa: Double, iterations: Int = 1, offset: Int = 0, length: Int = size-offset, standardDeviationType: StandardDeviation = StandardDeviation.Population, histogram: Histogram? = null): DoubleArray {
+    val array = copyOfRange(offset, offset+length)
+    val clippedLength = array.huberWinsorizedSigmaClipInplace(kappa, iterations, 0, length, standardDeviationType, histogram)
+    return array.copyOfRange(0, clippedLength)
+}
+
 fun FloatArray.sigmaWinsorize(kappa: Float, offset: Int = 0, length: Int = size-offset, standardDeviationType: StandardDeviation = StandardDeviation.Population): FloatArray {
     val array = copyOfRange(offset, offset+length)
 

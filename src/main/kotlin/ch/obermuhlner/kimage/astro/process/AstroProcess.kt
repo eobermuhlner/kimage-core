@@ -29,6 +29,7 @@ import ch.obermuhlner.kimage.core.image.io.ImageReader
 import ch.obermuhlner.kimage.core.image.io.ImageWriter
 import ch.obermuhlner.kimage.core.image.noise.*
 import ch.obermuhlner.kimage.core.image.stack.*
+import ch.obermuhlner.kimage.core.image.stack.StackConfig as CoreStackConfig
 import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
 import ch.obermuhlner.kimage.core.image.transform.rotateLeft
 import ch.obermuhlner.kimage.core.image.transform.rotateRight
@@ -242,6 +243,11 @@ data class AlignConfig(
 data class StackConfig(
     var stackedOutputDirectory: String = "astro-process/stacked",
     var algorithm: StackAlgorithm = StackAlgorithm.Median,
+    var kappa: Double = 2.0,
+    var iterations: Int = 10,
+    var precision: StackPrecision = StackPrecision.Float,
+    var tempDir: String? = null,
+    var maxDiskSpaceBytes: Long = Long.MAX_VALUE,
     var drizzle: DrizzleConfig = DrizzleConfig(),
 )
 
@@ -1114,7 +1120,7 @@ class AstroProcess(val config: ProcessConfig) {
                         }
                         imageSupplier to transform
                     }
-                    drizzle(frames, config.stack.drizzle) { image -> accumulateMax(image) }
+                    drizzle(frames, config.stack.drizzle, tempDir = config.stack.tempDir?.let { File(it) }) { image -> accumulateMax(image) }
                 }
             } else {
                 val alignedFileSuppliers = alignedFiles.map {
@@ -1127,8 +1133,15 @@ class AstroProcess(val config: ProcessConfig) {
                 }
                 elapsed("Stacking images") {
                     stack(
-                        algorithm = config.stack.algorithm,
-                        imageSuppliers = alignedFileSuppliers
+                        imageSuppliers = alignedFileSuppliers,
+                        config = CoreStackConfig(
+                            algorithm = config.stack.algorithm,
+                            kappa = config.stack.kappa,
+                            iterations = config.stack.iterations,
+                            precision = config.stack.precision,
+                            tempDir = config.stack.tempDir?.let { File(it) },
+                            maxDiskSpaceBytes = config.stack.maxDiskSpaceBytes,
+                        )
                     )
                 }
             }

@@ -305,6 +305,29 @@ enhance:
 - Enable quick mode: `quick: true, quickCount: 3`
 - Reduce `maxStars` to 50
 
+**Problem: Stacking runs out of disk space in system temp**
+
+Stacking writes memory-mapped temp files. For large frame counts, these can be tens of gigabytes. Redirect them to a drive with more space:
+```yaml
+stack:
+  tempDir: "/data/tmp"          # Linux/macOS — drizzle also uses this path
+  # tempDir: "D:/tmp"           # Windows
+```
+
+**Problem: No disk space to spare — use tile-based stacking**
+
+Set `maxDiskSpaceBytes: 0` to process row-by-row without any temp files. Each image is loaded from disk once per row strip, so it's slower but requires zero additional disk space:
+```yaml
+stack:
+  maxDiskSpaceBytes: 0          # tile-based, no disk usage
+```
+
+Or set a specific limit (e.g. 4 GB) and let the pipeline decide automatically:
+```yaml
+stack:
+  maxDiskSpaceBytes: 4000000000
+```
+
 **Problem: Need to redo processing steps**
 
 - Delete intermediate files and rerun:
@@ -468,6 +491,26 @@ stack:
                                 # WinsorizedSigmaClipMedian, WinsorizedSigmaClipAverage
                                 # SigmaClipWeightedMedian, SmartMax
                                 # Drizzle (see below)
+  kappa: 2.0                    # Sigma-clip / winsorize rejection threshold in standard deviations
+                                # (used by all SigmaClip*, SigmaWinsorize*, WinsorizedSigmaClip*, SmartMax)
+                                # Lower = more aggressive rejection (try 1.5–3.0)
+  iterations: 10                # Number of sigma-clip iterations (3–10 is usually enough)
+  precision: Float              # Pixel storage precision during stacking:
+                                #   Float  – 32-bit float (~7 significant digits); half the disk usage
+                                #   Double – 64-bit double (~15 significant digits); use for 32-bit FITS
+  tempDir: null                 # Directory for memory-mapped temp files (null = system temp dir)
+                                # Set this if your system temp partition is small (e.g. a ramdisk)
+  maxDiskSpaceBytes: 9223372036854775807  # Maximum bytes allowed for mmap temp files.
+                                # The pipeline calculates the exact requirement upfront:
+                                #   numImages × numChannels × numPixels × bytesPerElement
+                                # When the requirement exceeds this limit, stacking automatically
+                                # falls back to tile-based processing: images are loaded in full
+                                # for each strip of pixels, using only in-memory buffers.
+                                # Set to 0 to always use tile-based (row-by-row, zero disk usage).
+                                # Example values:
+                                #   500000000    – 500 MB
+                                #   2000000000   – 2 GB
+                                #   10000000000  – 10 GB
   drizzle:                      # Used only when algorithm: Drizzle
     scale: 2.0                  # Output grid scale factor (1.0 = native, 2.0 = double resolution)
     pixfrac: 0.7                # Drop size as fraction of input pixel side (0.0–1.0]
@@ -475,6 +518,7 @@ stack:
     rejection: None             # Bad-pixel rejection: None, SigmaClip, or Winsorize
     kappa: 2.0                  # Rejection threshold in standard deviations (SigmaClip/Winsorize)
     iterations: 5               # Sigma-clip iterations (SigmaClip only; 3–5 is usually enough)
+                                # Drizzle temp files use the same tempDir as the stack config above.
     crop:                       # Drizzle only a sub-region (reference-frame coords, before scaling)
       enabled: false            # Set true to activate
       x: 0                     # Left edge of crop window
@@ -482,6 +526,22 @@ stack:
       width: 0                 # Width of crop window
       height: 0                # Height of crop window
 ```
+
+**Stacking precision notes:**
+- `precision: Float` (default) — uses 32-bit floats for the stacking buffer. Sufficient for images from 8-bit or 16-bit sensors; halves disk and memory usage compared to Double.
+- `precision: Double` — uses 64-bit doubles. Recommended when input frames are 32-bit float FITS files where the extra dynamic range and precision matter.
+
+**Memory and disk management:**
+
+Stacking requires holding all pixel values for all frames simultaneously. The default approach memory-maps temporary files to disk (avoiding JVM heap exhaustion), but this requires `numImages × numChannels × numPixels × bytesPerElement` bytes of temp space.
+
+For a typical 50-frame stack of 24 MP images:
+- Float precision: 50 × 3 × 24,000,000 × 4 bytes ≈ 14 GB of temp space
+- Double precision: 50 × 3 × 24,000,000 × 8 bytes ≈ 29 GB of temp space
+
+When the calculated requirement exceeds `maxDiskSpaceBytes`, the pipeline automatically switches to **tile-based processing**: the image is divided into horizontal strips sized to fit within `maxDiskSpaceBytes`, and each image is loaded from disk once per strip. This trades disk space for additional I/O time.
+
+Set `tempDir` to a path on a partition with sufficient space when the system temp directory is too small.
 
 **Drizzle notes:**
 - Requires dithered frames (sub-pixel offsets between exposures) to be effective
@@ -491,6 +551,7 @@ stack:
 - `kernel: Gaussian` produces smoother blending, useful when rotation between frames is significant
 - `rejection: SigmaClip` with `kappa: 2.0` rejects hot pixels and cosmic rays; use `Winsorize` for a softer clamp
 - `rejection: None` (default) is equivalent to classic one-pass drizzle with no outlier removal
+- Drizzle's two-pass mmap temp files use the same `tempDir` set at the stack level
 
 ### Enhancement Configuration
 ```yaml

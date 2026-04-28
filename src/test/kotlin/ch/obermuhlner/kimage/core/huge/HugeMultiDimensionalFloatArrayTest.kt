@@ -34,7 +34,6 @@ class HugeMultiDimensionalFloatArrayTest {
         try {
             val config = ch.obermuhlner.kimage.core.image.stack.DrizzleConfig(
                 rejection = ch.obermuhlner.kimage.core.image.stack.DrizzleRejection.SigmaClip,
-                tempDir = customTempDir.absolutePath
             )
 
             val m = ch.obermuhlner.kimage.core.matrix.DoubleMatrix(4, 4) { _, _ -> 0.5 }
@@ -46,7 +45,7 @@ class HugeMultiDimensionalFloatArrayTest {
             val identity = ch.obermuhlner.kimage.core.matrix.DoubleMatrix(3, 3) { r, c -> if (r == c) 1.0 else 0.0 }
 
             val frames = listOf({ image } to identity, { image } to identity)
-            ch.obermuhlner.kimage.core.image.stack.drizzle(frames, config)
+            ch.obermuhlner.kimage.core.image.stack.drizzle(frames, config, tempDir = customTempDir)
 
             // all temp files cleaned up after drizzle completes
             assertTrue(customTempDir.listFiles()!!.isEmpty(), "Expected temp files cleaned up after drizzle")

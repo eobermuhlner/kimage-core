@@ -210,6 +210,10 @@ fun FloatArray.average(offset: Int = 0, length: Int = size-offset): Float {
     return ArrayFloatIterator(this, offset, length).sum() / length
 }
 
+fun DoubleArray.average(offset: Int = 0, length: Int = size-offset): Double {
+    return ArrayDoubleIterator(this, offset, length).sum() / length
+}
+
 enum class StandardDeviation { Population, Sample }
 
 fun Iterable<Float>.stddev(type: StandardDeviation = StandardDeviation.Population): Float {
