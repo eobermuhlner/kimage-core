@@ -4,7 +4,10 @@ import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.io.File
 
 class StackConfigTest {
 
@@ -137,6 +140,22 @@ class StackConfigTest {
             val tileResult = stack(suppliers, StackConfig(algorithm = algorithm, maxDiskSpaceBytes = 0L))
             assertEquals(4, tileResult.width)
         }
+    }
+
+    @Test
+    fun `tiled stack path uses tempDir for mmap files not RAM`() {
+        val nonExistentDir = File(System.getProperty("java.io.tmpdir"), "kimage_nonexistent_${System.nanoTime()}")
+        assertFalse(nonExistentDir.exists(), "Test precondition: directory must not exist")
+
+        val suppliers = makeImages(3)
+        val config = StackConfig(
+            algorithm = StackAlgorithm.Median,
+            maxDiskSpaceBytes = 1L,  // force tiling
+            tempDir = nonExistentDir,
+        )
+        // Tiled path must use HugeMultiDimensionalFloatArray (disk), which fails when tempDir
+        // doesn't exist. If this assertion fails the tiled path is silently using RAM instead.
+        assertThrows<Exception> { stack(suppliers, config) }
     }
 
     @Test

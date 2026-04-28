@@ -1,7 +1,6 @@
 package ch.obermuhlner.kimage.core.image.stack
 
 import ch.obermuhlner.kimage.core.huge.HugeMultiDimensionalFloatArray
-import ch.obermuhlner.kimage.core.huge.SimpleMultiDimensionalFloatArray
 import ch.obermuhlner.kimage.core.huge.MultiDimensionalFloatArray
 import java.io.File
 import ch.obermuhlner.kimage.core.image.Image
@@ -159,7 +158,7 @@ private fun drizzleTwoPass(
         } else {
             (maxDiskSpaceBytes / (frames.size.toLong() * (channels.size + 1) * outW.toLong() * 4L)).toInt().coerceAtLeast(1)
         }
-        drizzleTwoPassTiled(frames, firstImage, config, channels, outW, outH, centerX, centerY, halfSize, cropOffsetX, cropOffsetY, tileHeight, onImageLoaded)
+        drizzleTwoPassTiled(frames, firstImage, config, tempDir, channels, outW, outH, centerX, centerY, halfSize, cropOffsetX, cropOffsetY, tileHeight, onImageLoaded)
     }
 }
 
@@ -212,6 +211,7 @@ private fun drizzleTwoPassTiled(
     frames: List<Pair<() -> Image, Matrix>>,
     firstImage: Image,
     config: DrizzleConfig,
+    tempDir: File?,
     channels: List<ch.obermuhlner.kimage.core.image.Channel>,
     outW: Int,
     outH: Int,
@@ -231,8 +231,8 @@ private fun drizzleTwoPassTiled(
         val yEnd = min(yStart + tileHeight, outH)
         val tilePixels = outW * (yEnd - yStart)
 
-        val perFrameFlux   = SimpleMultiDimensionalFloatArray(frames.size, channels.size, tilePixels)
-        val perFrameWeight = SimpleMultiDimensionalFloatArray(frames.size, 1, tilePixels)
+        HugeMultiDimensionalFloatArray(frames.size, channels.size, tilePixels, tempDir = tempDir).use { perFrameFlux ->
+        HugeMultiDimensionalFloatArray(frames.size, 1, tilePixels, tempDir = tempDir).use { perFrameWeight ->
 
         // For each frame: load image (reuse firstImage for fi=0), accumulate into tile buffers
         for (fi in frames.indices) {
@@ -284,6 +284,7 @@ private fun drizzleTwoPassTiled(
             }
         }
 
+        }} // close perFrameWeight and perFrameFlux
         yStart = yEnd
     }
 

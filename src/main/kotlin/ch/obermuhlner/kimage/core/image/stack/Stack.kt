@@ -157,7 +157,7 @@ fun stack(
         val pixelEnd = minOf(pixelStart + tileSize, numPixels)
         val tileLength = pixelEnd - pixelStart
 
-        makeBuffer(config.precision, numImages, numChannels, tileLength, useMmap, config.tempDir).use { buf ->
+        makeBuffer(config.precision, numImages, numChannels, tileLength, true, config.tempDir).use { buf ->
             // Load phase: store pixel data for every image in this tile
             for (imageIndex in imageSuppliers.indices) {
                 val image = if (imageIndex == 0) baseImage

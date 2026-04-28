@@ -412,8 +412,7 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Drizzle,
-                maxDiskSpaceBytes = "0",
-                tempDir = "X:/does/not/exist", // this would fail if disk is used
+                maxDiskSpaceBytes = "0",  // force row-by-row tiling
                 drizzle = DrizzleConfig(
                     scale = 2.0,
                     pixfrac = 0.7,

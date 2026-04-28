@@ -4,8 +4,11 @@ import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.io.File
 
 class DrizzleTest {
 
@@ -284,6 +287,22 @@ class DrizzleTest {
 
         assertEquals(resultNoCrop.width, resultCropDisabled.width, "disabled crop should not change output width")
         assertEquals(resultNoCrop.height, resultCropDisabled.height, "disabled crop should not change output height")
+    }
+
+    @Test
+    fun `tiled two-pass drizzle uses tempDir for mmap files not RAM`() {
+        val nonExistentDir = File(System.getProperty("java.io.tmpdir"), "kimage_nonexistent_drizzle_${System.nanoTime()}")
+        assertFalse(nonExistentDir.exists(), "Test precondition: directory must not exist")
+
+        val image = uniformImage(10, 10, 0.5)
+        val frames = listOf(image to identityMatrix(), image to identityMatrix(), image to identityMatrix())
+        val config = DrizzleConfig(
+            scale = 1.0, pixfrac = 1.0, kernel = DrizzleKernel.Square,
+            rejection = DrizzleRejection.SigmaClip
+        )
+        // Tiled path must use HugeMultiDimensionalFloatArray (disk), which fails when tempDir
+        // doesn't exist. If this assertion fails the tiled path is silently using RAM instead.
+        assertThrows<Exception> { drizzle(frames, config, tempDir = nonExistentDir, maxDiskSpaceBytes = 1L) }
     }
 
     @Test
