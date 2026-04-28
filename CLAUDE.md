@@ -82,6 +82,8 @@ Reference images are binary PNG files stored in git - commit them to preserve th
 
 Application name: `kimage-astro-process` (entry point `ch.obermuhlner.kimage.astro.process.AstroProcessKt`). Commands: `init`, `process`, `config`, `stars`. Reads `kimage-astro-process.yaml` from the current directory; `init` writes `defaultAstroProcessConfigText`. See `README.md` for the full config reference — it is the authoritative documentation for pipeline semantics and parameter ranges.
 
+**Whenever the processing of the `kimage-astro-process.yaml` configuration is modified (added/changed/removed steps, parameters, or semantics), you MUST update `README.md` to reflect the changes.**
+
 ## Architecture
 
 Two package roots under `ch.obermuhlner.kimage`:
