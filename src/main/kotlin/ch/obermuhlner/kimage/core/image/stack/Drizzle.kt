@@ -1,6 +1,7 @@
 package ch.obermuhlner.kimage.core.image.stack
 
 import ch.obermuhlner.kimage.core.huge.HugeMultiDimensionalFloatArray
+import java.io.File
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.matrix.FloatMatrix
@@ -34,6 +35,7 @@ data class DrizzleConfig(
     var kappa: Double = 2.0,
     var iterations: Int = 5,
     var crop: DrizzleCropConfig = DrizzleCropConfig(),
+    var tempDir: String? = null,
 )
 
 /**
@@ -130,57 +132,63 @@ private fun drizzleTwoPass(frames: List<Pair<() -> Image, Matrix>>, config: Driz
 
     // Per-frame flux:   [frameIndex, channelIndex, pixelIndex]
     // Per-frame weight: [frameIndex, 0,            pixelIndex]  (channel-independent)
-    val perFrameFlux   = HugeMultiDimensionalFloatArray(frames.size, channels.size, numPixels)
-    val perFrameWeight = HugeMultiDimensionalFloatArray(frames.size, 1, numPixels)
+    val tempDirFile = config.tempDir?.let { File(it) }
+    val perFrameFlux   = HugeMultiDimensionalFloatArray(frames.size, channels.size, numPixels, tempDir = tempDirFile)
+    val perFrameWeight = HugeMultiDimensionalFloatArray(frames.size, 1, numPixels, tempDir = tempDirFile)
 
-    fun accumulateFrame(fi: Int, image: Image, transformationMatrix: Matrix) {
-        forEachOverlap(image, transformationMatrix, config.kernel, centerX, centerY, config.scale, halfSize, cropOffsetX, cropOffsetY, outW, outH) { oy, ox, xIn, yIn, w ->
-            val pixelIndex = oy * outW + ox
-            // Weight accumulated once per spatial contribution (not per channel)
-            perFrameWeight[fi, 0, pixelIndex] = perFrameWeight[fi, 0, pixelIndex] + w.toFloat()
-            for (ci in channels.indices) {
-                val flux = image.getPixel(xIn, yIn, channels[ci])
-                perFrameFlux[fi, ci, pixelIndex] = perFrameFlux[fi, ci, pixelIndex] + (flux * w).toFloat()
-            }
-        }
-    }
-
-    // Pass 1: drizzle each frame into its own per-frame accumulator (load one image at a time)
-    accumulateFrame(0, firstImage, frames[0].second)
-    for (fi in 1 until frames.size) {
-        val image = frames[fi].first()
-        onImageLoaded?.invoke(image)
-        accumulateFrame(fi, image, frames[fi].second)
-    }
-
-    // Pass 2: for each output pixel, collect per-frame normalised values, reject, average
-    val values = FloatArray(frames.size)
-    val resultMatrices = channels.map { FloatMatrix(outH, outW) }
-
-    for (ci in channels.indices) {
-        val resultMatrix = resultMatrices[ci]
-        for (pixelIndex in 0 until numPixels) {
-            var count = 0
-            for (fi in frames.indices) {
-                val w = perFrameWeight[fi, 0, pixelIndex]
-                if (w > 0f) {
-                    values[count++] = perFrameFlux[fi, ci, pixelIndex] / w
+    try {
+        fun accumulateFrame(fi: Int, image: Image, transformationMatrix: Matrix) {
+            forEachOverlap(image, transformationMatrix, config.kernel, centerX, centerY, config.scale, halfSize, cropOffsetX, cropOffsetY, outW, outH) { oy, ox, xIn, yIn, w ->
+                val pixelIndex = oy * outW + ox
+                // Weight accumulated once per spatial contribution (not per channel)
+                perFrameWeight[fi, 0, pixelIndex] = perFrameWeight[fi, 0, pixelIndex] + w.toFloat()
+                for (ci in channels.indices) {
+                    val flux = image.getPixel(xIn, yIn, channels[ci])
+                    perFrameFlux[fi, ci, pixelIndex] = perFrameFlux[fi, ci, pixelIndex] + (flux * w).toFloat()
                 }
             }
-            if (count == 0) {
-                resultMatrix[pixelIndex] = 0.0
-                continue
-            }
-            val kept = when (config.rejection) {
-                DrizzleRejection.SigmaClip -> values.sigmaClipInplace(config.kappa.toFloat(), config.iterations, 0, count)
-                DrizzleRejection.Winsorize -> { values.sigmaWinsorizeInplace(config.kappa.toFloat(), 0, count); count }
-                DrizzleRejection.None      -> count
-            }
-            resultMatrix[pixelIndex] = values.average(0, kept).toDouble()
         }
-    }
 
-    return MatrixImage(outW, outH, channels, resultMatrices)
+        // Pass 1: drizzle each frame into its own per-frame accumulator (load one image at a time)
+        accumulateFrame(0, firstImage, frames[0].second)
+        for (fi in 1 until frames.size) {
+            val image = frames[fi].first()
+            onImageLoaded?.invoke(image)
+            accumulateFrame(fi, image, frames[fi].second)
+        }
+
+        // Pass 2: for each output pixel, collect per-frame normalised values, reject, average
+        val values = FloatArray(frames.size)
+        val resultMatrices = channels.map { FloatMatrix(outH, outW) }
+
+        for (ci in channels.indices) {
+            val resultMatrix = resultMatrices[ci]
+            for (pixelIndex in 0 until numPixels) {
+                var count = 0
+                for (fi in frames.indices) {
+                    val w = perFrameWeight[fi, 0, pixelIndex]
+                    if (w > 0f) {
+                        values[count++] = perFrameFlux[fi, ci, pixelIndex] / w
+                    }
+                }
+                if (count == 0) {
+                    resultMatrix[pixelIndex] = 0.0
+                    continue
+                }
+                val kept = when (config.rejection) {
+                    DrizzleRejection.SigmaClip -> values.sigmaClipInplace(config.kappa.toFloat(), config.iterations, 0, count)
+                    DrizzleRejection.Winsorize -> { values.sigmaWinsorizeInplace(config.kappa.toFloat(), 0, count); count }
+                    DrizzleRejection.None      -> count
+                }
+                resultMatrix[pixelIndex] = values.average(0, kept).toDouble()
+            }
+        }
+
+        return MatrixImage(outW, outH, channels, resultMatrices)
+    } finally {
+        perFrameFlux.close()
+        perFrameWeight.close()
+    }
 }
 
 // ── Forward-mapping loop: calls onHit for each (output pixel, input pixel) overlap ──

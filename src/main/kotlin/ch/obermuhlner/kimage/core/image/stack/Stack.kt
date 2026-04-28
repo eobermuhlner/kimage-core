@@ -57,7 +57,7 @@ fun stack(
 ): Image {
     val baseImage: Image = imageSuppliers[0]()
     val channels = baseImage.channels
-    val huge = multiDimensionalFloatArraySupplier(imageSuppliers.size, channels.size, baseImage.width * baseImage.height)
+    multiDimensionalFloatArraySupplier(imageSuppliers.size, channels.size, baseImage.width * baseImage.height).use { huge ->
 
     for (imageIndex in imageSuppliers.indices) {
         val image = if (imageIndex == 0) {
@@ -163,4 +163,5 @@ fun stack(
         }
     }
     return resultImage
+    } // end huge.use
 }
