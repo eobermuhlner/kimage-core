@@ -116,6 +116,15 @@ private fun makeBuffer(precision: StackPrecision, numImages: Int, numChannels: I
         )
     }
 
+// ── Formatting ────────────────────────────────────────────────────────────────
+
+internal fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_000_000_000L -> "%.1f GB".format(bytes / 1_000_000_000.0)
+    bytes >= 1_000_000L     -> "%.1f MB".format(bytes / 1_000_000.0)
+    bytes >= 1_000L         -> "%.1f kB".format(bytes / 1_000.0)
+    else                    -> "$bytes B"
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -144,6 +153,15 @@ fun stack(
         config.maxDiskSpaceBytes <= 0L -> baseImage.width  // row-by-row
         else -> (config.maxDiskSpaceBytes / (numImages.toLong() * numChannels * bytesPerElement))
                  .coerceAtLeast(1L).toInt()
+    }
+
+    run {
+        val numTiles = if (useMmap) 1 else (numPixels + tileSize - 1) / tileSize
+        val tileBytes = numImages.toLong() * numChannels * tileSize * bytesPerElement
+        val precName = config.precision.name.lowercase()
+        val tempDirLabel = config.tempDir?.path ?: System.getProperty("java.io.tmpdir")
+        val modeStr = if (useMmap) "single mmap" else "$numTiles tiles × ${formatBytes(tileBytes)}/tile"
+        println("Stack: $numImages images × $numChannels ch × ${baseImage.width}×${baseImage.height} ($precName) = ${formatBytes(requiredDiskBytes)} → $modeStr (tempDir=$tempDirLabel)")
     }
 
     val sigmaClipHistogram = Histogram(numImages + 1)

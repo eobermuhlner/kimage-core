@@ -150,6 +150,8 @@ private fun drizzleTwoPass(
     val requiredBytes = frames.size.toLong() * (channels.size + 1) * outW.toLong() * outH.toLong() * 4L
 
     return if (requiredBytes <= maxDiskSpaceBytes) {
+        val tempDirLabel = tempDir?.path ?: System.getProperty("java.io.tmpdir")
+        println("Drizzle: ${frames.size} frames × ${channels.size + 1} ch × ${outW}×${outH} (float) = ${formatBytes(requiredBytes)} → single mmap (tempDir=$tempDirLabel)")
         drizzleTwoPassFull(frames, firstImage, config, tempDir, channels, outW, outH, centerX, centerY, halfSize, cropOffsetX, cropOffsetY, onImageLoaded)
     } else {
         // Tile height: how many output rows fit within the disk budget
@@ -158,6 +160,10 @@ private fun drizzleTwoPass(
         } else {
             (maxDiskSpaceBytes / (frames.size.toLong() * (channels.size + 1) * outW.toLong() * 4L)).toInt().coerceAtLeast(1)
         }
+        val numTiles = (outH + tileHeight - 1) / tileHeight
+        val tileBytes = frames.size.toLong() * (channels.size + 1) * outW.toLong() * tileHeight * 4L
+        val tempDirLabel = tempDir?.path ?: System.getProperty("java.io.tmpdir")
+        println("Drizzle: ${frames.size} frames × ${channels.size + 1} ch × ${outW}×${outH} (float) = ${formatBytes(requiredBytes)} → $numTiles tiles × ${tileHeight} rows × ${formatBytes(tileBytes)}/tile (tempDir=$tempDirLabel)")
         drizzleTwoPassTiled(frames, firstImage, config, tempDir, channels, outW, outH, centerX, centerY, halfSize, cropOffsetX, cropOffsetY, tileHeight, onImageLoaded)
     }
 }
