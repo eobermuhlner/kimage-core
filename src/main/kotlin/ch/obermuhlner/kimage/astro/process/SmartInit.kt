@@ -51,6 +51,10 @@ internal fun detectLightFiles(workingDir: File): Pair<List<File>, String> {
 
 internal fun findCalibrationDir(workingDir: File, aliases: List<String>): String? {
     val lowerAliases = aliases.map { it.lowercase() }.toSet()
+    val exactMatch = workingDir.listFiles()
+        ?.firstOrNull { it.isDirectory && it.name in aliases }
+        ?.name
+    if (exactMatch != null) return exactMatch
     return workingDir.listFiles()
         ?.firstOrNull { it.isDirectory && it.name.lowercase() in lowerAliases }
         ?.name
