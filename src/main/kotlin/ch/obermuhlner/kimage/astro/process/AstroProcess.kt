@@ -36,6 +36,7 @@ import ch.obermuhlner.kimage.core.image.transform.rotateRight
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
+import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceCustom
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceGlobal
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceLocal
 import ch.obermuhlner.kimage.core.math.*
@@ -1333,7 +1334,7 @@ class AstroProcess(val config: ProcessConfig) {
                                 enhanceStepConfig.whitebalance!!.localMedianRadius
                             )
 
-                            WhitebalanceType.Custom -> it.applyWhitebalance(
+                            WhitebalanceType.Custom -> it.applyWhitebalanceCustom(
                                 enhanceStepConfig.whitebalance!!.customRed,
                                 enhanceStepConfig.whitebalance!!.customGreen,
                                 enhanceStepConfig.whitebalance!!.customBlue

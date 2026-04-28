@@ -61,6 +61,12 @@ fun Image.whitebalance(redMedian: Double, greenMedian: Double, blueMedian: Doubl
     return result
 }
 
+fun Image.applyWhitebalanceCustom(redFactor: Double, greenFactor: Double, blueFactor: Double) {
+    this[Channel.Red].applyEach { v -> v * redFactor }
+    this[Channel.Green].applyEach { v -> v * greenFactor }
+    this[Channel.Blue].applyEach { v -> v * blueFactor }
+}
+
 fun Image.applyWhitebalance(redMedian: Double, greenMedian: Double, blueMedian: Double) {
     val redMatrix = this[Channel.Red]
     val greenMatrix = this[Channel.Green]
