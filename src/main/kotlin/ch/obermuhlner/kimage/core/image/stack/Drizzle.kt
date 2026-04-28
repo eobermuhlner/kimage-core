@@ -42,7 +42,7 @@ data class DrizzleConfig(
  * Drizzle (Variable-Pixel Linear Reconstruction) image combination.
  *
  * Each frame is forward-mapped onto the output grid using its affine transformation matrix
- * (the forward map from input → reference frame, as returned by calculateTransformationMatrix).
+ * (the forward map from input -> reference frame, as returned by calculateTransformationMatrix).
  * Pixel flux is distributed across output cells weighted by the fractional area of overlap.
  *
  * When rejection != None, each frame is drizzled independently (two-pass) so hot pixels
@@ -151,7 +151,7 @@ private fun drizzleTwoPass(
 
     return if (requiredBytes <= maxDiskSpaceBytes) {
         val tempDirLabel = tempDir?.path ?: System.getProperty("java.io.tmpdir")
-        println("Drizzle: ${frames.size} frames × ${channels.size + 1} ch × ${outW}×${outH} (float) = ${formatBytes(requiredBytes)} → single mmap (tempDir=$tempDirLabel)")
+        println("Drizzle: ${frames.size} frames x ${channels.size + 1} ch x ${outW}x${outH} (float) = ${formatBytes(requiredBytes)} -> single mmap (tempDir=$tempDirLabel)")
         drizzleTwoPassFull(frames, firstImage, config, tempDir, channels, outW, outH, centerX, centerY, halfSize, cropOffsetX, cropOffsetY, onImageLoaded)
     } else {
         // Tile height: how many output rows fit within the disk budget
@@ -163,7 +163,7 @@ private fun drizzleTwoPass(
         val numTiles = (outH + tileHeight - 1) / tileHeight
         val tileBytes = frames.size.toLong() * (channels.size + 1) * outW.toLong() * tileHeight * 4L
         val tempDirLabel = tempDir?.path ?: System.getProperty("java.io.tmpdir")
-        println("Drizzle: ${frames.size} frames × ${channels.size + 1} ch × ${outW}×${outH} (float) = ${formatBytes(requiredBytes)} → $numTiles tiles × ${tileHeight} rows × ${formatBytes(tileBytes)}/tile (tempDir=$tempDirLabel)")
+        println("Drizzle: ${frames.size} frames x ${channels.size + 1} ch x ${outW}x${outH} (float) = ${formatBytes(requiredBytes)} -> $numTiles tiles x ${tileHeight} rows x ${formatBytes(tileBytes)}/tile (tempDir=$tempDirLabel)")
         drizzleTwoPassTiled(frames, firstImage, config, tempDir, channels, outW, outH, centerX, centerY, halfSize, cropOffsetX, cropOffsetY, tileHeight, onImageLoaded)
     }
 }

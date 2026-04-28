@@ -70,7 +70,7 @@ enum class StackPrecision {
  * @param precision         whether to store intermediate pixel values as Float or Double
  * @param tempDir           directory for memory-mapped temp files; null = system temp dir
  * @param maxDiskSpaceBytes maximum bytes allowed for memory-mapped temp files.
- *   The required disk space is calculated as `numImages × numChannels × numPixels × bytesPerElement`.
+ *   The required disk space is calculated as `numImages x numChannels x numPixels x bytesPerElement`.
  *   When the requirement exceeds this limit the implementation falls back to tile-based processing:
  *   each image is loaded in full but only the relevant strip of pixels is processed at a time,
  *   using in-memory buffers sized to stay within [maxDiskSpaceBytes].
@@ -160,8 +160,8 @@ fun stack(
         val tileBytes = numImages.toLong() * numChannels * tileSize * bytesPerElement
         val precName = config.precision.name.lowercase()
         val tempDirLabel = config.tempDir?.path ?: System.getProperty("java.io.tmpdir")
-        val modeStr = if (useMmap) "single mmap" else "$numTiles tiles × ${formatBytes(tileBytes)}/tile"
-        println("Stack: $numImages images × $numChannels ch × ${baseImage.width}×${baseImage.height} ($precName) = ${formatBytes(requiredDiskBytes)} → $modeStr (tempDir=$tempDirLabel)")
+        val modeStr = if (useMmap) "single mmap" else "$numTiles tiles x ${formatBytes(tileBytes)}/tile"
+        println("Stack: $numImages images x $numChannels ch x ${baseImage.width}x${baseImage.height} ($precName) = ${formatBytes(requiredDiskBytes)} -> $modeStr (tempDir=$tempDirLabel)")
     }
 
     val sigmaClipHistogram = Histogram(numImages + 1)
