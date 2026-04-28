@@ -231,11 +231,15 @@ private fun drizzleTwoPassTiled(
 ): Image {
     val resultMatrices = channels.map { FloatMatrix(outH, outW) }
     val values = FloatArray(frames.size)
+    val numTiles = (outH + tileHeight - 1) / tileHeight
 
     var yStart = 0
+    var tileIndex = 0
     while (yStart < outH) {
         val yEnd = min(yStart + tileHeight, outH)
         val tilePixels = outW * (yEnd - yStart)
+        tileIndex++
+        println("  Tile $tileIndex/$numTiles: output rows $yStart-${yEnd - 1} of $outH")
 
         HugeMultiDimensionalFloatArray(frames.size, channels.size, tilePixels, tempDir = tempDir).use { perFrameFlux ->
         HugeMultiDimensionalFloatArray(frames.size, 1, tilePixels, tempDir = tempDir).use { perFrameWeight ->

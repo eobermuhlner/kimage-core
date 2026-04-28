@@ -155,8 +155,8 @@ fun stack(
                  .coerceAtLeast(1L).toInt()
     }
 
+    val numTiles = if (useMmap) 1 else (numPixels + tileSize - 1) / tileSize
     run {
-        val numTiles = if (useMmap) 1 else (numPixels + tileSize - 1) / tileSize
         val tileBytes = numImages.toLong() * numChannels * tileSize * bytesPerElement
         val precName = config.precision.name.lowercase()
         val tempDirLabel = config.tempDir?.path ?: System.getProperty("java.io.tmpdir")
@@ -171,9 +171,17 @@ fun stack(
     val resultImage = MatrixImage(baseImage.width, baseImage.height, channels)
 
     var pixelStart = 0
+    var tileIndex = 0
     while (pixelStart < numPixels) {
         val pixelEnd = minOf(pixelStart + tileSize, numPixels)
         val tileLength = pixelEnd - pixelStart
+        tileIndex++
+
+        if (numTiles > 1) {
+            val rowStart = pixelStart / baseImage.width
+            val rowEnd = (pixelEnd - 1) / baseImage.width
+            println("  Tile $tileIndex/$numTiles: rows $rowStart-$rowEnd of ${baseImage.height}")
+        }
 
         makeBuffer(config.precision, numImages, numChannels, tileLength, true, config.tempDir).use { buf ->
             // Load phase: store pixel data for every image in this tile
