@@ -28,9 +28,15 @@ class StackConfigFieldsTest {
     }
 
     @Test
-    fun `StackConfig has maxDiskSpaceBytes field`() {
-        val config = StackConfig(maxDiskSpaceBytes = 500_000_000L)
-        assertEquals(500_000_000L, config.maxDiskSpaceBytes)
+    fun `StackConfig has maxDiskSpaceBytes field accepting string`() {
+        val config = StackConfig(maxDiskSpaceBytes = "500MB")
+        assertEquals("500MB", config.maxDiskSpaceBytes)
+    }
+
+    @Test
+    fun `StackConfig maxDiskSpaceBytes defaults to max`() {
+        val config = StackConfig()
+        assertEquals("max", config.maxDiskSpaceBytes)
     }
 
     @Test
@@ -41,10 +47,10 @@ class StackConfigFieldsTest {
             iterations = 8,
             precision = StackPrecision.Double,
             tempDir = "/tmp/kimage",
-            maxDiskSpaceBytes = 2_000_000_000L,
+            maxDiskSpaceBytes = "2GB",
         )
         assertEquals(StackAlgorithm.SigmaClipMedian, config.algorithm)
         assertEquals(StackPrecision.Double, config.precision)
-        assertEquals(2_000_000_000L, config.maxDiskSpaceBytes)
+        assertEquals("2GB", config.maxDiskSpaceBytes)
     }
 }

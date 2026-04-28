@@ -247,7 +247,7 @@ data class StackConfig(
     var iterations: Int = 10,
     var precision: StackPrecision = StackPrecision.Float,
     var tempDir: String? = null,
-    var maxDiskSpaceBytes: Long = Long.MAX_VALUE,
+    var maxDiskSpaceBytes: String = "max",
     var drizzle: DrizzleConfig = DrizzleConfig(),
 )
 
@@ -1120,7 +1120,7 @@ class AstroProcess(val config: ProcessConfig) {
                         }
                         imageSupplier to transform
                     }
-                    drizzle(frames, config.stack.drizzle, tempDir = config.stack.tempDir?.let { File(it) }, maxDiskSpaceBytes = config.stack.maxDiskSpaceBytes) { image -> accumulateMax(image) }
+                    drizzle(frames, config.stack.drizzle, tempDir = config.stack.tempDir?.let { File(it) }, maxDiskSpaceBytes = parseDiskSpaceBytes(config.stack.maxDiskSpaceBytes)) { image -> accumulateMax(image) }
                 }
             } else {
                 val alignedFileSuppliers = alignedFiles.map {
@@ -1140,7 +1140,7 @@ class AstroProcess(val config: ProcessConfig) {
                             iterations = config.stack.iterations,
                             precision = config.stack.precision,
                             tempDir = config.stack.tempDir?.let { File(it) },
-                            maxDiskSpaceBytes = config.stack.maxDiskSpaceBytes,
+                            maxDiskSpaceBytes = parseDiskSpaceBytes(config.stack.maxDiskSpaceBytes),
                         )
                     )
                 }
