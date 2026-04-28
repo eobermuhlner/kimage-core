@@ -1120,7 +1120,7 @@ class AstroProcess(val config: ProcessConfig) {
                         }
                         imageSupplier to transform
                     }
-                    drizzle(frames, config.stack.drizzle, tempDir = config.stack.tempDir?.let { File(it) }) { image -> accumulateMax(image) }
+                    drizzle(frames, config.stack.drizzle, tempDir = config.stack.tempDir?.let { File(it) }, maxDiskSpaceBytes = config.stack.maxDiskSpaceBytes) { image -> accumulateMax(image) }
                 }
             } else {
                 val alignedFileSuppliers = alignedFiles.map {

@@ -285,4 +285,71 @@ class DrizzleTest {
         assertEquals(resultNoCrop.width, resultCropDisabled.width, "disabled crop should not change output width")
         assertEquals(resultNoCrop.height, resultCropDisabled.height, "disabled crop should not change output height")
     }
+
+    @Test
+    fun `tiled two-pass produces same result as full mmap two-pass`() {
+        val width = 16
+        val height = 16
+        val normal = uniformImage(width, height, 0.5)
+        val hotMatrix = DoubleMatrix(height, width) { row, col ->
+            if (row == 8 && col == 8) 1.0 else 0.5
+        }
+        val withHotPixel = MatrixImage(width, height,
+            Channel.Red to hotMatrix,
+            Channel.Green to DoubleMatrix(height, width) { _, _ -> 0.5 },
+            Channel.Blue to DoubleMatrix(height, width) { _, _ -> 0.5 }
+        )
+
+        val config = DrizzleConfig(
+            scale = 1.0, pixfrac = 1.0, kernel = DrizzleKernel.Square,
+            rejection = DrizzleRejection.SigmaClip, kappa = 2.0, iterations = 3
+        )
+        val frames = listOf(normal to identityMatrix(), withHotPixel to identityMatrix(), normal to identityMatrix())
+
+        // Full mmap (no disk limit)
+        val fullResult = drizzle(frames.map { (img, m) -> ({ img } to m) }, config, maxDiskSpaceBytes = Long.MAX_VALUE)
+
+        // Tiled: force single-row tiles by setting maxDiskSpaceBytes to 1 byte (< any real usage)
+        val tiledResult = drizzle(frames.map { (img, m) -> ({ img } to m) }, config, maxDiskSpaceBytes = 1L)
+
+        assertEquals(fullResult.width, tiledResult.width)
+        assertEquals(fullResult.height, tiledResult.height)
+        for (y in 0 until fullResult.height) {
+            for (x in 0 until fullResult.width) {
+                assertEquals(
+                    fullResult[x, y, Channel.Red], tiledResult[x, y, Channel.Red], 1e-5,
+                    "[$x,$y] Red differs between full and tiled"
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `tiled two-pass with scale=2 produces same result as full mmap`() {
+        val width = 12
+        val height = 12
+        val image = uniformImage(width, height, 0.5)
+        val frames = listOf(
+            { image } to identityMatrix(),
+            { image } to translationMatrix(0.5, 0.5),
+        )
+        val config = DrizzleConfig(
+            scale = 2.0, pixfrac = 0.7, kernel = DrizzleKernel.Square,
+            rejection = DrizzleRejection.SigmaClip, kappa = 2.0, iterations = 3
+        )
+
+        val fullResult = drizzle(frames, config, maxDiskSpaceBytes = Long.MAX_VALUE)
+        val tiledResult = drizzle(frames, config, maxDiskSpaceBytes = 1L)
+
+        assertEquals(fullResult.width, tiledResult.width)
+        assertEquals(fullResult.height, tiledResult.height)
+        for (y in 0 until fullResult.height) {
+            for (x in 0 until fullResult.width) {
+                assertEquals(
+                    fullResult[x, y, Channel.Red], tiledResult[x, y, Channel.Red], 1e-5,
+                    "[$x,$y] Red differs between full and tiled (scale=2)"
+                )
+            }
+        }
+    }
 }

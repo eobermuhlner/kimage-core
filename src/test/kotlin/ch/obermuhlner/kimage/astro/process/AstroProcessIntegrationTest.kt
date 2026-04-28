@@ -395,6 +395,47 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `processAstro runs with drizzle stacking and sigma clip rejection no disk`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 5, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(
+                algorithm = StackAlgorithm.Drizzle,
+                maxDiskSpaceBytes = 0,
+                tempDir = "X:/does/not/exist", // this would fail if disk is used
+                drizzle = DrizzleConfig(
+                    scale = 2.0,
+                    pixfrac = 0.7,
+                    kernel = DrizzleKernel.Square,
+                    rejection = DrizzleRejection.SigmaClip,
+                    kappa = 2.0,
+                    iterations = 3,
+                )
+            ),
+            enhance = EnhanceConfig(
+                steps = mutableListOf()
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
     fun `processAstro runs with drizzle stacking and crop and sigma clip rejection`() {
         initTestRun()
         createRandomAstroImages(testDir, "light", 5, addBiasNoise = false)
