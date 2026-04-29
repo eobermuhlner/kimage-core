@@ -126,7 +126,7 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         )
 
         val testDir = prepareTestRunDirectory()
-        createRandomAstroImages(testDir, "light", 5, 20, 20)
+        createRandomAstroImages(testDir, "light", 5)
 
         val process = AstroProcess(config)
         process.workingDirectory = testDir
@@ -163,7 +163,7 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         )
 
         val testDir = prepareTestRunDirectory()
-        createRandomAstroImages(testDir, "light", imageCount, 20, 20)
+        createRandomAstroImages(testDir, "light", imageCount)
 
         val process = AstroProcess(config)
         process.workingDirectory = testDir
@@ -211,7 +211,7 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         )
 
         val testDir = prepareTestRunDirectory()
-        createRandomAstroImages(testDir, "light", 5, 20, 20)
+        createRandomAstroImages(testDir, "light", 5)
 
         val process = AstroProcess(config)
         process.workingDirectory = testDir
@@ -256,7 +256,7 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         )
 
         val testDir = prepareTestRunDirectory()
-        createRandomAstroImages(testDir, "light", 5, 20, 20)
+        createRandomAstroImages(testDir, "light", 5)
 
         val process = AstroProcess(config)
         process.workingDirectory = testDir
@@ -300,7 +300,7 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         )
 
         val testDir = prepareTestRunDirectory()
-        createRandomAstroImages(testDir, "light", 5, 20, 20)
+        createRandomAstroImages(testDir, "light", 5)
 
         val process = AstroProcess(config)
         process.workingDirectory = testDir
