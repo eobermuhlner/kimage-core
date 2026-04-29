@@ -394,7 +394,24 @@ output:
   outputName: "{firstInput}_{branchName}"   # {branchName} is filled per branch
 ```
 
-Each branch writes its own output files. The `{branchName}` token inserts the branch name into the filename. When `branches` is present, `steps` is ignored.
+Each branch writes its own output files. The `{branchName}` token inserts the branch name into the filename.
+
+Any `steps` defined at the `enhance` level run once as a shared prefix before the branches diverge — useful for common preparation steps (noise reduction, background extraction, crop) that would otherwise be duplicated in every branch:
+
+```yaml
+enhance:
+  steps:
+    - reduceNoise: { strength: 0.5 }     # runs once, shared by all branches
+  branches:
+    - name: "soft"
+      steps:
+        - sigmoid: { midpoint: 0.3, strength: 0.8 }
+    - name: "aggressive"
+      steps:
+        - sigmoid: { midpoint: 0.2, strength: 1.5 }
+```
+
+The shared prefix result is cached under `astro-process/enhanced/common/`; each branch's steps are cached under their own subdirectory.
 
 ---
 

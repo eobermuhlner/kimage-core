@@ -1228,7 +1228,7 @@ class AstroProcess(val config: ProcessConfig) {
                 println("### Enhancing frame ${frameIndex + 1}/${alignedFiles.size}: $alignedFile ...")
                 val enhancedImage = processEnhanceSteps(
                     frameImage, dirty, config.enhance.steps, config.format, config.enhance, frameCacheDir, sourceRegistry
-                )
+                ).first
                 processOutput(enhancedImage, frameInfoTokens, config.output)
                 processAnnotate(enhancedImage, frameInfoTokens, wcsFile, config.annotate, config.output)
             }
@@ -1330,9 +1330,18 @@ class AstroProcess(val config: ProcessConfig) {
             println()
 
             if (!config.enhance.branches.isNullOrEmpty()) {
-                if (config.enhance.steps.isNotEmpty()) {
-                    println("WARNING: enhance.steps is ignored because enhance.branches is set")
+                val (commonImage, commonDirty) = if (config.enhance.steps.isNotEmpty()) {
+                    val commonCacheDir = currentDir.resolve(config.enhance.enhancedOutputDirectory).resolve("common")
+                    commonCacheDir.mkdirs()
+                    elapsed("enhance common steps") {
+                        processEnhanceSteps(
+                            enhanceInputImage, dirty, config.enhance.steps, config.format, config.enhance, commonCacheDir, sourceRegistry
+                        )
+                    }
+                } else {
+                    Pair(enhanceInputImage, dirty)
                 }
+
                 for (branch in config.enhance.branches!!) {
                     val branchInfoTokens = infoTokens.toMutableMap()
                     branchInfoTokens[InfoTokens.branchName.name] = branch.name
@@ -1343,8 +1352,8 @@ class AstroProcess(val config: ProcessConfig) {
 
                     val enhancedImage = elapsed("enhance branch '${branch.name}'") {
                         processEnhanceSteps(
-                            enhanceInputImage, dirty, branch.steps, config.format, config.enhance, branchCacheDir, sourceRegistry
-                        )
+                            commonImage, commonDirty, branch.steps, config.format, config.enhance, branchCacheDir, sourceRegistry
+                        ).first
                     }
 
                     println()
@@ -1379,7 +1388,7 @@ class AstroProcess(val config: ProcessConfig) {
     ): Image {
         val cacheDir = workingDirectory.resolve(enhanceConfig.enhancedOutputDirectory)
         cacheDir.mkdirs()
-        return processEnhanceSteps(inputImage, alreadyDirty, enhanceConfig.steps, formatConfig, enhanceConfig, cacheDir, sourceRegistry)
+        return processEnhanceSteps(inputImage, alreadyDirty, enhanceConfig.steps, formatConfig, enhanceConfig, cacheDir, sourceRegistry).first
     }
 
     private fun processEnhanceSteps(
@@ -1390,7 +1399,7 @@ class AstroProcess(val config: ProcessConfig) {
         enhanceConfig: EnhanceConfig,
         cacheDir: File,
         sourceRegistry: MutableMap<String, Image>,
-    ): Image {
+    ): Pair<Image, Boolean> {
         val currentDir = workingDirectory
         cacheDir.mkdirs()
 
@@ -1660,7 +1669,7 @@ class AstroProcess(val config: ProcessConfig) {
                 hdrSourceImages.add(image)
             }
         }
-        return image
+        return Pair(image, dirty)
     }
 
     private fun extractSingleChannelMatrix(image: Image): ch.obermuhlner.kimage.core.matrix.Matrix {
@@ -1759,8 +1768,8 @@ class AstroProcess(val config: ProcessConfig) {
         starsCacheDir.mkdirs()
         backgroundCacheDir.mkdirs()
 
-        val processedStars = processEnhanceSteps(starImage, dirty, cfg.starsBranch.steps, formatConfig, enhanceConfig, starsCacheDir, sourceRegistry)
-        val processedBackground = processEnhanceSteps(backgroundImage, dirty, cfg.backgroundBranch.steps, formatConfig, enhanceConfig, backgroundCacheDir, sourceRegistry)
+        val processedStars = processEnhanceSteps(starImage, dirty, cfg.starsBranch.steps, formatConfig, enhanceConfig, starsCacheDir, sourceRegistry).first
+        val processedBackground = processEnhanceSteps(backgroundImage, dirty, cfg.backgroundBranch.steps, formatConfig, enhanceConfig, backgroundCacheDir, sourceRegistry).first
 
         val maskMatrix = buildStarMask(image, stars, cfg.factor, cfg.softMaskBlurRadius)
         return blendWithMask(processedStars, processedBackground, maskMatrix)
@@ -1784,7 +1793,7 @@ class AstroProcess(val config: ProcessConfig) {
                 val processedLuminance = if (cfg.luminance != null) {
                     val lCacheDir = subCacheDir.resolve(cfg.luminance!!.name.ifEmpty { "luminance" })
                     lCacheDir.mkdirs()
-                    processEnhanceSteps(luminanceImage, dirty, cfg.luminance!!.steps, formatConfig, enhanceConfig, lCacheDir, sourceRegistry)
+                    processEnhanceSteps(luminanceImage, dirty, cfg.luminance!!.steps, formatConfig, enhanceConfig, lCacheDir, sourceRegistry).first
                 } else {
                     luminanceImage
                 }
@@ -1792,7 +1801,7 @@ class AstroProcess(val config: ProcessConfig) {
                 val processedColor = if (cfg.color != null) {
                     val cCacheDir = subCacheDir.resolve(cfg.color!!.name.ifEmpty { "color" })
                     cCacheDir.mkdirs()
-                    processEnhanceSteps(image, dirty, cfg.color!!.steps, formatConfig, enhanceConfig, cCacheDir, sourceRegistry)
+                    processEnhanceSteps(image, dirty, cfg.color!!.steps, formatConfig, enhanceConfig, cCacheDir, sourceRegistry).first
                 } else {
                     image
                 }
@@ -1806,7 +1815,7 @@ class AstroProcess(val config: ProcessConfig) {
                     val branchCacheDir = subCacheDir.resolve(branch.name.ifEmpty { branchName })
                     branchCacheDir.mkdirs()
                     val channelImage = MatrixImage(channelMatrix)
-                    val processed = processEnhanceSteps(channelImage, dirty, branch.steps, formatConfig, enhanceConfig, branchCacheDir, sourceRegistry)
+                    val processed = processEnhanceSteps(channelImage, dirty, branch.steps, formatConfig, enhanceConfig, branchCacheDir, sourceRegistry).first
                     return processed[Channel.Gray]
                 }
                 val redResult = processBranch(cfg.red, image[Channel.Red], "red")
@@ -1821,7 +1830,7 @@ class AstroProcess(val config: ProcessConfig) {
                     val branchCacheDir = subCacheDir.resolve(branch.name.ifEmpty { branchName })
                     branchCacheDir.mkdirs()
                     val channelImage = MatrixImage(channelMatrix)
-                    val processed = processEnhanceSteps(channelImage, dirty, branch.steps, formatConfig, enhanceConfig, branchCacheDir, sourceRegistry)
+                    val processed = processEnhanceSteps(channelImage, dirty, branch.steps, formatConfig, enhanceConfig, branchCacheDir, sourceRegistry).first
                     return processed[Channel.Gray]
                 }
                 val hueResult = processBranch(cfg.hue, image[Channel.Hue], "hue")
@@ -1887,8 +1896,8 @@ class AstroProcess(val config: ProcessConfig) {
         insideCacheDir.mkdirs()
         outsideCacheDir.mkdirs()
 
-        val processedInside = processEnhanceSteps(image, dirty, cfg.insideMask.steps, formatConfig, enhanceConfig, insideCacheDir, sourceRegistry)
-        val processedOutside = processEnhanceSteps(image, dirty, cfg.outsideMask.steps, formatConfig, enhanceConfig, outsideCacheDir, sourceRegistry)
+        val processedInside = processEnhanceSteps(image, dirty, cfg.insideMask.steps, formatConfig, enhanceConfig, insideCacheDir, sourceRegistry).first
+        val processedOutside = processEnhanceSteps(image, dirty, cfg.outsideMask.steps, formatConfig, enhanceConfig, outsideCacheDir, sourceRegistry).first
 
         return blendWithMask(processedInside, processedOutside, maskMatrix)
     }

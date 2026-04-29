@@ -109,6 +109,64 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
     // --- Integration tests ---
 
     @Test
+    fun `processAstro with common steps and branches applies common steps before each branch`() {
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(sigmoid = SigmoidConfig(midpoint = 0.3, strength = 0.8))
+                ),
+                branches = mutableListOf(
+                    BranchConfig(
+                        name = "soft",
+                        steps = mutableListOf(
+                            EnhanceStepConfig(sigmoid = SigmoidConfig(midpoint = 0.5, strength = 0.5))
+                        )
+                    ),
+                    BranchConfig(
+                        name = "aggressive",
+                        steps = mutableListOf(
+                            EnhanceStepConfig(sigmoid = SigmoidConfig(midpoint = 0.2, strength = 2.0))
+                        )
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_{${InfoTokens.branchName.name}}",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        val testDir = prepareTestRunDirectory()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val process = AstroProcess(config)
+        process.workingDirectory = testDir
+        process.processAstro()
+
+        val outputDir = testDir.resolve("astro-process/output")
+        assertTrue(outputDir.exists(), "Output directory should exist")
+        val outputFiles = outputDir.listFiles()?.sorted() ?: emptyList()
+        assertEquals(2, outputFiles.size, "Should produce one output file per branch")
+        assertTrue(outputFiles.any { it.name.contains("soft") }, "Should have 'soft' branch output")
+        assertTrue(outputFiles.any { it.name.contains("aggressive") }, "Should have 'aggressive' branch output")
+
+        val commonCacheDir = testDir.resolve("astro-process/enhanced/common")
+        assertTrue(commonCacheDir.exists(), "Common step cache directory should exist")
+        assertTrue(commonCacheDir.listFiles()?.isNotEmpty() == true, "Common step cache should contain step files")
+    }
+
+    @Test
     fun `processAstro with branches produces output for each branch`() {
         val config = ProcessConfig(
             format = FormatConfig(
