@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(./gradlew compileKotlin)",
+      "Bash(./gradlew compileTestKotlin)",
+      "Bash(./gradlew test *)",
+      "Bash(./gradlew compileKotlin --info)",
+      "Bash(kimage-astro-process process *)"
+    ]
+  }
+}

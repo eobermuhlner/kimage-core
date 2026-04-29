@@ -6,6 +6,7 @@ import ch.obermuhlner.kimage.core.matrix.Matrix
 import ch.obermuhlner.kimage.core.matrix.filter.richardsonLucyDeconvolution
 import ch.obermuhlner.kimage.core.matrix.filter.sobelFilter
 import ch.obermuhlner.kimage.core.matrix.filter.unsharpMaskFilter
+import ch.obermuhlner.kimage.core.matrix.filter.wienerDeconvolution
 import ch.obermuhlner.kimage.filter.GaussianBlurFilter
 
 fun Image.boxBlur3Filter(): Image = this.kernelFilter(KernelFilter.BoxBlur3)
@@ -60,6 +61,27 @@ fun Image.sobel3Filter() = this.sobelFilter(KernelFilter.SobelHorizontal3, Kerne
 fun Image.sobel5Filter() = this.sobelFilter(KernelFilter.SobelHorizontal5, KernelFilter.SobelVertical5)
 
 fun Image.richardsonLucyDeconvolution(psfSigma: Double = 1.5, iterations: Int = 20): Image {
+    // Kernel size must be odd and large enough to capture the Gaussian
+    val minSize = (psfSigma * 6).toInt().coerceAtLeast(7)
+    val size = if (minSize % 2 == 0) minSize + 1 else minSize
+    val center = size / 2
+    val psf = DoubleMatrix.matrixOf(size, size) { row, col ->
+        val dx = row - center
+        val dy = col - center
+        val dist2 = dx * dx + dy * dy
+        kotlin.math.exp(-dist2 / (2 * psfSigma * psfSigma))
+    }
+    // Normalize PSF so its values sum to 1.0
+    val sum = (0 until psf.rows).sumOf { row -> (0 until psf.cols).sumOf { col -> psf[row, col] } }
+    val normalizedPsf = DoubleMatrix.matrixOf(size, size) { row, col -> psf[row, col] / sum }
+    return this.richardsonLucyDeconvolution(normalizedPsf, iterations)
+}
+
+fun Image.richardsonLucyDeconvolution(psf: Matrix, iterations: Int = 20): Image = MatrixImageFilter(
+    { _, matrix -> matrix.richardsonLucyDeconvolution(psf, iterations) }
+).filter(this)
+
+fun Image.wienerDeconvolution(psfSigma: Double = 1.5, iterations: Int = 10, noiseLevel: Double = 0.01): Image {
     val size = 7
     val center = size / 2
     val psf = DoubleMatrix.matrixOf(size, size) { row, col ->
@@ -68,9 +90,12 @@ fun Image.richardsonLucyDeconvolution(psfSigma: Double = 1.5, iterations: Int = 
         val dist2 = dx * dx + dy * dy
         kotlin.math.exp(-dist2 / (2 * psfSigma * psfSigma))
     }
-    return this.richardsonLucyDeconvolution(psf, iterations)
+    // Normalize PSF so its values sum to 1.0
+    val sum = (0 until psf.rows).sumOf { row -> (0 until psf.cols).sumOf { col -> psf[row, col] } }
+    val normalizedPsf = DoubleMatrix.matrixOf(size, size) { row, col -> psf[row, col] / sum }
+    return this.wienerDeconvolution(normalizedPsf, iterations, noiseLevel)
 }
 
-fun Image.richardsonLucyDeconvolution(psf: Matrix, iterations: Int = 20): Image = MatrixImageFilter(
-    { _, matrix -> matrix.richardsonLucyDeconvolution(psf, iterations) }
+fun Image.wienerDeconvolution(psf: Matrix, iterations: Int = 10, noiseLevel: Double = 0.01): Image = MatrixImageFilter(
+    { _, matrix -> matrix.wienerDeconvolution(psf, iterations, noiseLevel) }
 ).filter(this)

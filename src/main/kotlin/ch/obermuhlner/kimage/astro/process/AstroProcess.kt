@@ -1397,7 +1397,7 @@ class AstroProcess(val config: ProcessConfig) {
                                 )
                             }
                             DeconvolutionAlgorithm.Wiener -> {
-                                it.richardsonLucyDeconvolution(
+                                it.wienerDeconvolution(
                                     enhanceStepConfig.deconvolve!!.psfSigma,
                                     enhanceStepConfig.deconvolve!!.iterations
                                 )

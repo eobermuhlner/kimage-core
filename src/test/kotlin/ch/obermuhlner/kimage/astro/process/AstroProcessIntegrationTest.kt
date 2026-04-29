@@ -15,6 +15,37 @@ import org.junit.jupiter.api.Test
 class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
 
     @Test
+    fun `processAstro runs with minimal config and light frames`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(
+                algorithm = StackAlgorithm.Median
+            ),
+            enhance = EnhanceConfig(
+                steps = mutableListOf()
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
     fun `processAstro debayers light frames using VNG interpolation`() {
         initTestRun()
         createRandomBayerImages(testDir, "light", 5, BayerPattern.RGGB)
@@ -132,37 +163,6 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         }
         assertTrue(redGreenDiff > 0.0, "Red and Green channels should be different (not grayscale)")
         assertTrue(redBlueDiff > 0.0, "Red and Blue channels should be different (not grayscale)")
-    }
-
-    @Test
-    fun `processAstro runs with minimal config and light frames`() {
-        initTestRun()
-        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
-
-        val config = ProcessConfig(
-            format = FormatConfig(
-                inputImageExtension = "png",
-                outputImageExtension = "png",
-                debayer = DebayerConfig(enabled = false)
-            ),
-            calibrate = CalibrateConfig(
-                enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
-            ),
-            align = AlignConfig(),
-            stack = StackConfig(
-                algorithm = StackAlgorithm.Median
-            ),
-            enhance = EnhanceConfig(
-                steps = mutableListOf()
-            ),
-            output = OutputFormatConfig(
-                outputName = "test_output",
-                outputImageExtensions = mutableListOf("png"),
-            )
-        )
-
-        assertAstroProcess(config)
     }
 
     @Test
@@ -479,4 +479,42 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
 
         assertAstroProcess(config)
     }
+
+    @Test
+    fun `processAstro runs with enhance`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(
+                algorithm = StackAlgorithm.Median
+            ),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        deconvolve = DeconvolutionConfig(
+                            iterations = 50
+                        )
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
 }
