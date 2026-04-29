@@ -183,6 +183,7 @@ Enhancement uses a flexible step-by-step approach. Common steps include:
 - **rotate** - Rotate the image
 - **crop** - Remove unwanted edges
 - **whitebalance** - Color correction
+- **autoStretch** - Automatic STF stretch (luminance-based, PixInsight-compatible)
 - **linearPercentile** - Histogram stretching
 - **sigmoid** - S-curve contrast enhancement
 - **reduceNoise** - Noise reduction
@@ -577,11 +578,10 @@ enhance:
   steps:                        # Processing steps (executed in order)
     # Each step supports an optional top-level "enabled" flag to skip it:
     #   - sigmoid:
+    #       enabled: false        # Temporarily disable this step without removing it
     #       midpoint: 0.01
-    #     enabled: false        # Temporarily disable this step without removing it
-    # Debayer Step (if not done earlier)
     - debayer:
-        enabled: true
+        enabled: false  # usually done earlier in calibration step
         cleanupBadPixels: true
         bayerPattern: "RGGB"
         interpolation: "AHD"    # Debayer algorithm: None, SuperPixel, SuperPixelHalf, Monochrome, Nearest, Bilinear, AHD, GLI, AMaZE, VNG, PPG
@@ -619,6 +619,11 @@ enhance:
         medianRadius: 50        # Radius for median calculation at fix points
         power: 1.5              # Interpolation power (1.0-3.0)
         offset: 0.01            # Background offset value
+    # Auto Stretch (if this is enabled then usually no other stretch step is needed)
+    - autoStretch:
+        shadowClipping: 2.8      # black point = median - k*noise
+        targetBackground: 0.1    # where to place the background after stretch (0.05–0.3)
+        perChannel: false        # false = luminance-based (preserves color), true = per-channel
     # Linear Percentile Stretch
     - linearPercentile:
         minPercentile: 0.0001   # Minimum percentile (0.0001-0.01)
@@ -745,6 +750,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`crop`** - Crop image to specified rectangle
 - **`whitebalance`** - Apply color correction
 - **`removeBackground`** - Remove background gradients
+- **`autoStretch`** - Automatic STF (Screen Transfer Function) stretch; estimates background and noise from the image, then applies a Midtone Transfer Function to bring the background to a target brightness
 - **`linearPercentile`** - Linear histogram stretching
 - **`sigmoid`** - S-curve contrast enhancement
 - **`blur`** - Apply Gaussian blur
@@ -771,6 +777,11 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - `starThreshold`: 0.1 (more stars, noisier) to 0.5 (fewer stars, cleaner)
 - `maxStars`: 50 (faster) to 500 (more accurate alignment)
 - `positionTolerance`: 1.0 (strict) to 10.0 (tolerant)
+
+**Auto Stretch (autoStretch):**
+- `shadowClipping`: 1.0 (bright background) to 5.0 (dark background) — multiplier for MAD-based noise estimate that sets the black point; default 2.8 matches PixInsight AutoSTF
+- `targetBackground`: 0.05 (dark) to 0.3 (bright) — normalized value where the background lands after stretching; default 0.1
+- `perChannel`: `false` (luminance-based, preserves color balance) / `true` (per-channel, more aggressive but may shift colors)
 
 **Enhancement Values:**
 - `minPercentile`: 0.0001 (aggressive) to 0.01 (conservative)

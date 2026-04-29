@@ -3,6 +3,7 @@ package ch.obermuhlner.kimage.image.color
 import ch.obermuhlner.kimage.astro.color.stretch
 import ch.obermuhlner.kimage.astro.color.stretchAsinh
 import ch.obermuhlner.kimage.astro.color.stretchAsinhPercentile
+import ch.obermuhlner.kimage.astro.color.stretchAutoSTF
 import ch.obermuhlner.kimage.astro.color.stretchExponential
 import ch.obermuhlner.kimage.astro.color.stretchExponentialMedian
 import ch.obermuhlner.kimage.astro.color.stretchExponentialPercentile
@@ -32,5 +33,14 @@ class ImageStretchTest : AbstractImageProcessingTest() {
         assertReferenceImage("stretchSigmoid", image.stretchSigmoid())
         assertReferenceImage("stretchLogarithmic", image.stretchLogarithmic())
         assertReferenceImage("stretchSTF", image.stretchSTF())
+    }
+
+    @Test
+    fun testStretchAutoSTF() {
+        val image = createGradientTestImage(60, 30)
+
+        assertReferenceImage("stretchAutoSTF", image.stretchAutoSTF())
+        assertReferenceImage("stretchAutoSTF_perChannel", image.stretchAutoSTF(perChannel = true))
+        assertReferenceImage("stretchAutoSTF_custom", image.stretchAutoSTF(shadowClipping = 1.5, targetBackground = 0.15))
     }
 }

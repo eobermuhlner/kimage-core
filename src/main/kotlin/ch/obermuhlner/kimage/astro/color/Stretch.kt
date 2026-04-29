@@ -1,14 +1,18 @@
 package ch.obermuhlner.kimage.astro.color
 
 import ch.obermuhlner.kimage.core.image.Image
+import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.image.copy
 import ch.obermuhlner.kimage.core.image.values.applyEach
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.math.Histogram
 import ch.obermuhlner.kimage.core.math.median
+import ch.obermuhlner.kimage.core.math.medianAndMedianAbsoluteDeviation
 import ch.obermuhlner.kimage.core.math.sigmaClip
 import ch.obermuhlner.kimage.core.math.sigmoidLike
 import ch.obermuhlner.kimage.core.math.stddev
+import ch.obermuhlner.kimage.core.matrix.values.values
+import kotlin.math.abs
 import kotlin.math.asinh
 import kotlin.math.ln
 import kotlin.math.pow
@@ -136,6 +140,51 @@ fun Image.stretchSTF(shadows: Double = 0.01, highlights: Double = 0.99, midtones
             ((t.pow(midtones) * (1 - target)) + target).coerceIn(0.0, 1.0)
         }
     }
+}
+
+fun Image.stretchAutoSTF(
+    shadowClipping: Double = 2.8,
+    targetBackground: Double = 0.1,
+    perChannel: Boolean = false,
+): Image {
+    return if (perChannel) {
+        MatrixImage(width, height, channels) { channel, _, _ ->
+            val (c0, m) = autoStfParams(this[channel].values().toList(), shadowClipping, targetBackground)
+            val result = this[channel].copy()
+            result.applyEach { v -> autoStfApply(c0, m, v) }
+            result
+        }
+    } else {
+        val (c0, m) = autoStfParams(this.values().toList(), shadowClipping, targetBackground)
+        stretch { v -> autoStfApply(c0, m, v) }
+    }
+}
+
+private fun autoStfParams(values: Iterable<Double>, shadowClipping: Double, targetBackground: Double): Pair<Double, Double> {
+    val (median, mad) = values.medianAndMedianAbsoluteDeviation()
+    val sigma = 1.4826 * mad
+    val c0 = (median - shadowClipping * sigma).coerceIn(0.0, 1.0)
+    val range = (1.0 - c0).coerceAtLeast(1e-10)
+    val x = ((median - c0) / range).coerceIn(0.0, 1.0)
+    val m = if (x <= 0.0 || x >= 1.0) {
+        0.5
+    } else {
+        val tb = targetBackground
+        (x * (tb - 1.0) / ((2.0 * x - 1.0) * tb - x)).coerceIn(0.001, 0.999)
+    }
+    return Pair(c0, m)
+}
+
+private fun autoStfApply(c0: Double, m: Double, v: Double): Double {
+    val x = ((v - c0).coerceAtLeast(0.0) / (1.0 - c0).coerceAtLeast(1e-10)).coerceIn(0.0, 1.0)
+    return mtfTransfer(m, x)
+}
+
+private fun mtfTransfer(m: Double, x: Double): Double {
+    if (x <= 0.0) return 0.0
+    if (x >= 1.0) return 1.0
+    if (m == 0.5) return x
+    return ((m - 1.0) * x / ((2.0 * m - 1.0) * x - m)).coerceIn(0.0, 1.0)
 }
 
 fun Image.stretch(func: (Double) -> Double): Image {

@@ -9,6 +9,7 @@ import ch.obermuhlner.kimage.astro.annotate.WCSConverter
 import ch.obermuhlner.kimage.astro.annotate.WCSParser
 import ch.obermuhlner.kimage.astro.background.*
 import ch.obermuhlner.kimage.astro.color.histogram
+import ch.obermuhlner.kimage.astro.color.stretchAutoSTF
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionConfig
@@ -268,6 +269,7 @@ data class EnhanceStepConfig(
     var reduceNoise: ReduceNoiseConfig? = null,
     var whitebalance: WhitebalanceConfig? = null,
     var removeBackground: RemoveBackgroundConfig? = null,
+    var autoStretch: AutoStretchConfig? = null,
     var sigmoid: SigmoidConfig? = null,
     var linearPercentile: LinearPercentileConfig? = null,
     var blur: BlurConfig? = null,
@@ -286,6 +288,7 @@ data class EnhanceStepConfig(
             reduceNoise != null -> EnhanceStepType.ReduceNoise
             whitebalance != null -> EnhanceStepType.Whitebalance
             removeBackground != null -> EnhanceStepType.RemoveBackground
+            autoStretch != null -> EnhanceStepType.AutoStretch
             sigmoid != null -> EnhanceStepType.Sigmoid
             linearPercentile != null -> EnhanceStepType.LinearPercentile
             blur != null -> EnhanceStepType.Blur
@@ -304,6 +307,7 @@ enum class EnhanceStepType {
     Rotate,
     Whitebalance,
     RemoveBackground,
+    AutoStretch,
     LinearPercentile,
     Sigmoid,
     Blur,
@@ -420,6 +424,12 @@ enum class WhitebalanceType {
     Local,
     Custom
 }
+
+data class AutoStretchConfig(
+    var shadowClipping: Double = 2.8,
+    var targetBackground: Double = 0.1,
+    var perChannel: Boolean = false,
+)
 
 data class SigmoidConfig(
     var midpoint: Double = 0.5,
@@ -1321,6 +1331,14 @@ class AstroProcess(val config: ProcessConfig) {
                         val fixPointValues = it.getFixPointValues(fixPoints, enhanceStepConfig.removeBackground!!.medianRadius)
                         val background = it.interpolate(fixPointValues, power = enhanceStepConfig.removeBackground!!.power)
                         it - background + enhanceStepConfig.removeBackground!!.offset
+                    }
+
+                    EnhanceStepType.AutoStretch -> {
+                        it.stretchAutoSTF(
+                            enhanceStepConfig.autoStretch!!.shadowClipping,
+                            enhanceStepConfig.autoStretch!!.targetBackground,
+                            enhanceStepConfig.autoStretch!!.perChannel,
+                        )
                     }
 
                     EnhanceStepType.Whitebalance -> {
