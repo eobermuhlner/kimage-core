@@ -369,6 +369,7 @@ data class DeconvolutionConfig(
     var algorithm: DeconvolutionAlgorithm = DeconvolutionAlgorithm.RichardsonLucy,
     var psfSigma: Double = 1.5,
     var iterations: Int = 20,
+    var noiseLevel: Double = 0.01,
 )
 
 enum class DeconvolutionAlgorithm {
@@ -1399,7 +1400,8 @@ class AstroProcess(val config: ProcessConfig) {
                             DeconvolutionAlgorithm.Wiener -> {
                                 it.wienerDeconvolution(
                                     enhanceStepConfig.deconvolve!!.psfSigma,
-                                    enhanceStepConfig.deconvolve!!.iterations
+                                    enhanceStepConfig.deconvolve!!.iterations,
+                                    enhanceStepConfig.deconvolve!!.noiseLevel
                                 )
                             }
                         }

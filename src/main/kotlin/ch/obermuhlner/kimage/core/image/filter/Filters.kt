@@ -82,7 +82,8 @@ fun Image.richardsonLucyDeconvolution(psf: Matrix, iterations: Int = 20): Image 
 ).filter(this)
 
 fun Image.wienerDeconvolution(psfSigma: Double = 1.5, iterations: Int = 10, noiseLevel: Double = 0.01): Image {
-    val size = 7
+    val minSize = (psfSigma * 6).toInt().coerceAtLeast(7)
+    val size = if (minSize % 2 == 0) minSize + 1 else minSize
     val center = size / 2
     val psf = DoubleMatrix.matrixOf(size, size) { row, col ->
         val dx = row - center

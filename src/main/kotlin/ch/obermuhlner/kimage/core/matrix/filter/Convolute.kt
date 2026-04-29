@@ -148,7 +148,7 @@ fun Matrix.wienerDeconvolution(kernel: Matrix, iterations: Int = 10, noiseLevel:
     var estimate = this.copy()
 
     for (i in 0 until iterations) {
-        val convolved = if (kernel1D != null) estimate.convoluteSeparable(kernel1D) else estimate.convolute(kernel)
+        val convolved = if (kernel1D != null) estimate.convoluteSeparable(kernel1D) else estimate.convoluteUnclamped(kernel)
         val ratio = DoubleMatrix.matrixOf(rows, cols) { row, col ->
             val c = convolved[row, col]
             val b = blurred[row, col]
@@ -158,7 +158,7 @@ fun Matrix.wienerDeconvolution(kernel: Matrix, iterations: Int = 10, noiseLevel:
                 b / c
             }
         }
-        val correction = if (kernel1D != null) ratio.convoluteSeparable(kernel1D) else ratio.convolute(kernelFlipped!!)
+        val correction = if (kernel1D != null) ratio.convoluteSeparable(kernel1D) else ratio.convoluteUnclamped(kernelFlipped!!)
 
         val newEstimate = DoubleMatrix.matrixOf(rows, cols) { row, col ->
             val est = estimate[row, col]

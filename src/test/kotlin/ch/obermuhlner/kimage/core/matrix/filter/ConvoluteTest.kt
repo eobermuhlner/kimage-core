@@ -159,4 +159,61 @@ class ConvoluteTest {
         assertEquals(matrix.rows, result.rows)
         assertEquals(matrix.cols, result.cols)
     }
+
+    @Test
+    fun `test wienerDeconvolution produces valid output range for Gaussian kernel`() {
+        val size = 5
+        val center = size / 2
+        val sigma = 1.0
+        val kernel = DoubleMatrix.matrixOf(size, size) { row, col ->
+            val dx = row - center
+            val dy = col - center
+            kotlin.math.exp(-(dx*dx + dy*dy) / (2 * sigma * sigma))
+        }
+        val sum = (0 until size).sumOf { r -> (0 until size).sumOf { c -> kernel[r, c] } }
+        val normalizedKernel = DoubleMatrix.matrixOf(size, size) { r, c -> kernel[r, c] / sum }
+
+        val matrix = DoubleMatrix.matrixOf(10, 10) { row, col ->
+            ((row + col) % 5 + 1).toDouble() / 5.0
+        }
+
+        val result = matrix.wienerDeconvolution(normalizedKernel, iterations = 5, noiseLevel = 0.01)
+
+        assertEquals(matrix.rows, result.rows)
+        assertEquals(matrix.cols, result.cols)
+        for (row in 0 until result.rows) {
+            for (col in 0 until result.cols) {
+                assertTrue(result[row, col].isFinite(), "Value at ($row,$col) must be finite")
+                assertTrue(result[row, col] >= 0.0, "Value at ($row,$col) must be >= 0")
+                assertTrue(result[row, col] <= 1.0, "Value at ($row,$col) must be <= 1")
+            }
+        }
+    }
+
+    @Test
+    fun `test wienerDeconvolution with non-separable kernel produces valid output`() {
+        // Non-separable kernel (fails isGaussianKernel check) to exercise the non-Gaussian code path
+        val kernel = DoubleMatrix.matrixOf(3, 3,
+            0.1, 0.1, 0.0,
+            0.1, 0.5, 0.1,
+            0.0, 0.1, 0.0
+        )
+
+        val matrix = DoubleMatrix.matrixOf(10, 10) { row, col ->
+            ((row + col) % 5 + 1).toDouble() / 5.0
+        }
+
+        val result = matrix.wienerDeconvolution(kernel, iterations = 3, noiseLevel = 0.01)
+
+        assertNotNull(result)
+        assertEquals(matrix.rows, result.rows)
+        assertEquals(matrix.cols, result.cols)
+        for (row in 0 until result.rows) {
+            for (col in 0 until result.cols) {
+                assertTrue(result[row, col].isFinite(), "Value at ($row,$col) must be finite")
+                assertTrue(result[row, col] >= 0.0, "Value at ($row,$col) must be >= 0")
+                assertTrue(result[row, col] <= 1.0, "Value at ($row,$col) must be <= 1")
+            }
+        }
+    }
 }
