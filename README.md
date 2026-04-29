@@ -981,6 +981,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`mergeWith`** - HDR-blend a named source into the current image
 - **`stackSources`** - Combine named sources using any stack algorithm
 - **`maskedProcess`** - Apply different steps inside/outside a spatial mask
+- **`quantize`** - Reduce image to a fixed number of intensity levels per channel (posterization)
 
 ### Parameter Ranges and Tips
 
@@ -1025,6 +1026,9 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - `iterations`: 5 (faster) to 100 (more aggressive restoration)
 - Best results achieved after good calibration and stacking
 - Too many iterations can introduce artifacts/noise amplification
+
+**Quantize:**
+- `levels`: 2 (binary) to 256 (full 8-bit, near-lossless); default 16 gives visible posterization; minimum 2
 
 </details>
 

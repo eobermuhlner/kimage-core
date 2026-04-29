@@ -39,6 +39,7 @@ import ch.obermuhlner.kimage.core.image.statistics.normalizeImage
 import ch.obermuhlner.kimage.core.image.transform.rotateLeft
 import ch.obermuhlner.kimage.core.image.transform.rotateRight
 import ch.obermuhlner.kimage.core.image.values.applyEach
+import ch.obermuhlner.kimage.core.image.values.onEach
 import ch.obermuhlner.kimage.core.image.values.values
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalance
 import ch.obermuhlner.kimage.core.image.whitebalance.applyWhitebalanceCustom
@@ -294,6 +295,7 @@ data class EnhanceStepConfig(
     var mergeWith: MergeWithConfig? = null,
     var stackSources: StackSourcesConfig? = null,
     var maskedProcess: MaskedProcessConfig? = null,
+    var quantize: QuantizeConfig? = null,
     var addToHighDynamicRange: Boolean = false,
 ) {
     val type: EnhanceStepType
@@ -319,6 +321,7 @@ data class EnhanceStepConfig(
             mergeWith != null -> EnhanceStepType.MergeWith
             stackSources != null -> EnhanceStepType.StackSources
             maskedProcess != null -> EnhanceStepType.MaskedProcess
+            quantize != null -> EnhanceStepType.Quantize
             else -> throw IllegalArgumentException("No enhancement step configuration found")
         }
 }
@@ -345,6 +348,7 @@ enum class EnhanceStepType {
     MergeWith,
     StackSources,
     MaskedProcess,
+    Quantize,
 }
 
 data class HighDynamicRangeConfig(
@@ -472,6 +476,14 @@ data class LinearPercentileConfig(
 data class BlurConfig(
     var strength: Double = 0.1,
 )
+
+data class QuantizeConfig(
+    var levels: Int = 16,
+) {
+    init {
+        require(levels >= 2) { "levels must be >= 2, got $levels" }
+    }
+}
 
 data class UnsharpMaskConfig(
     var radius: Int = 1,
@@ -1625,6 +1637,11 @@ class AstroProcess(val config: ProcessConfig) {
                         val cfg = enhanceStepConfig.maskedProcess!!
                         val subCacheDir = cacheDir.resolve("step_${stepIndex}_MaskedProcess")
                         processMaskedProcess(it, cfg, formatConfig, enhanceConfig, subCacheDir, dirty, sourceRegistry)
+                    }
+
+                    EnhanceStepType.Quantize -> {
+                        val levels = enhanceStepConfig.quantize!!.levels.toDouble()
+                        it.onEach { v -> floor(v * levels) / levels }
                     }
                 }
                 if (enhanceConfig.regionOfInterest.enabled) {

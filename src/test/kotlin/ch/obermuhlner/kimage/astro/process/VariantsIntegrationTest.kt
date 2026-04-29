@@ -2,6 +2,7 @@ package ch.obermuhlner.kimage.astro.process
 
 import ch.obermuhlner.kimage.core.image.stack.StackAlgorithm
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -85,6 +86,24 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
     fun `EnhanceStepConfig with maskedProcess has correct type`() {
         val config = EnhanceStepConfig(maskedProcess = MaskedProcessConfig())
         assertEquals(EnhanceStepType.MaskedProcess, config.type)
+    }
+
+    @Test
+    fun `EnhanceStepConfig with quantize has correct type`() {
+        val config = EnhanceStepConfig(quantize = QuantizeConfig())
+        assertEquals(EnhanceStepType.Quantize, config.type)
+    }
+
+    @Test
+    fun `QuantizeConfig defaults to 16 levels`() {
+        assertEquals(16, QuantizeConfig().levels)
+    }
+
+    @Test
+    fun `QuantizeConfig rejects levels less than 2`() {
+        assertThrows<IllegalArgumentException> { QuantizeConfig(levels = 1) }
+        assertThrows<IllegalArgumentException> { QuantizeConfig(levels = 0) }
+        assertThrows<IllegalArgumentException> { QuantizeConfig(levels = -1) }
     }
 
     // --- Integration tests ---
@@ -295,6 +314,44 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             output = OutputFormatConfig(
                 outputName = "test_maskedprocess",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        val testDir = prepareTestRunDirectory()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val process = AstroProcess(config)
+        process.workingDirectory = testDir
+        process.processAstro()
+
+        val outputDir = testDir.resolve("astro-process/output")
+        assertTrue(outputDir.exists(), "Output directory should exist")
+        val outputFiles = outputDir.listFiles()?.sorted() ?: emptyList()
+        assertTrue(outputFiles.isNotEmpty(), "Should produce output files")
+    }
+
+    @Test
+    fun `processAstro with quantize step completes successfully`() {
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(quantize = QuantizeConfig(levels = 64))
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_quantize",
                 outputImageExtensions = mutableListOf("png"),
             )
         )
