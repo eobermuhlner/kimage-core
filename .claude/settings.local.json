@@ -6,7 +6,8 @@
       "Bash(./gradlew compileTestKotlin)",
       "Bash(./gradlew test *)",
       "Bash(./gradlew compileKotlin --info)",
-      "Bash(kimage-astro-process process *)"
+      "Bash(kimage-astro-process process *)",
+      "Bash(./gradlew build *)"
     ]
   }
 }

@@ -505,7 +505,7 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
-    fun `processAstro runs with enhance`() {
+    fun `processAstro runs with enhance using deconvolution`() {
         initTestRun()
         createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
 
