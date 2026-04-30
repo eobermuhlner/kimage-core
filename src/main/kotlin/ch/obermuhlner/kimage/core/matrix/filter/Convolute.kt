@@ -130,45 +130,50 @@ fun Matrix.richardsonLucyDeconvolution(kernel: Matrix, iterations: Int = 20): Ma
     return estimate
 }
 
+// Wiener deconvolution in the frequency domain:
+//   F̂(ω) = H*(ω) · G(ω) / (|H(ω)|² + noiseLevel)
+// where H is the OTF (FFT of PSF) and G is the observed (blurred) image.
+// The `iterations` parameter is kept for API compatibility but is not used.
+@Suppress("UNUSED_PARAMETER")
 fun Matrix.wienerDeconvolution(kernel: Matrix, iterations: Int = 10, noiseLevel: Double = 0.01): Matrix {
-    val kernel1D = if (isGaussianKernel(kernel)) {
-        val center = kernel.rows / 2
-        DoubleArray(kernel.cols) { kernel[center, it] }
-    } else {
-        null
+    val fftRows = nextPow2(rows + kernel.rows - 1)
+    val fftCols = nextPow2(cols + kernel.cols - 1)
+
+    // Zero-pad observed image into frequency-domain buffers
+    val gRe = Array(fftRows) { row -> DoubleArray(fftCols) { col -> if (row < rows && col < cols) this[row, col] else 0.0 } }
+    val gIm = Array(fftRows) { DoubleArray(fftCols) }
+
+    // Place PSF with its centre circularly shifted to (0,0) for linear-phase alignment
+    val hRe = Array(fftRows) { DoubleArray(fftCols) }
+    val hIm = Array(fftRows) { DoubleArray(fftCols) }
+    val kCR = kernel.rows / 2
+    val kCC = kernel.cols / 2
+    for (kr in 0 until kernel.rows) {
+        for (kc in 0 until kernel.cols) {
+            val r = (kr - kCR + fftRows) % fftRows
+            val c = (kc - kCC + fftCols) % fftCols
+            hRe[r][c] = kernel[kr, kc]
+        }
     }
 
-    val blurred = this
-    val kernelFlipped = if (kernel1D == null) {
-        DoubleMatrix.matrixOf(kernel.rows, kernel.cols) { row, col ->
-            kernel[kernel.rows - 1 - row, kernel.cols - 1 - col]
-        }
-    } else null
+    fft2D(gRe, gIm)
+    fft2D(hRe, hIm)
 
-    var estimate = this.copy()
-
-    for (i in 0 until iterations) {
-        val convolved = if (kernel1D != null) estimate.convoluteSeparable(kernel1D) else estimate.convoluteUnclamped(kernel)
-        val ratio = DoubleMatrix.matrixOf(rows, cols) { row, col ->
-            val c = convolved[row, col]
-            val b = blurred[row, col]
-            if (c < 1e-10) {
-                b / 1e-10
-            } else {
-                b / c
-            }
+    // Apply Wiener formula in-place, reusing gRe/gIm for the result
+    for (row in 0 until fftRows) {
+        for (col in 0 until fftCols) {
+            val hr = hRe[row][col]; val hi = hIm[row][col]
+            val gr = gRe[row][col]; val gi = gIm[row][col]
+            val denom = hr * hr + hi * hi + noiseLevel
+            // H_conj * G = (hr - i·hi)(gr + i·gi)
+            gRe[row][col] = (hr * gr + hi * gi) / denom
+            gIm[row][col] = (hr * gi - hi * gr) / denom
         }
-        val correction = if (kernel1D != null) ratio.convoluteSeparable(kernel1D) else ratio.convoluteUnclamped(kernelFlipped!!)
-
-        val newEstimate = DoubleMatrix.matrixOf(rows, cols) { row, col ->
-            val est = estimate[row, col]
-            val corr = correction[row, col]
-            val denominator = corr * corr + noiseLevel
-            est * (corr / denominator)
-        }
-        newEstimate.applyEach { v -> clamp(v, 0.0, 1.0) }
-        estimate = newEstimate
     }
 
-    return estimate
+    fft2D(gRe, gIm, inverse = true)
+
+    return DoubleMatrix.matrixOf(rows, cols) { row, col ->
+        clamp(gRe[row][col], 0.0, 1.0)
+    }
 }

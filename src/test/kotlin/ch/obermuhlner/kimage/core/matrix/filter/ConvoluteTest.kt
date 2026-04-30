@@ -191,6 +191,35 @@ class ConvoluteTest {
     }
 
     @Test
+    fun `wienerDeconvolution sharpens a blurred point source`() {
+        val imgSize = 32
+        val center = imgSize / 2
+        val psfRadius = 5
+        val psfSize = 2 * psfRadius + 1
+        val sigma = 2.0
+
+        val sharp = DoubleMatrix.matrixOf(imgSize, imgSize, 0.0)
+        sharp[center, center] = 1.0
+
+        val psf = DoubleMatrix.matrixOf(psfSize, psfSize) { row, col ->
+            val dx = (row - psfRadius).toDouble()
+            val dy = (col - psfRadius).toDouble()
+            kotlin.math.exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma))
+        }
+        val psfSum = (0 until psfSize).sumOf { r -> (0 until psfSize).sumOf { c -> psf[r, c] } }
+        val normalizedPsf = DoubleMatrix.matrixOf(psfSize, psfSize) { r, c -> psf[r, c] / psfSum }
+
+        val blurred = sharp.convolute(normalizedPsf)
+        val blurredPeak = blurred[center, center]
+
+        val restored = blurred.wienerDeconvolution(normalizedPsf, noiseLevel = 0.005)
+        val restoredPeak = restored[center, center]
+
+        assertTrue(restoredPeak > blurredPeak * 1.5,
+            "Wiener deconvolution should significantly sharpen the peak: restored=$restoredPeak, blurred=$blurredPeak")
+    }
+
+    @Test
     fun `test wienerDeconvolution with non-separable kernel produces valid output`() {
         // Non-separable kernel (fails isGaussianKernel check) to exercise the non-Gaussian code path
         val kernel = DoubleMatrix.matrixOf(3, 3,
