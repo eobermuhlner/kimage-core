@@ -296,6 +296,7 @@ data class EnhanceStepConfig(
     var stackSources: StackSourcesConfig? = null,
     var maskedProcess: MaskedProcessConfig? = null,
     var quantize: QuantizeConfig? = null,
+    var edge: EdgeConfig? = null,
     var addToHighDynamicRange: Boolean = false,
 ) {
     val type: EnhanceStepType
@@ -322,6 +323,7 @@ data class EnhanceStepConfig(
             stackSources != null -> EnhanceStepType.StackSources
             maskedProcess != null -> EnhanceStepType.MaskedProcess
             quantize != null -> EnhanceStepType.Quantize
+            edge != null -> EnhanceStepType.Edge
             else -> throw IllegalArgumentException("No enhancement step configuration found")
         }
 }
@@ -349,6 +351,7 @@ enum class EnhanceStepType {
     StackSources,
     MaskedProcess,
     Quantize,
+    Edge,
 }
 
 data class HighDynamicRangeConfig(
@@ -484,6 +487,15 @@ data class QuantizeConfig(
         require(levels >= 2) { "levels must be >= 2, got $levels" }
     }
 }
+
+enum class EdgeAlgorithm {
+    Sobel, Sobel3, Sobel5, Laplacian, EdgeStrong, EdgeCross, EdgeDiagonal, EdgeEnhancement
+}
+
+data class EdgeConfig(
+    var algorithm: EdgeAlgorithm = EdgeAlgorithm.Sobel,
+    var strength: Double = 1.0,
+)
 
 data class UnsharpMaskConfig(
     var radius: Int = 1,
@@ -1651,6 +1663,22 @@ class AstroProcess(val config: ProcessConfig) {
                     EnhanceStepType.Quantize -> {
                         val levels = enhanceStepConfig.quantize!!.levels.toDouble()
                         it.onEach { v -> floor(v * levels) / levels }
+                    }
+
+                    EnhanceStepType.Edge -> {
+                        val cfg = enhanceStepConfig.edge!!
+                        val edgeImage = when (cfg.algorithm) {
+                            EdgeAlgorithm.Sobel -> it.sobelFilter()
+                            EdgeAlgorithm.Sobel3 -> it.sobel3Filter()
+                            EdgeAlgorithm.Sobel5 -> it.sobel5Filter()
+                            EdgeAlgorithm.Laplacian -> it.laplacianFilter()
+                            EdgeAlgorithm.EdgeStrong -> it.edgeDetectionStrongFilter()
+                            EdgeAlgorithm.EdgeCross -> it.edgeDetectionCrossFilter()
+                            EdgeAlgorithm.EdgeDiagonal -> it.edgeDetectionDiagonalFilter()
+                            EdgeAlgorithm.EdgeEnhancement -> it.edgeEnhancementFilter()
+                        }
+                        if (cfg.strength == 1.0) edgeImage
+                        else edgeImage.onEach { v -> (v * cfg.strength).coerceIn(0.0, 1.0) }
                     }
                 }
                 if (enhanceConfig.regionOfInterest.enabled) {

@@ -106,6 +106,22 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         assertThrows<IllegalArgumentException> { QuantizeConfig(levels = -1) }
     }
 
+    @Test
+    fun `EnhanceStepConfig with edge has correct type`() {
+        val config = EnhanceStepConfig(edge = EdgeConfig())
+        assertEquals(EnhanceStepType.Edge, config.type)
+    }
+
+    @Test
+    fun `EdgeConfig defaults to Sobel algorithm`() {
+        assertEquals(EdgeAlgorithm.Sobel, EdgeConfig().algorithm)
+    }
+
+    @Test
+    fun `EdgeConfig strength defaults to 1_0`() {
+        assertEquals(1.0, EdgeConfig().strength)
+    }
+
     // --- Integration tests ---
 
     @Test
@@ -410,6 +426,44 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             output = OutputFormatConfig(
                 outputName = "test_quantize",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        val testDir = prepareTestRunDirectory()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val process = AstroProcess(config)
+        process.workingDirectory = testDir
+        process.processAstro()
+
+        val outputDir = testDir.resolve("astro-process/output")
+        assertTrue(outputDir.exists(), "Output directory should exist")
+        val outputFiles = outputDir.listFiles()?.sorted() ?: emptyList()
+        assertTrue(outputFiles.isNotEmpty(), "Should produce output files")
+    }
+
+    @Test
+    fun `processAstro with edge step completes successfully`() {
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(
+                enabled = false,
+                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
+            ),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(edge = EdgeConfig(algorithm = EdgeAlgorithm.Sobel))
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_edge",
                 outputImageExtensions = mutableListOf("png"),
             )
         )

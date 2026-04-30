@@ -184,6 +184,7 @@ Enhancement uses a flexible step-by-step approach. Common steps include:
 - **crop** - Remove unwanted edges
 - **whitebalance** - Color correction
 - **autoStretch** - Automatic STF stretch (luminance-based, PixInsight-compatible)
+- **edge** - Edge detection/enhancement (Sobel, Laplacian, etc.)
 - **linearPercentile** - Histogram stretching
 - **sigmoid** - S-curve contrast enhancement
 - **reduceNoise** - Noise reduction
@@ -874,6 +875,10 @@ enhance:
     - unsharpMask:
         radius: 1               # Unsharp mask radius (1-10)
         strength: 1.0           # Unsharp mask strength (0.1-3.0)
+    # Edge Detection Step
+    - edge:
+        algorithm: "Sobel"      # Sobel (default), Sobel3, Sobel5, Laplacian, EdgeStrong, EdgeCross, EdgeDiagonal, EdgeEnhancement
+        strength: 1.0           # Multiplier applied to edge values (0.0-2.0)
     # Noise Reduction Step
     - reduceNoise:
         algorithm: "MultiScaleMedianOverAllChannels" # or "MultiScaleMedianOverGrayChannel"
@@ -999,6 +1004,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`stackSources`** - Combine named sources using any stack algorithm
 - **`maskedProcess`** - Apply different steps inside/outside a spatial mask
 - **`quantize`** - Reduce image to a fixed number of intensity levels per channel (posterization)
+- **`edge`** - Detect or enhance edges using configurable kernel filters
 
 ### Parameter Ranges and Tips
 
