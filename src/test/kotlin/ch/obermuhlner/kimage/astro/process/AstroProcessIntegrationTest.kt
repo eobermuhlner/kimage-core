@@ -27,8 +27,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median
@@ -63,8 +63,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(steps = mutableListOf()),
@@ -95,8 +95,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(steps = mutableListOf()),
@@ -183,8 +183,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
                 enabled = true,
                 searchParentDirectories = false,
                 debayer = DebayerConfig(enabled = false),
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median
@@ -214,8 +214,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Drizzle,
@@ -255,8 +255,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median
@@ -296,8 +296,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median
@@ -337,8 +337,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
                 enabled = true,
                 searchParentDirectories = false,
                 debayer = DebayerConfig(enabled = false),
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median
@@ -368,8 +368,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Drizzle,
@@ -407,8 +407,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Drizzle,
@@ -447,8 +447,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Drizzle,
@@ -493,8 +493,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median
@@ -530,8 +530,8 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(
                 algorithm = StackAlgorithm.Median

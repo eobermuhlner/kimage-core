@@ -134,8 +134,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(
@@ -192,8 +192,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(
@@ -244,8 +244,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(perFrame = true),
             enhance = EnhanceConfig(steps = mutableListOf()),
@@ -278,8 +278,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(
@@ -326,8 +326,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(
@@ -371,8 +371,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(
@@ -415,8 +415,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(
@@ -453,8 +453,8 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             calibrate = CalibrateConfig(
                 enabled = false,
-                normalizeBackground = NormalizeBackgroundConfig(enabled = false)
             ),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
             align = AlignConfig(),
             stack = StackConfig(algorithm = StackAlgorithm.Median),
             enhance = EnhanceConfig(

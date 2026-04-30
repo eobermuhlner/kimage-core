@@ -691,10 +691,23 @@ calibrate:
   searchParentDirectories: true # Search parent directories for calibration frames
   darkskip: false               # Skip dark subtraction from light frames (for short exposures)
   darkScalingFactor: 1.0        # Scale dark frame by (lightExp/darkExp) before subtraction
-  normalizeBackground:          # Background normalization settings (independent of frame calibration)
-    enabled: true               # Whether to normalize backgrounds across images
-    offset: 0.01                # Offset value for normalization
   calibratedOutputDirectory: "astro-process/calibrated" # Output directory for calibrated images
+```
+
+### Background Correction Configuration
+Runs on calibrated frames before alignment. Combines level equalization across frames and per-frame gradient removal.
+```yaml
+normalizeBackground:
+  enabled: true                 # Enable/disable the entire background correction stage
+  normalize:                    # Equalize background levels across all frames
+    enabled: true               # Enable/disable level equalization
+    offset: 0.01                # Target background offset after normalization
+  neutralize:                   # Color-neutralize each frame's background before stacking
+    enabled: false              # Enable/disable per-frame channel equalization (opt-in)
+    offset: 0.01                # Target background level after neutralization
+                                # Subtracts per-channel median so R/G/B backgrounds match.
+                                # For spatial gradient removal use the RemoveBackground enhance step.
+  outputDirectory: "astro-process/normalized" # Output directory for corrected frames
 ```
 
 ### Alignment Configuration

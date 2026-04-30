@@ -61,6 +61,7 @@ data class ProcessConfig(
     var target: TargetConfig = TargetConfig(),
     var format: FormatConfig = FormatConfig(),
     var calibrate: CalibrateConfig = CalibrateConfig(),
+    var normalizeBackground: NormalizeBackgroundConfig = NormalizeBackgroundConfig(),
     var platesolve: PlatesolveConfig = PlatesolveConfig(),
     var align: AlignConfig = AlignConfig(),
     var stack: StackConfig = StackConfig(),
@@ -234,12 +235,23 @@ data class CalibrateConfig(
     var searchParentDirectories: Boolean = true,
     var darkskip: Boolean = false,
     var darkScalingFactor: Double = 1.0,
-    var normalizeBackground: NormalizeBackgroundConfig = NormalizeBackgroundConfig(),
     var calibratedOutputDirectory: String = "astro-process/calibrated",
 )
 
 data class NormalizeBackgroundConfig(
     var enabled: Boolean = true,
+    var normalize: BackgroundNormalizeConfig = BackgroundNormalizeConfig(),
+    var neutralize: BackgroundNeutralizeConfig = BackgroundNeutralizeConfig(),
+    var outputDirectory: String = "astro-process/normalized",
+)
+
+data class BackgroundNormalizeConfig(
+    var enabled: Boolean = true,
+    var offset: Double = 0.01,
+)
+
+data class BackgroundNeutralizeConfig(
+    var enabled: Boolean = false,
     var offset: Double = 0.01,
 )
 
@@ -1034,57 +1046,6 @@ class AstroProcess(val config: ProcessConfig) {
         println()
         println("### Calibrating ${inputFiles.size} images ...")
 
-        val (minBackground, dirtyMinBackground) = if (config.calibrate.normalizeBackground.enabled) {
-            val minBackgroundFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
-                .resolve("minBackground.yaml")
-            if (minBackgroundFile.exists()) {
-                val yaml = Yaml()
-                val stringMap = minBackgroundFile.inputStream().use {
-                    yaml.load<Map<String, Double>>(it)
-                }
-                val map = stringMap.mapKeys { Channel.valueOf(it.key) }
-                Pair(map, false)
-            } else {
-                val minBackground = mutableMapOf<Channel, Double>()
-                println()
-                elapsed("Normalizing backgrounds for ${inputFiles.size} input files") {
-                    inputFiles.forEach { inputFile ->
-                        val calibratedFile = currentDir.resolve(config.calibrate.calibratedOutputDirectory)
-                            .resolve("${inputFile.nameWithoutExtension}.${config.format.outputImageExtension}")
-                        if (!calibratedFile.exists()) {
-                            println()
-                            println("Loading $inputFile")
-                            var light = elapsed("Reading light frame") { ImageReader.read(inputFile) }
-                            if (config.format.debayer.enabled) {
-                                elapsed("Debayering light frame $inputFile") {
-                                    light =
-                                        debayerImageIfConfigured(
-                                            light,
-                                            config.format.debayer.copy(cleanupBadPixels = false)
-                                        )
-                                }
-                            }
-
-                            for (channel in light.channels) {
-                                val median = light[channel].values().median()
-                                println("Background: $channel: $median")
-                                minBackground[channel] = minBackground[channel]?.let { min(it, median) } ?: median
-                            }
-                        }
-                    }
-                }
-
-                val yaml = Yaml()
-                val stringMap = minBackground.mapKeys { it.key.name }
-                minBackgroundFile.writeText(yaml.dumpAsMap(stringMap))
-                Pair(minBackground, true)
-            }
-        } else {
-            Pair(emptyMap(), false)
-        }
-        dirty = dirty || dirtyMinBackground
-
-
         var dirtyCalibrated = false
         val dirtyCalibratedFiles = mutableSetOf<File>()
         val calibratedFiles = elapsed("Calibrating ${inputFiles.size} light frames") {
@@ -1129,17 +1090,6 @@ class AstroProcess(val config: ProcessConfig) {
                         }
                     }
 
-                    if (config.calibrate.normalizeBackground.enabled) {
-                        for (channel in light.channels) {
-                            val lowestBackground = minBackground[channel]
-                            if (lowestBackground != null) {
-                                val background = light[channel].values().median()
-                                val delta = background - lowestBackground - config.calibrate.normalizeBackground.offset
-                                light[channel].applyEach { v -> v - delta }
-                            }
-                        }
-                    }
-
                     light.applyEach { v -> clamp(v, 0.0, 1.0) }
                 }
 
@@ -1151,9 +1101,97 @@ class AstroProcess(val config: ProcessConfig) {
         }
 
         println()
-        println("### Aligning ${calibratedFiles.size} images ...")
+        println("### Normalizing backgrounds for ${calibratedFiles.size} images ...")
 
-        val referenceCalibratedFile = calibratedFiles.first()
+        var dirtyNormalized = false
+        val dirtyNormalizedFiles = mutableSetOf<File>()
+        val preAlignFiles = if (config.normalizeBackground.enabled) {
+            val normalizedOutputDir = currentDir.resolve(config.normalizeBackground.outputDirectory)
+            normalizedOutputDir.mkdirs()
+
+            val minBackground: Map<Channel, Double> = if (config.normalizeBackground.normalize.enabled) {
+                val minBackgroundFile = normalizedOutputDir.resolve("minBackground.yaml")
+                if (minBackgroundFile.exists() && !dirty) {
+                    val yaml = Yaml()
+                    val stringMap = minBackgroundFile.inputStream().use { yaml.load<Map<String, Double>>(it) }
+                    stringMap.mapKeys { Channel.valueOf(it.key) }
+                } else {
+                    val minBg = mutableMapOf<Channel, Double>()
+                    elapsed("Computing minimum background from ${calibratedFiles.size} calibrated frames") {
+                        calibratedFiles.forEach { calibratedFile ->
+                            val normalizedFile = normalizedOutputDir
+                                .resolve("${calibratedFile.nameWithoutExtension}.${config.format.outputImageExtension}")
+                            if (!normalizedFile.exists() || dirty) {
+                                val light = elapsed("Reading calibrated frame $calibratedFile") {
+                                    ImageReader.read(calibratedFile)
+                                }
+                                for (channel in light.channels) {
+                                    val median = light[channel].values().median()
+                                    println("Background $channel: $median")
+                                    minBg[channel] = minBg[channel]?.let { min(it, median) } ?: median
+                                }
+                            }
+                        }
+                    }
+                    val yaml = Yaml()
+                    minBackgroundFile.writeText(yaml.dumpAsMap(minBg.mapKeys { it.key.name }))
+                    minBg
+                }
+            } else {
+                emptyMap()
+            }
+
+            calibratedFiles.map { calibratedFile ->
+                val outputFile = normalizedOutputDir
+                    .resolve("${calibratedFile.nameWithoutExtension}.${config.format.outputImageExtension}")
+                if (outputFile.exists() && !dirty && !dirtyCalibratedFiles.contains(calibratedFile)) {
+                    return@map outputFile
+                }
+                dirtyNormalized = true
+                dirtyNormalizedFiles.add(outputFile)
+
+                println()
+                println("Loading calibrated $calibratedFile")
+                var light = elapsed("Reading calibrated frame") { ImageReader.read(calibratedFile) }
+
+                if (config.normalizeBackground.neutralize.enabled) {
+                    val cfg = config.normalizeBackground.neutralize
+                    elapsed("Neutralizing background of $calibratedFile") {
+                        for (channel in light.channels) {
+                            val median = light[channel].values().median()
+                            light[channel].applyEach { v -> v - median + cfg.offset }
+                        }
+                    }
+                }
+
+                if (config.normalizeBackground.normalize.enabled) {
+                    elapsed("Normalizing background of $calibratedFile") {
+                        for (channel in light.channels) {
+                            val lowestBackground = minBackground[channel]
+                            if (lowestBackground != null) {
+                                val background = light[channel].values().median()
+                                val delta = background - lowestBackground - config.normalizeBackground.normalize.offset
+                                light[channel].applyEach { v -> v - delta }
+                            }
+                        }
+                    }
+                }
+
+                light.applyEach { v -> clamp(v, 0.0, 1.0) }
+
+                println("Saving $outputFile")
+                elapsed("Writing normalized frame") { ImageWriter.write(light, outputFile) }
+                outputFile
+            }
+        } else {
+            calibratedFiles
+        }
+        dirty = dirty || dirtyNormalized
+
+        println()
+        println("### Aligning ${preAlignFiles.size} images ...")
+
+        val referenceCalibratedFile = preAlignFiles.first()
         var referenceStars: List<Star> = emptyList<Star>()
         var referenceImageWidth = 0
         var referenceImageHeight = 0
@@ -1169,11 +1207,11 @@ class AstroProcess(val config: ProcessConfig) {
         }
 
         var dirtyAligned = false
-        val alignedFiles = calibratedFiles
+        val alignedFiles = preAlignFiles
             .mapNotNull { calibratedFile ->
                 val outputFile = currentDir.resolve(config.align.alignedOutputDirectory)
                     .resolve("${calibratedFile.nameWithoutExtension}.${config.format.outputImageExtension}")
-                if (outputFile.exists() && !dirty && !dirtyCalibratedFiles.contains(calibratedFile)) {
+                if (outputFile.exists() && !dirty && !dirtyNormalizedFiles.contains(calibratedFile) && !dirtyCalibratedFiles.contains(calibratedFile)) {
                     return@mapNotNull outputFile
                 }
 

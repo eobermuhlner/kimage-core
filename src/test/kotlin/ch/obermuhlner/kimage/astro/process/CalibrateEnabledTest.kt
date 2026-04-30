@@ -40,9 +40,6 @@ darkDirectory: "dark"
 searchParentDirectories: true
 darkskip: false
 darkScalingFactor: 1.0
-normalizeBackground:
-  enabled: true
-  offset: 0.01
 calibratedOutputDirectory: "astro-process/calibrated"
         """.trimIndent()
 
@@ -50,7 +47,6 @@ calibratedOutputDirectory: "astro-process/calibrated"
 
         assertEquals(false, config.enabled)
         assertEquals("bias", config.biasDirectory)
-        assertEquals(true, config.normalizeBackground.enabled)
     }
 
     @Test
