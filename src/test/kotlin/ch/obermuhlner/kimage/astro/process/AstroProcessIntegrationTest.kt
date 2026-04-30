@@ -110,6 +110,30 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `createRandomAstroImage renders galaxy signal at center`() {
+        initTestRun()
+        val savedPhotonNoiseScale = photonNoiseScale
+        photonNoiseScale = 0.0
+
+        val cx = width / 2
+        val cy = height / 2
+
+        val withGalaxy = createRandomAstroImage(width, height, emptyList<MockStar>(), addBiasNoise = false, addReadNoise = false)
+        val centerBrightness = withGalaxy.getPixel(cx, cy, Channel.Red)
+
+        val savedGalaxies = galaxyPositions.toList()
+        galaxyPositions.clear()
+        val withoutGalaxy = createRandomAstroImage(width, height, emptyList<MockStar>(), addBiasNoise = false, addReadNoise = false)
+        galaxyPositions.addAll(savedGalaxies)
+        val backgroundBrightness = withoutGalaxy.getPixel(cx, cy, Channel.Red)
+
+        assertTrue(centerBrightness > backgroundBrightness + 0.05,
+            "Galaxy should add signal at center: with=$centerBrightness, without=$backgroundBrightness")
+
+        photonNoiseScale = savedPhotonNoiseScale
+    }
+
+    @Test
     fun `createRandomAstroImage star color reflects colorIndex`() {
         initTestRun()
         val savedPhotonNoiseScale = photonNoiseScale

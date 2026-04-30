@@ -10,10 +10,12 @@ import ch.obermuhlner.kimage.core.matrix.DoubleMatrix
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -26,6 +28,7 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
     var height = 50
     var starDensity = 0.02
     val starPositions = mutableListOf<MockStar>()
+    val galaxyPositions = mutableListOf<MockGalaxy>()
 
     var flatLevel = 0.8
     var flatSigma = 0.1
@@ -70,6 +73,18 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
                 random.nextDouble(0.0, 1.0),
                 random.nextDouble(0.0, 1.0)))
         }
+
+        galaxyPositions.clear()
+        galaxyPositions.add(MockGalaxy(
+            x = width / 2,
+            y = height / 2,
+            brightness = 0.3,
+            effectiveRadius = 8.0,
+            sersicIndex = 1.0,
+            axisRatio = 0.6,
+            positionAngle = Math.PI / 6,
+            colorIndex = 0.65,
+        ))
     }
 
     fun assertAstroProcess(processConfig: ProcessConfig) {
@@ -102,6 +117,17 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
         val x: Int,
         val y: Int,
         val brightness: Double,
+        val colorIndex: Double = 0.5,
+    )
+
+    data class MockGalaxy(
+        val x: Int,
+        val y: Int,
+        val brightness: Double,
+        val effectiveRadius: Double = 8.0,
+        val sersicIndex: Double = 1.0,
+        val axisRatio: Double = 0.6,
+        val positionAngle: Double = 0.0,
         val colorIndex: Double = 0.5,
     )
 
@@ -255,7 +281,32 @@ abstract class AbstractAstroProcessIntegrationTest : AbstractImageProcessingTest
                     totalStarSignal += starBrightnessFactor(star) * moffatPSF
                 }
 
-                val rawSignal = (totalStarSignal + skyValue) * vignette
+                var totalGalaxySignal = 0.0
+                for (galaxy in galaxyPositions) {
+                    val gx = galaxy.x + jitterX
+                    val gy = galaxy.y + jitterY
+                    val dx = col.toDouble() - gx
+                    val dy = row.toDouble() - gy
+                    val cosPA = cos(galaxy.positionAngle)
+                    val sinPA = sin(galaxy.positionAngle)
+                    val dxRot = dx * cosPA + dy * sinPA
+                    val dyRot = (-dx * sinPA + dy * cosPA) / galaxy.axisRatio
+                    val r = sqrt(dxRot * dxRot + dyRot * dyRot)
+                    val bn = 2.0 * galaxy.sersicIndex - 1.0 / 3.0
+                    val sersic = exp(-bn * (r / galaxy.effectiveRadius).pow(1.0 / galaxy.sersicIndex))
+                    val galaxyColor = when (channel) {
+                        Channel.Red -> 0.3 + 0.7 * galaxy.colorIndex
+                        Channel.Blue -> 0.3 + 0.7 * (1.0 - galaxy.colorIndex)
+                        else -> {
+                            val cr = 0.3 + 0.7 * galaxy.colorIndex
+                            val cb = 0.3 + 0.7 * (1.0 - galaxy.colorIndex)
+                            minOf(cr, cb) + 0.4 * abs(cr - cb)
+                        }
+                    }
+                    totalGalaxySignal += galaxy.brightness * galaxyColor * sersic
+                }
+
+                val rawSignal = (totalStarSignal + totalGalaxySignal + skyValue) * vignette
 
                 var totalTrailSignal = 0.0
                 for (trail in satelliteTrails) {
