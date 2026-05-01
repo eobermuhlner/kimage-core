@@ -109,8 +109,9 @@ fun Image.stretchSigmoidLike(midpoint: Double = 0.5, strength: Double = 2.0): Im
     }
 }
 
-fun Image.stretchAsinh(strength: Double = 1.0): Image {
-    return stretch { v -> (asinh(v * strength)).coerceIn(0.0, 1.0) }
+fun Image.stretchAsinh(beta: Double = 5.0): Image {
+    val scale = asinh(beta)
+    return stretch { v -> (asinh(v * beta) / scale).coerceIn(0.0, 1.0) }
 }
 
 fun Image.stretchAsinhPercentile(

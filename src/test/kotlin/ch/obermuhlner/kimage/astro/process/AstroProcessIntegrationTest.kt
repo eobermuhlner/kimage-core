@@ -580,4 +580,33 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         assertAstroProcess(config)
     }
 
+    @Test
+    fun `processAstro runs with enhance using arcsinh`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(arcsinh = AsinhConfig(beta = 5.0))
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
 }

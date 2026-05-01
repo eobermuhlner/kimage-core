@@ -11,6 +11,7 @@ import ch.obermuhlner.kimage.astro.background.*
 import ch.obermuhlner.kimage.astro.color.histogram
 import ch.obermuhlner.kimage.astro.color.stretchAutoSTF
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
+import ch.obermuhlner.kimage.astro.color.stretchAsinh
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionConfig
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionMode
@@ -294,6 +295,7 @@ data class EnhanceStepConfig(
     var removeBackground: RemoveBackgroundConfig? = null,
     var autoStretch: AutoStretchConfig? = null,
     var sigmoid: SigmoidConfig? = null,
+    var arcsinh: AsinhConfig? = null,
     var linearPercentile: LinearPercentileConfig? = null,
     var blur: BlurConfig? = null,
     var sharpen: SharpenConfig? = null,
@@ -321,6 +323,7 @@ data class EnhanceStepConfig(
             removeBackground != null -> EnhanceStepType.RemoveBackground
             autoStretch != null -> EnhanceStepType.AutoStretch
             sigmoid != null -> EnhanceStepType.Sigmoid
+            arcsinh != null -> EnhanceStepType.ArcSinh
             linearPercentile != null -> EnhanceStepType.LinearPercentile
             blur != null -> EnhanceStepType.Blur
             sharpen != null -> EnhanceStepType.Sharpen
@@ -349,6 +352,7 @@ enum class EnhanceStepType {
     AutoStretch,
     LinearPercentile,
     Sigmoid,
+    ArcSinh,
     Blur,
     Sharpen,
     UnsharpMask,
@@ -481,6 +485,10 @@ data class AutoStretchConfig(
 data class SigmoidConfig(
     var midpoint: Double = 0.5,
     var strength: Double = 1.0,
+)
+
+data class AsinhConfig(
+    var beta: Double = 5.0,
 )
 
 data class LinearPercentileConfig(
@@ -1599,6 +1607,10 @@ class AstroProcess(val config: ProcessConfig) {
 
                     EnhanceStepType.Sigmoid -> {
                         it.stretchSigmoidLike(enhanceStepConfig.sigmoid!!.midpoint, enhanceStepConfig.sigmoid!!.strength)
+                    }
+
+                    EnhanceStepType.ArcSinh -> {
+                        it.stretchAsinh(enhanceStepConfig.arcsinh!!.beta)
                     }
 
                     EnhanceStepType.Blur -> {

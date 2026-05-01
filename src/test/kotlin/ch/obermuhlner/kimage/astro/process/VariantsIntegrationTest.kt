@@ -113,6 +113,12 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `EnhanceStepConfig with arcsinh has correct type`() {
+        val config = EnhanceStepConfig(arcsinh = AsinhConfig())
+        assertEquals(EnhanceStepType.ArcSinh, config.type)
+    }
+
+    @Test
     fun `EdgeConfig defaults to Sobel algorithm`() {
         assertEquals(EdgeAlgorithm.Sobel, EdgeConfig().algorithm)
     }
