@@ -639,6 +639,64 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `processAstro runs with enhance using removeStars`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(removeStars = RemoveStarsConfig())
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using tgvDenoise`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(tgvDenoise = TGVDenoiseConfig(lambda = 50.0, iterations = 50))
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
     fun `processAstro runs with enhance using sigmoid with highlightProtection`() {
         initTestRun()
         createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)

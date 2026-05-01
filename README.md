@@ -189,7 +189,8 @@ Enhancement uses a flexible step-by-step approach. Common steps include:
 - **arcsinh** - Hyperbolic arcsine stretch (preserves star colour)
 - **generalizedHyperbolicStretch** - Generalized Hyperbolic Stretch (state-of-the-art parametric stretch with precise control)
 - **sigmoid** - S-curve contrast enhancement
-- **reduceNoise** - Noise reduction
+- **reduceNoise** - Noise reduction (multi-scale median wavelet)
+- **tgvDenoise** - TGV2 denoising (Total Generalized Variation, edge-preserving)
 - **deconvolve** - Richardson-Lucy deconvolution (restores resolution)
 - **highDynamicRange** - HDR processing
 
@@ -456,6 +457,22 @@ enhance:
           steps:
             - reduceNoise: { thresholds: [0.0005] }
             - removeBackground: {}
+    - sigmoid: { midpoint: 0.3, strength: 1.2 }
+```
+
+Star positions are read from `astro-process/aligned/stars.yaml` (written after alignment). If that file does not exist, `findStars` runs on the stacked image.
+
+---
+
+### Star Removal — `removeStars`
+
+Remove stars entirely to produce a starless image, useful for processing nebulosity independently or creating starless outputs.
+
+```yaml
+enhance:
+  steps:
+    - removeStars:
+        factor: 2.0           # Star ellipse radius multiplier × FWHM (default 2.0)
     - sigmoid: { midpoint: 0.3, strength: 1.2 }
 ```
 
@@ -915,6 +932,12 @@ enhance:
         thresholds:             # Threshold levels (multiple levels supported)
           - 0.01
           - 0.001
+    # TGV2 Denoising Step
+    - tgvDenoise:
+        lambda: 100.0           # Data fidelity weight; higher = less smoothing (1.0-1000.0)
+        alpha0: 1.0             # Curvature/second-order TGV weight; higher = smoother ramps, less staircase (0.1-10.0)
+        alpha1: 2.0             # Gradient/first-order TGV weight; higher = flatter regions, softer edges (0.1-10.0)
+        iterations: 100         # Number of Chambolle-Pock iterations (20-500)
     # Deconvolution Step (Richardson-Lucy)
     - deconvolve:
         algorithm: "RichardsonLucy"  # Algorithm: RichardsonLucy, Wiener
@@ -1025,11 +1048,13 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`blur`** - Apply Gaussian blur
 - **`sharpen`** - Apply sharpening filter
 - **`unsharpMask`** - Apply unsharp mask filter
-- **`reduceNoise`** - Multi-scale noise reduction
+- **`reduceNoise`** - Multi-scale median-wavelet noise reduction
+- **`tgvDenoise`** - TGV2 (Total Generalized Variation, order 2) denoising via the Chambolle-Pock primal-dual algorithm. Edge-preserving variational method that avoids the "plastic" look of wavelet approaches. Parameters: `lambda` (data fidelity; higher = less smoothing, default 100.0), `alpha0` (curvature weight; higher = smoother ramps, less staircase, default 1.0), `alpha1` (gradient weight; higher = flatter regions, softer edges, default 2.0), `iterations` (Chambolle-Pock iterations, default 100).
 - **`deconvolve`** - Richardson-Lucy deconvolution to restore resolution
 - **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
 - **`extractStars`** - Separate stars and background, process independently, recombine
+- **`removeStars`** - Subtract detected stars to produce a starless background image. Parameter: `factor` (star radius multiplier × FWHM, default 2.0)
 - **`decompose`** - Split into LRGB/RGB/HSB components, process each, recombine
 - **`compositeChannels`** - Assemble named sources (R, G, B) into a single RGB image
 - **`mergeWith`** - HDR-blend a named source into the current image

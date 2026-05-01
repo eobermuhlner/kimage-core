@@ -89,6 +89,21 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `EnhanceStepConfig with tgvDenoise has correct type`() {
+        val config = EnhanceStepConfig(tgvDenoise = TGVDenoiseConfig())
+        assertEquals(EnhanceStepType.TGVDenoise, config.type)
+    }
+
+    @Test
+    fun `TGVDenoiseConfig has correct defaults`() {
+        val cfg = TGVDenoiseConfig()
+        assertEquals(100.0, cfg.lambda)
+        assertEquals(1.0, cfg.alpha0)
+        assertEquals(2.0, cfg.alpha1)
+        assertEquals(100, cfg.iterations)
+    }
+
+    @Test
     fun `EnhanceStepConfig with quantize has correct type`() {
         val config = EnhanceStepConfig(quantize = QuantizeConfig())
         assertEquals(EnhanceStepType.Quantize, config.type)

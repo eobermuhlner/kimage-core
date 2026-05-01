@@ -293,6 +293,7 @@ data class EnhanceStepConfig(
     var crop: RectangleConfig? = null,
     var rotate: RotateConfig? = null,
     var reduceNoise: ReduceNoiseConfig? = null,
+    var tgvDenoise: TGVDenoiseConfig? = null,
     var whitebalance: WhitebalanceConfig? = null,
     var removeBackground: RemoveBackgroundConfig? = null,
     var autoStretch: AutoStretchConfig? = null,
@@ -308,6 +309,7 @@ data class EnhanceStepConfig(
     var cosmeticCorrection: CosmeticCorrectionConfig? = null,
     var deconvolve: DeconvolutionConfig? = null,
     var extractStars: ExtractStarsConfig? = null,
+    var removeStars: RemoveStarsConfig? = null,
     var decompose: DecomposeConfig? = null,
     var compositeChannels: CompositeChannelsConfig? = null,
     var mergeWith: MergeWithConfig? = null,
@@ -323,6 +325,7 @@ data class EnhanceStepConfig(
             crop != null -> EnhanceStepType.Crop
             rotate != null -> EnhanceStepType.Rotate
             reduceNoise != null -> EnhanceStepType.ReduceNoise
+            tgvDenoise != null -> EnhanceStepType.TGVDenoise
             whitebalance != null -> EnhanceStepType.Whitebalance
             removeBackground != null -> EnhanceStepType.RemoveBackground
             autoStretch != null -> EnhanceStepType.AutoStretch
@@ -337,6 +340,7 @@ data class EnhanceStepConfig(
             cosmeticCorrection != null -> EnhanceStepType.CosmeticCorrection
             deconvolve != null -> EnhanceStepType.Deconvolve
             extractStars != null -> EnhanceStepType.ExtractStars
+            removeStars != null -> EnhanceStepType.RemoveStars
             decompose != null -> EnhanceStepType.Decompose
             compositeChannels != null -> EnhanceStepType.CompositeChannels
             mergeWith != null -> EnhanceStepType.MergeWith
@@ -363,10 +367,12 @@ enum class EnhanceStepType {
     Sharpen,
     UnsharpMask,
     ReduceNoise,
+    TGVDenoise,
     HighDynamicRange,
     CosmeticCorrection,
     Deconvolve,
     ExtractStars,
+    RemoveStars,
     Decompose,
     CompositeChannels,
     MergeWith,
@@ -415,6 +421,13 @@ data class ReduceNoiseConfig(
     var algorithm: NoiseReductionAlgorithm = NoiseReductionAlgorithm.MultiScaleMedianOverAllChannels,
     var thresholding: Thresholding = Thresholding.Soft,
     var thresholds: MutableList<Double> = mutableListOf(0.0001)
+)
+
+data class TGVDenoiseConfig(
+    var lambda: Double = 100.0,
+    var alpha0: Double = 1.0,
+    var alpha1: Double = 2.0,
+    var iterations: Int = 100,
 )
 
 data class CosmeticCorrectionConfig(
@@ -581,6 +594,10 @@ data class ExtractStarsConfig(
     var softMaskBlurRadius: Int = 5,
     var starsBranch: BranchConfig = BranchConfig(name = "stars"),
     var backgroundBranch: BranchConfig = BranchConfig(name = "background"),
+)
+
+data class RemoveStarsConfig(
+    var factor: Double = 2.0,
 )
 
 enum class DecomposeMode { LRGB, RGB, HSB }
@@ -1663,6 +1680,11 @@ class AstroProcess(val config: ProcessConfig) {
                         }
                     }
 
+                    EnhanceStepType.TGVDenoise -> {
+                        val cfg = enhanceStepConfig.tgvDenoise!!
+                        it.tgvDenoise(cfg.lambda, cfg.alpha0, cfg.alpha1, cfg.iterations)
+                    }
+
                     EnhanceStepType.HighDynamicRange -> {
                         highDynamicRange(hdrSourceImages.map { img -> { img } })
                     }
@@ -1689,6 +1711,14 @@ class AstroProcess(val config: ProcessConfig) {
                         val cfg = enhanceStepConfig.extractStars!!
                         val subCacheDir = cacheDir.resolve("step_${stepIndex}_ExtractStars")
                         processExtractStars(it, cfg, formatConfig, enhanceConfig, subCacheDir, dirty, sourceRegistry)
+                    }
+
+                    EnhanceStepType.RemoveStars -> {
+                        val cfg = enhanceStepConfig.removeStars!!
+                        val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
+                        val stars = loadOrFindStars(starsYamlFile, it, config.align)
+                        val starImage = copyOnlyStars(it, stars, cfg.factor)
+                        it - starImage
                     }
 
                     EnhanceStepType.Decompose -> {

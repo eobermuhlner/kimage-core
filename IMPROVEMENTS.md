@@ -74,6 +74,8 @@ Status: DONE
 
 TGVDenoise is PixInsight's highest-quality noise reduction and widely considered the best algorithm available in any astrophotography tool. It is an edge-preserving variational method that removes noise while keeping fine detail and avoiding the "plastic" look of wavelet methods. Algorithm is published in academic literature (Bredies et al.). Requires implementing a PDE solver with iterative minimization — non-trivial but well-documented.
 
+Status: DONE
+
 #### 2.2 Improved Wavelet Noise Reduction
 **Impact: Medium | Feasibility: High**
 
