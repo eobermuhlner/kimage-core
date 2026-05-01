@@ -887,10 +887,12 @@ enhance:
         LP: 0.0                 # Shadow protection — pixels below this get only linear stretch (0.0-SP)
         HP: 1.0                 # Highlight protection — pixels above this get only linear stretch (SP-1.0)
       addToHighDynamicRange: true # Add this result to HDR processing
-    # Sigmoid Stretch
+    # Sigmoid Stretch with highlight protection
     - sigmoid:
         midpoint: 0.01          # Midpoint of sigmoid curve (0.001-1.0)
         strength: 1.1           # Strength of sigmoid curve (0.1-5.0)
+      highlightProtection:
+        threshold: 0.5          # Luminance threshold above which pixels blend back to original (0.0-1.0)
       addToHighDynamicRange: true # Add this result to HDR processing
     # Blur Step
     - blur:
@@ -1019,6 +1021,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`arcsinh`** - Hyperbolic arcsine stretch; maps [0,1]→[0,1] via `asinh(β·x)/asinh(β)`, preserving star colour while revealing faint nebulosity
 - **`generalizedHyperbolicStretch`** - Generalized Hyperbolic Stretch; state-of-the-art parametric stretch (as in Siril/PixInsight). Uses `SP + asinh(D·sinh(b·(x−SP)))/b` internally, with linear extrapolation outside `[LP, HP]` to protect shadows and highlights. When `b=0`, degenerates to a linear stretch with gain `D`.
 - **`sigmoid`** - S-curve contrast enhancement
+- **`highlightProtection`** (optional modifier, combinable with any stretch step) — after the stretch is applied, pixels whose luminance exceeds `threshold` are linearly blended back toward the original: fully stretched at `threshold`, fully original at luminance 1.0. Prevents star-core blowout ("star whitening"). Parameter: `threshold` (0.0–1.0, default 0.5).
 - **`blur`** - Apply Gaussian blur
 - **`sharpen`** - Apply sharpening filter
 - **`unsharpMask`** - Apply unsharp mask filter

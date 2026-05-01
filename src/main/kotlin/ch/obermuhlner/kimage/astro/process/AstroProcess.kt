@@ -13,6 +13,7 @@ import ch.obermuhlner.kimage.astro.color.stretchAutoSTF
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchAsinh
 import ch.obermuhlner.kimage.astro.color.stretchGHS
+import ch.obermuhlner.kimage.astro.color.stretchMasked
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionConfig
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionMode
@@ -298,6 +299,7 @@ data class EnhanceStepConfig(
     var sigmoid: SigmoidConfig? = null,
     var arcsinh: AsinhConfig? = null,
     var generalizedHyperbolicStretch: GHSConfig? = null,
+    var highlightProtection: HighlightProtectionConfig? = null,
     var linearPercentile: LinearPercentileConfig? = null,
     var blur: BlurConfig? = null,
     var sharpen: SharpenConfig? = null,
@@ -493,6 +495,10 @@ data class SigmoidConfig(
 
 data class AsinhConfig(
     var beta: Double = 5.0,
+)
+
+data class HighlightProtectionConfig(
+    var threshold: Double = 0.5,
 )
 
 data class GHSConfig(
@@ -1527,7 +1533,7 @@ class AstroProcess(val config: ProcessConfig) {
             }
             val type = enhanceStepConfig.type
             step(type.name) {
-                val stepResultImage = when (type) {
+                val rawResult = when (type) {
                     EnhanceStepType.Debayer -> {
                         val badPixels = if (enhanceStepConfig.debayer!!.cleanupBadPixels) {
                             val mosaic = image[Channel.Red]
@@ -1748,6 +1754,9 @@ class AstroProcess(val config: ProcessConfig) {
                         else edgeImage.onEach { v -> (v * cfg.strength).coerceIn(0.0, 1.0) }
                     }
                 }
+                val stepResultImage = enhanceStepConfig.highlightProtection?.let { hp ->
+                    it.stretchMasked(hp.threshold, rawResult)
+                } ?: rawResult
                 if (enhanceConfig.regionOfInterest.enabled) {
                     val roiImage = stepResultImage.crop(
                         enhanceConfig.regionOfInterest.x,

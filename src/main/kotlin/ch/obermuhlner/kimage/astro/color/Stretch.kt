@@ -1,5 +1,6 @@
 package ch.obermuhlner.kimage.astro.color
 
+import ch.obermuhlner.kimage.core.image.Channel
 import ch.obermuhlner.kimage.core.image.Image
 import ch.obermuhlner.kimage.core.image.MatrixImage
 import ch.obermuhlner.kimage.core.image.copy
@@ -227,6 +228,25 @@ private fun mtfTransfer(m: Double, x: Double): Double {
     if (m == 0.5) return x
     return ((m - 1.0) * x / ((2.0 * m - 1.0) * x - m)).coerceIn(0.0, 1.0)
 }
+
+fun Image.stretchMasked(threshold: Double, stretched: Image): Image {
+    val result = this.copy()
+    val rangeAboveThreshold = (1.0 - threshold).coerceAtLeast(1e-10)
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            val lum = convertPixelToChannel(x, y, Channel.Luminance)
+            val alpha = ((lum - threshold) / rangeAboveThreshold).coerceIn(0.0, 1.0)
+            for (channel in channels) {
+                val v = stretched.getPixel(x, y, channel) * (1.0 - alpha) + getPixel(x, y, channel) * alpha
+                result.setPixel(x, y, channel, v)
+            }
+        }
+    }
+    return result
+}
+
+fun Image.stretchMasked(threshold: Double = 0.5, stretchFunc: (Image) -> Image): Image =
+    stretchMasked(threshold, stretchFunc(this))
 
 fun Image.stretch(func: (Double) -> Double): Image {
     val result = this.copy()

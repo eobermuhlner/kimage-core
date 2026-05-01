@@ -12,8 +12,10 @@ import ch.obermuhlner.kimage.astro.color.stretchLinear
 import ch.obermuhlner.kimage.astro.color.stretchLinearFactor
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchLogarithmic
+import ch.obermuhlner.kimage.astro.color.stretchMasked
 import ch.obermuhlner.kimage.astro.color.stretchSTF
 import ch.obermuhlner.kimage.astro.color.stretchSigmoid
+import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.image.AbstractImageProcessingTest
 import org.junit.jupiter.api.Test
 
@@ -37,6 +39,11 @@ class ImageStretchTest : AbstractImageProcessingTest() {
         assertReferenceImage("stretchGHS", image.stretchGHS())
         assertReferenceImage("stretchGHS_D3_b3_SP0.2_LP0.05_HP0.9", image.stretchGHS(D = 3.0, b = 3.0, SP = 0.2, LP = 0.05, HP = 0.9))
         assertReferenceImage("stretchGHS_b0_linear", image.stretchGHS(D = 5.0, b = 0.0, SP = 0.1))
+        assertReferenceImage("stretchMasked_sigmoid", image.stretchMasked(0.5) { it.stretchSigmoidLike() })
+        assertReferenceImage("stretchMasked_ghs", image.stretchMasked(0.5) { it.stretchGHS() })
+        assertReferenceImage("stretchMasked_asinh", image.stretchMasked(0.5) { it.stretchAsinh() })
+        assertReferenceImage("stretchMasked_threshold0.3", image.stretchMasked(0.3) { it.stretchSigmoidLike() })
+        assertReferenceImage("stretchMasked_threshold0.7", image.stretchMasked(0.7) { it.stretchSigmoidLike() })
     }
 
     @Test

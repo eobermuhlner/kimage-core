@@ -63,6 +63,8 @@ Gradle project, Kotlin 2.0 targeting JVM 17.
 
 Tests depending on `AbstractImageProcessingTest` read from `test-input/` and write/compare reference images under `test-results/<classFqn>/<method>/`. If a reference file is missing it is written on first run; subsequent runs compare against it.
 
+**`AstroProcessIntegrationTest` visual verification (MANDATORY):** Tests in this class use `assertAstroProcess`, which stores the output as a reference image on first run and only verifies pixel-for-pixel identity on subsequent runs. This means the reference image for a new test is whatever the first run produced — it does **not** prove the feature is visually correct. After adding or changing a test in `AstroProcessIntegrationTest`, you **must** open the reference PNG in `test-results/` and visually confirm that the output looks as expected before committing.
+
 ### Reference Image Management
 
 Reference images in `test-results/` are committed to git alongside code changes:

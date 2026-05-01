@@ -638,4 +638,100 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         assertAstroProcess(config)
     }
 
+    @Test
+    fun `processAstro runs with enhance using sigmoid with highlightProtection`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        sigmoid = SigmoidConfig(midpoint = 0.3, strength = 1.1),
+                        highlightProtection = HighlightProtectionConfig(threshold = 0.5)
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using ghs with highlightProtection`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        generalizedHyperbolicStretch = GHSConfig(D = 5.0, b = 5.0, SP = 0.1, LP = 0.0, HP = 1.0),
+                        highlightProtection = HighlightProtectionConfig(threshold = 0.5)
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using arcsinh with highlightProtection`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        arcsinh = AsinhConfig(beta = 5.0),
+                        highlightProtection = HighlightProtectionConfig(threshold = 0.5)
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
 }

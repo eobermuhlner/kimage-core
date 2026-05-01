@@ -95,6 +95,17 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `HighlightProtectionConfig has correct defaults`() {
+        val cfg = HighlightProtectionConfig()
+        assertEquals(0.5, cfg.threshold)
+    }
+
+    @Test
+    fun `EnhanceStepConfig highlightProtection defaults to null`() {
+        assertNull(EnhanceStepConfig(sigmoid = SigmoidConfig()).highlightProtection)
+    }
+
+    @Test
     fun `QuantizeConfig defaults to 16 levels`() {
         assertEquals(16, QuantizeConfig().levels)
     }
@@ -394,6 +405,45 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
             ),
             output = OutputFormatConfig(
                 outputName = "test_maskedprocess",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        val testDir = prepareTestRunDirectory()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val process = AstroProcess(config)
+        process.workingDirectory = testDir
+        process.processAstro()
+
+        val outputDir = testDir.resolve("astro-process/output")
+        assertTrue(outputDir.exists(), "Output directory should exist")
+        val outputFiles = outputDir.listFiles()?.sorted() ?: emptyList()
+        assertTrue(outputFiles.isNotEmpty(), "Should produce output files")
+    }
+
+    @Test
+    fun `processAstro with highlightProtection on sigmoid completes successfully`() {
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        sigmoid = SigmoidConfig(midpoint = 0.3),
+                        highlightProtection = HighlightProtectionConfig(threshold = 0.5)
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_highlight_protection",
                 outputImageExtensions = mutableListOf("png"),
             )
         )
