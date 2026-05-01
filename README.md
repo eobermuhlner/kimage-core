@@ -187,6 +187,7 @@ Enhancement uses a flexible step-by-step approach. Common steps include:
 - **edge** - Edge detection/enhancement (Sobel, Laplacian, etc.)
 - **linearPercentile** - Histogram stretching
 - **arcsinh** - Hyperbolic arcsine stretch (preserves star colour)
+- **generalizedHyperbolicStretch** - Generalized Hyperbolic Stretch (state-of-the-art parametric stretch with precise control)
 - **sigmoid** - S-curve contrast enhancement
 - **reduceNoise** - Noise reduction
 - **deconvolve** - Richardson-Lucy deconvolution (restores resolution)
@@ -878,6 +879,14 @@ enhance:
     - arcsinh:
         beta: 5.0               # Stretch intensity (1.0-20.0); higher pulls up fainter detail
       addToHighDynamicRange: true # Add this result to HDR processing
+    # Generalized Hyperbolic Stretch (GHS)
+    - generalizedHyperbolicStretch:
+        D: 5.0                  # Stretch intensity (1.0-20.0); higher boosts more
+        b: 5.0                  # Shape parameter (0.0-20.0); 0=linear, higher=more aggressive transition
+        SP: 0.1                 # Symmetry point — histogram value centred on the stretch (0.0-1.0)
+        LP: 0.0                 # Shadow protection — pixels below this get only linear stretch (0.0-SP)
+        HP: 1.0                 # Highlight protection — pixels above this get only linear stretch (SP-1.0)
+      addToHighDynamicRange: true # Add this result to HDR processing
     # Sigmoid Stretch
     - sigmoid:
         midpoint: 0.01          # Midpoint of sigmoid curve (0.001-1.0)
@@ -1008,6 +1017,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`autoStretch`** - Automatic STF (Screen Transfer Function) stretch; estimates background and noise from the image, then applies a Midtone Transfer Function to bring the background to a target brightness
 - **`linearPercentile`** - Linear histogram stretching
 - **`arcsinh`** - Hyperbolic arcsine stretch; maps [0,1]→[0,1] via `asinh(β·x)/asinh(β)`, preserving star colour while revealing faint nebulosity
+- **`generalizedHyperbolicStretch`** - Generalized Hyperbolic Stretch; state-of-the-art parametric stretch (as in Siril/PixInsight). Uses `SP + asinh(D·sinh(b·(x−SP)))/b` internally, with linear extrapolation outside `[LP, HP]` to protect shadows and highlights. When `b=0`, degenerates to a linear stretch with gain `D`.
 - **`sigmoid`** - S-curve contrast enhancement
 - **`blur`** - Apply Gaussian blur
 - **`sharpen`** - Apply sharpening filter

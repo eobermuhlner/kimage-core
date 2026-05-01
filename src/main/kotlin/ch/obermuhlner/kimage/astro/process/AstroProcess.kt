@@ -12,6 +12,7 @@ import ch.obermuhlner.kimage.astro.color.histogram
 import ch.obermuhlner.kimage.astro.color.stretchAutoSTF
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
 import ch.obermuhlner.kimage.astro.color.stretchAsinh
+import ch.obermuhlner.kimage.astro.color.stretchGHS
 import ch.obermuhlner.kimage.astro.color.stretchSigmoidLike
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionConfig
 import ch.obermuhlner.kimage.astro.cosmetic.CosmeticCorrectionMode
@@ -296,6 +297,7 @@ data class EnhanceStepConfig(
     var autoStretch: AutoStretchConfig? = null,
     var sigmoid: SigmoidConfig? = null,
     var arcsinh: AsinhConfig? = null,
+    var generalizedHyperbolicStretch: GHSConfig? = null,
     var linearPercentile: LinearPercentileConfig? = null,
     var blur: BlurConfig? = null,
     var sharpen: SharpenConfig? = null,
@@ -324,6 +326,7 @@ data class EnhanceStepConfig(
             autoStretch != null -> EnhanceStepType.AutoStretch
             sigmoid != null -> EnhanceStepType.Sigmoid
             arcsinh != null -> EnhanceStepType.ArcSinh
+            generalizedHyperbolicStretch != null -> EnhanceStepType.GHS
             linearPercentile != null -> EnhanceStepType.LinearPercentile
             blur != null -> EnhanceStepType.Blur
             sharpen != null -> EnhanceStepType.Sharpen
@@ -353,6 +356,7 @@ enum class EnhanceStepType {
     LinearPercentile,
     Sigmoid,
     ArcSinh,
+    GHS,
     Blur,
     Sharpen,
     UnsharpMask,
@@ -489,6 +493,14 @@ data class SigmoidConfig(
 
 data class AsinhConfig(
     var beta: Double = 5.0,
+)
+
+data class GHSConfig(
+    var D: Double = 5.0,
+    var b: Double = 5.0,
+    var SP: Double = 0.1,
+    var LP: Double = 0.0,
+    var HP: Double = 1.0,
 )
 
 data class LinearPercentileConfig(
@@ -1611,6 +1623,11 @@ class AstroProcess(val config: ProcessConfig) {
 
                     EnhanceStepType.ArcSinh -> {
                         it.stretchAsinh(enhanceStepConfig.arcsinh!!.beta)
+                    }
+
+                    EnhanceStepType.GHS -> {
+                        val cfg = enhanceStepConfig.generalizedHyperbolicStretch!!
+                        it.stretchGHS(cfg.D, cfg.b, cfg.SP, cfg.LP, cfg.HP)
                     }
 
                     EnhanceStepType.Blur -> {

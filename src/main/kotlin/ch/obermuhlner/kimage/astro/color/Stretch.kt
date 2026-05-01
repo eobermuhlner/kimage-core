@@ -14,8 +14,11 @@ import ch.obermuhlner.kimage.core.math.stddev
 import ch.obermuhlner.kimage.core.matrix.values.values
 import kotlin.math.abs
 import kotlin.math.asinh
+import kotlin.math.cosh
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.math.sinh
+import kotlin.math.sqrt
 
 fun Image.stretchLinearFactor(factor: Double): Image {
     return stretch { v -> (v * factor).coerceIn(0.0, 1.0) }
@@ -124,6 +127,43 @@ fun Image.stretchAsinhPercentile(
     return stretchAsinh(1.0 / (maxValue - minValue))
 }
 
+
+fun Image.stretchGHS(
+    D: Double = 5.0,
+    b: Double = 5.0,
+    SP: Double = 0.1,
+    LP: Double = 0.0,
+    HP: Double = 1.0,
+): Image {
+    fun core(x: Double): Double = if (b == 0.0) {
+        SP + D * (x - SP)
+    } else {
+        SP + asinh(D * sinh(b * (x - SP))) / b
+    }
+
+    fun derivative(x: Double): Double = if (b == 0.0) {
+        D
+    } else {
+        val inner = D * sinh(b * (x - SP))
+        D * cosh(b * (x - SP)) / sqrt(1.0 + inner * inner)
+    }
+
+    val f0 = core(0.0)
+    val f1 = core(1.0)
+    val range = (f1 - f0).coerceAtLeast(1e-10)
+    val fLP = (core(LP) - f0) / range
+    val fHP = (core(HP) - f0) / range
+    val slopeLP = derivative(LP) / range
+    val slopeHP = derivative(HP) / range
+
+    return stretch { x ->
+        when {
+            x <= LP -> (fLP + slopeLP * (x - LP)).coerceIn(0.0, 1.0)
+            x >= HP -> (fHP + slopeHP * (x - HP)).coerceIn(0.0, 1.0)
+            else -> ((core(x) - f0) / range).coerceIn(0.0, 1.0)
+        }
+    }
+}
 
 fun Image.stretchSTF(shadows: Double = 0.01, highlights: Double = 0.99, midtones: Double = 0.5, target: Double = 0.25): Image {
     val minVal = this.values().min()

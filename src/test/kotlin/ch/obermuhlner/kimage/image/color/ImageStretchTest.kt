@@ -7,6 +7,7 @@ import ch.obermuhlner.kimage.astro.color.stretchAutoSTF
 import ch.obermuhlner.kimage.astro.color.stretchExponential
 import ch.obermuhlner.kimage.astro.color.stretchExponentialMedian
 import ch.obermuhlner.kimage.astro.color.stretchExponentialPercentile
+import ch.obermuhlner.kimage.astro.color.stretchGHS
 import ch.obermuhlner.kimage.astro.color.stretchLinear
 import ch.obermuhlner.kimage.astro.color.stretchLinearFactor
 import ch.obermuhlner.kimage.astro.color.stretchLinearPercentile
@@ -33,6 +34,9 @@ class ImageStretchTest : AbstractImageProcessingTest() {
         assertReferenceImage("stretchSigmoid", image.stretchSigmoid())
         assertReferenceImage("stretchLogarithmic", image.stretchLogarithmic())
         assertReferenceImage("stretchSTF", image.stretchSTF())
+        assertReferenceImage("stretchGHS", image.stretchGHS())
+        assertReferenceImage("stretchGHS_D3_b3_SP0.2_LP0.05_HP0.9", image.stretchGHS(D = 3.0, b = 3.0, SP = 0.2, LP = 0.05, HP = 0.9))
+        assertReferenceImage("stretchGHS_b0_linear", image.stretchGHS(D = 5.0, b = 0.0, SP = 0.1))
     }
 
     @Test
