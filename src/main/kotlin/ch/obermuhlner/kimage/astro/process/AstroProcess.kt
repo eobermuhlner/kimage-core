@@ -592,6 +592,7 @@ data class SourceConfig(
 data class ExtractStarsConfig(
     var factor: Double = 2.0,
     var softMaskBlurRadius: Int = 5,
+    var inpaint: InpaintAlgorithm = InpaintAlgorithm.Erosion,
     var starsBranch: BranchConfig = BranchConfig(name = "stars"),
     var backgroundBranch: BranchConfig = BranchConfig(name = "background"),
 )
@@ -1896,8 +1897,13 @@ class AstroProcess(val config: ProcessConfig) {
         val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
         val stars = loadOrFindStars(starsYamlFile, image, config.align)
 
-        val starImage = copyOnlyStars(image, stars, cfg.factor)
-        val backgroundImage = image - starImage
+        val (starImage, backgroundImage) = if (cfg.inpaint == InpaintAlgorithm.None) {
+            val s = copyOnlyStars(image, stars, cfg.factor)
+            s to (image - s)
+        } else {
+            val bg = inpaintStars(image, stars, cfg.factor, cfg.inpaint)
+            (image - bg) to bg
+        }
 
         val starsCacheDir = subCacheDir.resolve(cfg.starsBranch.name.ifEmpty { "stars" })
         val backgroundCacheDir = subCacheDir.resolve(cfg.backgroundBranch.name.ifEmpty { "background" })

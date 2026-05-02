@@ -443,6 +443,8 @@ output:
 
 Separate stars from background nebulosity, process each independently, then recombine with soft masking.
 
+The background is reconstructed by inpainting star regions, giving a hole-free background image. The stars branch receives the inpainted-background-subtracted signal — pure star excess with no nebulosity contribution. Set `inpaint: None` to fall back to the legacy copy-and-subtract method.
+
 ```yaml
 enhance:
   steps:
@@ -450,6 +452,7 @@ enhance:
     - extractStars:
         factor: 2.0                   # Star ellipse radius multiplier × FWHM
         softMaskBlurRadius: 5         # Gaussian feather radius in pixels
+        inpaint: Erosion              # Background fill: None | Annulus | Erosion | Polynomial | RBF | Telea
         starsBranch:
           steps:
             - reduceNoise: { thresholds: [0.00005] }
@@ -1067,7 +1070,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`deconvolve`** - Richardson-Lucy deconvolution to restore resolution
 - **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
-- **`extractStars`** - Separate stars and background, process independently, recombine
+- **`extractStars`** - Separate stars and background via inpainting, process independently, recombine. Parameters: `factor` (star radius multiplier × FWHM, default 2.0), `softMaskBlurRadius` (feather radius, default 5), `inpaint` (background fill: `None` | `Annulus` | `Erosion` | `Polynomial` | `RBF` | `Telea`, default `Erosion`). `None` uses the legacy copy-and-subtract method.
 - **`removeStars`** - Subtract detected stars to produce a starless background image. Parameters: `factor` (star radius multiplier × FWHM, default 1.0), `inpaint` (fill algorithm for holes: `None` | `Annulus` | `Erosion` | `Polynomial` | `RBF` | `Telea`, default `Erosion`)
 - **`decompose`** - Split into LRGB/RGB/HSB components, process each, recombine
 - **`compositeChannels`** - Assemble named sources (R, G, B) into a single RGB image
