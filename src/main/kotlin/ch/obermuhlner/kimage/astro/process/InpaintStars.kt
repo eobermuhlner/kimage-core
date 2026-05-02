@@ -358,47 +358,72 @@ private fun inpaintTelea(image: Image, mask: BooleanArray): Image {
     val pixels = imageToPixels(image)
     val isMasked = mask.copyOf()
     val searchRadius = 5
+    val sr2 = searchRadius * searchRadius
 
     val dist = FloatArray(width * height) { if (mask[it]) Float.MAX_VALUE else 0f }
-    // PQ entries: (distance, index) — lazy-deletion for stale entries
-    val pq = PriorityQueue<Pair<Float, Int>>(compareBy { it.first })
+
+    // Encode (dist, idx) as Long: upper 32 bits = Float.toBits(dist), lower 32 = idx.
+    // Non-negative float bit patterns are ordered identically to their values, so
+    // PriorityQueue<Long> with natural ordering gives correct min-dist priority.
+    // This halves the per-entry allocation cost vs Pair<Float,Int>.
+    fun pack(d: Float, i: Int): Long = (d.toBits().toLong() shl 32) or (i.toLong() and 0xFFFFFFFFL)
+    fun Long.entryDist(): Float = Float.fromBits((this ushr 32).toInt())
+    fun Long.entryIdx(): Int = (this and 0xFFFFFFFFL).toInt()
+
+    val pq = PriorityQueue<Long>()
 
     val dx4 = intArrayOf(-1, 1,  0, 0)
     val dy4 = intArrayOf( 0, 0, -1, 1)
 
-    // Seed: masked pixels directly adjacent to known pixels
     for (idx in 0 until width * height) {
         if (!mask[idx]) continue
         val row = idx / width; val col = idx % width
         for (d in 0..3) {
             val nr = row + dy4[d]; val nc = col + dx4[d]
             if (nr !in 0 until height || nc !in 0 until width) continue
-            if (!mask[nr * width + nc]) { dist[idx] = 1f; pq.add(Pair(1f, idx)); break }
+            if (!mask[nr * width + nc]) { dist[idx] = 1f; pq.add(pack(1f, idx)); break }
         }
     }
 
     val filled = BooleanArray(width * height) { !mask[it] }
+    // Reuse accumulator across iterations — avoids one FloatArray allocation per masked pixel.
+    val sum = FloatArray(nch)
 
     while (pq.isNotEmpty()) {
-        val (d, idx) = pq.poll()
+        val entry = pq.poll()
+        val d = entry.entryDist(); val idx = entry.entryIdx()
         if (filled[idx] || d > dist[idx] + 1e-6f) continue   // stale entry
         val row = idx / width; val col = idx % width
 
-        val sum = FloatArray(nch); var wsum = 0f
+        sum.fill(0f); var wsum = 0f
         for (dr in -searchRadius..searchRadius) {
             for (dc in -searchRadius..searchRadius) {
+                val d2 = dr * dr + dc * dc
+                if (d2 > sr2) continue                         // skip corners of the square window
                 val nr = row + dr; val nc = col + dc
                 if (nr !in 0 until height || nc !in 0 until width) continue
                 val nidx = nr * width + nc
                 if (!filled[nidx]) continue
-                val d2 = (dr * dr + dc * dc).toFloat()
-                if (d2 > searchRadius * searchRadius) continue
                 val w = 1f / (d2 + 1f)
-                val gx = gradX(pixels, nch, filled, nr, nc, width, height)
-                val gy = gradY(pixels, nch, filled, nr, nc, width, height)
+                // Inline gradient computation — avoids 2 FloatArray allocations per neighbour.
+                val hasL = nc > 0          && filled[nidx - 1]
+                val hasR = nc < width - 1  && filled[nidx + 1]
+                val hasA = nr > 0          && filled[nidx - width]
+                val hasB = nr < height - 1 && filled[nidx + width]
                 for (ch in 0 until nch) {
-                    val predicted = pixels[ch][nidx] + gx[ch] * dc + gy[ch] * dr
-                    sum[ch] += w * predicted.coerceIn(0f, 1f)
+                    val gx = when {
+                        hasL && hasR -> (pixels[ch][nidx + 1]     - pixels[ch][nidx - 1])     / 2f
+                        hasR         ->  pixels[ch][nidx + 1]     - pixels[ch][nidx]
+                        hasL         ->  pixels[ch][nidx]         - pixels[ch][nidx - 1]
+                        else         ->  0f
+                    }
+                    val gy = when {
+                        hasA && hasB -> (pixels[ch][nidx + width] - pixels[ch][nidx - width]) / 2f
+                        hasB         ->  pixels[ch][nidx + width] - pixels[ch][nidx]
+                        hasA         ->  pixels[ch][nidx]         - pixels[ch][nidx - width]
+                        else         ->  0f
+                    }
+                    sum[ch] += w * (pixels[ch][nidx] + gx * dc + gy * dr).coerceIn(0f, 1f)
                 }
                 wsum += w
             }
@@ -412,36 +437,10 @@ private fun inpaintTelea(image: Image, mask: BooleanArray): Image {
                 val nidx = nr * width + nc
                 if (isMasked[nidx] && !filled[nidx]) {
                     val newDist = dist[idx] + 1f
-                    if (newDist < dist[nidx]) { dist[nidx] = newDist; pq.add(Pair(newDist, nidx)) }
+                    if (newDist < dist[nidx]) { dist[nidx] = newDist; pq.add(pack(newDist, nidx)) }
                 }
             }
         }
     }
     return pixelsToImage(pixels, width, height, image.channels)
-}
-
-private fun gradX(pixels: Array<FloatArray>, nch: Int, filled: BooleanArray, row: Int, col: Int, width: Int, height: Int): FloatArray {
-    val hasL = col > 0        && filled[row * width + col - 1]
-    val hasR = col < width-1  && filled[row * width + col + 1]
-    return FloatArray(nch) { ch ->
-        when {
-            hasL && hasR -> (pixels[ch][row * width + col + 1] - pixels[ch][row * width + col - 1]) / 2f
-            hasR         ->  pixels[ch][row * width + col + 1] - pixels[ch][row * width + col]
-            hasL         ->  pixels[ch][row * width + col]     - pixels[ch][row * width + col - 1]
-            else         ->  0f
-        }
-    }
-}
-
-private fun gradY(pixels: Array<FloatArray>, nch: Int, filled: BooleanArray, row: Int, col: Int, width: Int, height: Int): FloatArray {
-    val hasA = row > 0        && filled[(row - 1) * width + col]
-    val hasB = row < height-1 && filled[(row + 1) * width + col]
-    return FloatArray(nch) { ch ->
-        when {
-            hasA && hasB -> (pixels[ch][(row + 1) * width + col] - pixels[ch][(row - 1) * width + col]) / 2f
-            hasB         ->  pixels[ch][(row + 1) * width + col] - pixels[ch][row * width + col]
-            hasA         ->  pixels[ch][row * width + col]       - pixels[ch][(row - 1) * width + col]
-            else         ->  0f
-        }
-    }
 }
