@@ -450,9 +450,11 @@ enhance:
   steps:
     - linearPercentile: { minPercentile: 0.0001, maxPercentile: 0.9999 }
     - extractStars:
-        factor: 2.0                   # Star ellipse radius multiplier × FWHM
-        softMaskBlurRadius: 5         # Gaussian feather radius in pixels
-        inpaint: Erosion              # Background fill: None | Annulus | Erosion | Polynomial | RBF | Telea
+        factor: 2.0                            # Star ellipse radius multiplier × FWHM
+        softMaskBlurRadius: 5                    # Gaussian feather radius in pixels
+        inpaint: Erosion                         # Background fill: None | Annulus | Erosion | Polynomial | RBF | Telea
+        starImageAlgorithm: Subtract              # Star image creation: Copy | Subtract | SoftMaskedMultiply
+        mergeAlgorithm: LinearSoftBlend          # Branch merge: LinearSoftBlend | AdditiveMerge
         starsBranch:
           steps:
             - reduceNoise: { thresholds: [0.00005] }
@@ -462,6 +464,21 @@ enhance:
             - removeBackground: {}
     - sigmoid: { midpoint: 0.3, strength: 1.2 }
 ```
+
+**`starImageAlgorithm` options:**
+
+| Value | Description |
+|---|---|
+| `Copy` | Legacy method: copy star pixels only (hard edges, zero elsewhere) |
+| `Subtract` | Subtract inpainted background from original (default) |
+| `SoftMaskedMultiply` | Multiply original by soft star mask (feathered edges) |
+
+**`mergeAlgorithm` options:**
+
+| Value | Description |
+|---|---|
+| `LinearSoftBlend` | Blend branches using soft star mask (default) |
+| `AdditiveMerge` | Add processed background + stars (no mask needed, faster) |
 
 Star positions are read from `astro-process/aligned/stars.yaml` (written after alignment). If that file does not exist, `findStars` runs on the stacked image.
 
@@ -1070,7 +1087,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`deconvolve`** - Richardson-Lucy deconvolution to restore resolution
 - **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
-- **`extractStars`** - Separate stars and background via inpainting, process independently, recombine. Parameters: `factor` (star radius multiplier × FWHM, default 2.0), `softMaskBlurRadius` (feather radius, default 5), `inpaint` (background fill: `None` | `Annulus` | `Erosion` | `Polynomial` | `RBF` | `Telea`, default `Erosion`). `None` uses the legacy copy-and-subtract method.
+- **`extractStars`** - Separate stars and background via inpainting, process independently, recombine. Parameters: `factor` (star radius multiplier × FWHM, default 2.0), `softMaskBlurRadius` (feather radius, default 5), `inpaint` (background fill: `None` | `Annulus` | `Erosion` | `Polynomial` | `RBF` | `Telea`, default `Erosion`), `starImageAlgorithm` (star image creation: `Copy` | `Subtract` | `SoftMaskedMultiply`, default `Subtract`), `mergeAlgorithm` (branch merge: `LinearSoftBlend` | `AdditiveMerge`, default `LinearSoftBlend`). `inpaint: None` uses the legacy copy-and-subtract method.
 - **`removeStars`** - Subtract detected stars to produce a starless background image. Parameters: `factor` (star radius multiplier × FWHM, default 1.0), `inpaint` (fill algorithm for holes: `None` | `Annulus` | `Erosion` | `Polynomial` | `RBF` | `Telea`, default `Erosion`)
 - **`decompose`** - Split into LRGB/RGB/HSB components, process each, recombine
 - **`compositeChannels`** - Assemble named sources (R, G, B) into a single RGB image

@@ -589,10 +589,16 @@ data class SourceConfig(
     var stack: StackConfig = StackConfig(),
 )
 
+enum class StarImageAlgorithm { Copy, Subtract, SoftMaskedMultiply }
+
+enum class MergeAlgorithm { LinearSoftBlend, AdditiveMerge }
+
 data class ExtractStarsConfig(
     var factor: Double = 2.0,
     var softMaskBlurRadius: Int = 5,
     var inpaint: InpaintAlgorithm = InpaintAlgorithm.Erosion,
+    var starImageAlgorithm: StarImageAlgorithm = StarImageAlgorithm.Subtract,
+    var mergeAlgorithm: MergeAlgorithm = MergeAlgorithm.LinearSoftBlend,
     var starsBranch: BranchConfig = BranchConfig(name = "stars"),
     var backgroundBranch: BranchConfig = BranchConfig(name = "background"),
 )
@@ -1897,12 +1903,22 @@ class AstroProcess(val config: ProcessConfig) {
         val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
         val stars = loadOrFindStars(starsYamlFile, image, config.align)
 
-        val (starImage, backgroundImage) = if (cfg.inpaint == InpaintAlgorithm.None) {
-            val s = copyOnlyStars(image, stars, cfg.factor)
-            s to (image - s)
-        } else {
-            val bg = inpaintStars(image, stars, cfg.factor, cfg.inpaint)
-            (image - bg) to bg
+        val starMaskMatrix by lazy { buildStarMask(image, stars, cfg.factor, cfg.softMaskBlurRadius) }
+
+        val (starImage, backgroundImage) = when (cfg.starImageAlgorithm) {
+            StarImageAlgorithm.Copy -> {
+                val s = copyOnlyStars(image, stars, cfg.factor)
+                s to (image - s)
+            }
+            StarImageAlgorithm.Subtract -> {
+                val bg = inpaintStars(image, stars, cfg.factor, cfg.inpaint)
+                (image - bg) to bg
+            }
+            StarImageAlgorithm.SoftMaskedMultiply -> {
+                val s = image * MatrixImage(starMaskMatrix)
+                val bg = image - s
+                s to bg
+            }
         }
 
         val starsCacheDir = subCacheDir.resolve(cfg.starsBranch.name.ifEmpty { "stars" })
@@ -1913,8 +1929,10 @@ class AstroProcess(val config: ProcessConfig) {
         val processedStars = processEnhanceSteps(starImage, dirty, cfg.starsBranch.steps, formatConfig, enhanceConfig, starsCacheDir, sourceRegistry).first
         val processedBackground = processEnhanceSteps(backgroundImage, dirty, cfg.backgroundBranch.steps, formatConfig, enhanceConfig, backgroundCacheDir, sourceRegistry).first
 
-        val maskMatrix = buildStarMask(image, stars, cfg.factor, cfg.softMaskBlurRadius)
-        return blendWithMask(processedStars, processedBackground, maskMatrix)
+        return when (cfg.mergeAlgorithm) {
+            MergeAlgorithm.LinearSoftBlend -> blendWithMask(processedStars, processedBackground, starMaskMatrix)
+            MergeAlgorithm.AdditiveMerge -> (processedBackground + processedStars).onEach { clamp(it, 0.0, 1.0) }
+        }
     }
 
     private fun processDecompose(

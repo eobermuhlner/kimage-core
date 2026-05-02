@@ -59,6 +59,28 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `StarImageAlgorithm has expected values`() {
+        assertEquals(3, StarImageAlgorithm.values().size)
+        assertEquals(StarImageAlgorithm.Copy, StarImageAlgorithm.valueOf("Copy"))
+        assertEquals(StarImageAlgorithm.Subtract, StarImageAlgorithm.valueOf("Subtract"))
+        assertEquals(StarImageAlgorithm.SoftMaskedMultiply, StarImageAlgorithm.valueOf("SoftMaskedMultiply"))
+    }
+
+    @Test
+    fun `MergeAlgorithm has expected values`() {
+        assertEquals(2, MergeAlgorithm.values().size)
+        assertEquals(MergeAlgorithm.LinearSoftBlend, MergeAlgorithm.valueOf("LinearSoftBlend"))
+        assertEquals(MergeAlgorithm.AdditiveMerge, MergeAlgorithm.valueOf("AdditiveMerge"))
+    }
+
+    @Test
+    fun `ExtractStarsConfig has correct defaults for new fields`() {
+        val config = ExtractStarsConfig()
+        assertEquals(StarImageAlgorithm.Subtract, config.starImageAlgorithm)
+        assertEquals(MergeAlgorithm.LinearSoftBlend, config.mergeAlgorithm)
+    }
+
+    @Test
     fun `EnhanceStepConfig with decompose has correct type`() {
         val config = EnhanceStepConfig(decompose = DecomposeConfig())
         assertEquals(EnhanceStepType.Decompose, config.type)
@@ -391,6 +413,120 @@ class VariantsIntegrationTest : AbstractAstroProcessIntegrationTest() {
         assertTrue(outputDir.exists(), "Output directory should exist")
         val outputFiles = outputDir.listFiles()?.sorted() ?: emptyList()
         assertTrue(outputFiles.isNotEmpty(), "Should produce output files")
+    }
+
+    @Test
+    fun `processAstro with extractStars using SoftMaskedMultiply star algorithm`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        extractStars = ExtractStarsConfig(
+                            factor = 2.0,
+                            softMaskBlurRadius = 3,
+                            inpaint = InpaintAlgorithm.None,
+                            starImageAlgorithm = StarImageAlgorithm.SoftMaskedMultiply,
+                            starsBranch = BranchConfig(name = "stars", steps = mutableListOf()),
+                            backgroundBranch = BranchConfig(name = "background", steps = mutableListOf())
+                        )
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro with extractStars using AdditiveMerge`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        extractStars = ExtractStarsConfig(
+                            factor = 2.0,
+                            softMaskBlurRadius = 3,
+                            inpaint = InpaintAlgorithm.None,
+                            mergeAlgorithm = MergeAlgorithm.AdditiveMerge,
+                            starsBranch = BranchConfig(name = "stars", steps = mutableListOf()),
+                            backgroundBranch = BranchConfig(name = "background", steps = mutableListOf())
+                        )
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro with extractStars using Copy star algorithm`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 5)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        extractStars = ExtractStarsConfig(
+                            factor = 2.0,
+                            softMaskBlurRadius = 3,
+                            inpaint = InpaintAlgorithm.None,
+                            starImageAlgorithm = StarImageAlgorithm.Copy,
+                            starsBranch = BranchConfig(name = "stars", steps = mutableListOf()),
+                            backgroundBranch = BranchConfig(name = "background", steps = mutableListOf())
+                        )
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
     }
 
     @Test
