@@ -455,6 +455,8 @@ enhance:
         inpaint: Erosion                         # Background fill: None | Annulus | Erosion | Polynomial | RBF | Telea
         starImageAlgorithm: Subtract              # Star image creation: Copy | Subtract | SoftMaskedMultiply
         mergeAlgorithm: LinearSoftBlend          # Branch merge: LinearSoftBlend | AdditiveMerge
+        starThreshold: 0.2                      # Minimum brightness to consider a pixel as a star (default 0.2)
+        channel: Gray                            # Channel to use for star detection: Gray | Red | Green | Blue | etc.
         starsBranch:
           steps:
             - reduceNoise: { thresholds: [0.00005] }

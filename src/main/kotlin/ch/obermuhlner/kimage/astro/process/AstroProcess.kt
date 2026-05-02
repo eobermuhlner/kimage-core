@@ -601,6 +601,8 @@ data class ExtractStarsConfig(
     var mergeAlgorithm: MergeAlgorithm = MergeAlgorithm.LinearSoftBlend,
     var starsBranch: BranchConfig = BranchConfig(name = "stars"),
     var backgroundBranch: BranchConfig = BranchConfig(name = "background"),
+    var starThreshold: Double = 0.2,
+    var channel: Channel = Channel.Gray,
 )
 
 data class RemoveStarsConfig(
@@ -1900,8 +1902,7 @@ class AstroProcess(val config: ProcessConfig) {
     ): Image {
         subCacheDir.mkdirs()
 
-        val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
-        val stars = loadOrFindStars(starsYamlFile, image, config.align)
+        val stars = findStars(image, cfg.starThreshold, cfg.channel)
 
         val starMaskMatrix by lazy { buildStarMask(image, stars, cfg.factor, cfg.softMaskBlurRadius) }
 
