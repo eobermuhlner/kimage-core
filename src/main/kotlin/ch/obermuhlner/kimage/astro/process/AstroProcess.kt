@@ -597,7 +597,8 @@ data class ExtractStarsConfig(
 )
 
 data class RemoveStarsConfig(
-    var factor: Double = 2.0,
+    var factor: Double = 1.0,
+    var inpaint: InpaintAlgorithm = InpaintAlgorithm.Erosion,
 )
 
 enum class DecomposeMode { LRGB, RGB, HSB }
@@ -1718,7 +1719,8 @@ class AstroProcess(val config: ProcessConfig) {
                         val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
                         val stars = loadOrFindStars(starsYamlFile, it, config.align)
                         val starImage = copyOnlyStars(it, stars, cfg.factor)
-                        it - starImage
+                        val background = it - starImage
+                        inpaintStars(background, stars, cfg.factor, cfg.inpaint)
                     }
 
                     EnhanceStepType.Decompose -> {

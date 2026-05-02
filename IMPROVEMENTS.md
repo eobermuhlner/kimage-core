@@ -34,6 +34,7 @@ Ratings:
 | Named sources / multi-stream pipeline | ✓ |
 | Narrowband channel combination | ✓ |
 | Star extraction branching | ✓ Basic |
+| Star removal (simple subtraction) | ✓ `removeStars` step |
 | LRGB/RGB/HSB decompose branching | ✓ |
 | HDR combination (multi-exposure blend) | ✓ Basic |
 | Quantize, edge enhance, rotate, crop | ✓ |
@@ -190,7 +191,32 @@ A simple morphological erosion-based star size reduction step. Stars are identif
 
 Bloomed star halos can be reduced by a targeted unsharp mask or curve adjustment applied only inside a star mask with a feathered edge. This is a common intermediate step and could be exposed as an enhance step option within the existing masked processing branching framework.
 
-#### 8.3 AI Star Removal (StarNet-style)
+#### 8.3 Star Removal Inpainting
+**Impact: Medium | Feasibility: High→Low depending on algorithm**
+
+The current `removeStars` step subtracts star pixels and leaves near-zero (black) holes in their place. For a standalone starless image this is visually problematic. Inpainting fills those holes with an estimate of the underlying background. Several algorithms exist at different quality/effort trade-offs:
+
+| Algorithm | Quality | Effort | Notes |
+|---|---|---|---|
+| **Median Annulus Fill** | Good | Easy (~30 lines) | Samples a thin ring just outside the star ellipse; fills the hole with the ring median. Per-star, not iterative. Fast; visible flat patch on large stars. |
+| **Iterative Erosion** | Good | Moderate (~80 lines) | Expands unmasked pixels inward pass-by-pass. Converges to a bilinear interpolant. Smooth, no seams. Iterations ≈ max star radius. |
+| **Polynomial Surface Fit** | Very good | Moderate (~80 lines + least-squares) | Fits a 2D polynomial (plane or quadratic) through boundary pixels of each hole. Excellent on smooth sky gradients; cannot follow nebulosity curvature. |
+| **RBF Interpolation** | Very good | Hard (~120 lines + matrix inversion) | Thin-plate spline through all boundary samples. Handles curved gradients well; one matrix solve per star. |
+| **Fast Marching Method (Telea 2004)** | Excellent | Hard (~150 lines + priority queue) | Fills inward in wavefront order. Each pixel weighted average of filled neighbors by distance and gradient alignment. General-purpose; basis of OpenCV `INPAINT_TELEA`. |
+| **Navier-Stokes / Isophote Propagation (Bertalmio 2000)** | Excellent | Very hard (~200 lines, PDE solver) | Propagates isophotes (equal-intensity lines) into the hole like fluid flow. Best when stars sit on top of visible structure (galaxy arm, dense nebula). |
+| **Total Variation Inpainting** | Excellent | Very hard (proximal gradient / ADMM solver) | Edge-preserving fill via TV-norm minimization. Good for structured backgrounds; harder to implement than Telea. |
+| **Exemplar-based / PatchMatch** | Best | Very hard (400+ lines) | Copies best-matching texture patches from elsewhere in the image. Overkill for most stars but useful for very large star cores over textured backgrounds. |
+
+**Practical recommendation:** Median Annulus or Iterative Erosion cover 90% of astrophotography use cases. Telea FMM is the first step that would be noticeably better on difficult images and is near-professional quality.
+
+The algorithm could be selected via a `removeStars.inpaint` parameter:
+```yaml
+- removeStars:
+    factor: 2.0
+    inpaint: erosion     # none | annulus | erosion | polynomial | rbf | telea
+```
+
+#### 8.4 AI Star Removal (StarNet-style)
 **Impact: High | Feasibility: Low**
 
 StarNet2 and APP's starless separation use trained convolutional neural networks to separate stars from background in a single pass, without requiring alignment star data. The output (starless + star layer) is then processed independently — a workflow already supported by kimage's extract-stars branching. However, implementing a neural network inference engine in Kotlin/JVM is a significant undertaking (requires ONNX Runtime or DL4J, plus a trained model). The trained StarNet2 model weights are open source.
@@ -277,6 +303,13 @@ PixInsight and APP support multi-panel mosaics: plate solving each panel, comput
 | Large-Scale Vignetting Correction | Medium | High | **P3** |
 | HDR Multiscale Transform | Medium | Medium | **P3** |
 | Star Halo Reduction | Medium | High | **P3** |
+| Star Removal: Median Annulus Inpainting | Medium | High | **P3** |
+| Star Removal: Iterative Erosion Inpainting | Medium | High | **P3** |
+| Star Removal: Polynomial Surface Fit Inpainting | Medium | High | **P3** |
+| Star Removal: RBF Inpainting | Medium | Medium | **P3** |
+| Star Removal: Fast Marching Method (Telea) | Medium | Medium | **P3** |
+| Star Removal: Navier-Stokes Inpainting | Medium | Low | **P4** |
+| Star Removal: PatchMatch / Exemplar Inpainting | Medium | Low | **P4** |
 | Satellite Trail Auto-Rejection | Medium | Medium | **P3** |
 | Python / External Scripting API | Medium | Medium | **P3** |
 | ESD Rejection | Low | Medium | **P4** |

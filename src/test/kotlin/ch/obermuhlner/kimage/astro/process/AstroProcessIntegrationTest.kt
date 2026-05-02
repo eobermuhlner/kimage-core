@@ -668,6 +668,91 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
     }
 
     @Test
+    fun `processAstro runs with enhance using removeStars with annulus inpainting`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(inputImageExtension = "png", outputImageExtension = "png", debayer = DebayerConfig(enabled = false)),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf(EnhanceStepConfig(removeStars = RemoveStarsConfig(inpaint = InpaintAlgorithm.Annulus)))),
+            output = OutputFormatConfig(outputName = "test_output", outputImageExtensions = mutableListOf("png")),
+        )
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using removeStars with erosion inpainting`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(inputImageExtension = "png", outputImageExtension = "png", debayer = DebayerConfig(enabled = false)),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf(EnhanceStepConfig(removeStars = RemoveStarsConfig(inpaint = InpaintAlgorithm.Erosion)))),
+            output = OutputFormatConfig(outputName = "test_output", outputImageExtensions = mutableListOf("png")),
+        )
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using removeStars with polynomial inpainting`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(inputImageExtension = "png", outputImageExtension = "png", debayer = DebayerConfig(enabled = false)),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf(EnhanceStepConfig(removeStars = RemoveStarsConfig(inpaint = InpaintAlgorithm.Polynomial)))),
+            output = OutputFormatConfig(outputName = "test_output", outputImageExtensions = mutableListOf("png")),
+        )
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using removeStars with rbf inpainting`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(inputImageExtension = "png", outputImageExtension = "png", debayer = DebayerConfig(enabled = false)),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf(EnhanceStepConfig(removeStars = RemoveStarsConfig(inpaint = InpaintAlgorithm.RBF)))),
+            output = OutputFormatConfig(outputName = "test_output", outputImageExtensions = mutableListOf("png")),
+        )
+        assertAstroProcess(config)
+    }
+
+    @Test
+    fun `processAstro runs with enhance using removeStars with telea inpainting`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(inputImageExtension = "png", outputImageExtension = "png", debayer = DebayerConfig(enabled = false)),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(steps = mutableListOf(EnhanceStepConfig(removeStars = RemoveStarsConfig(inpaint = InpaintAlgorithm.Telea)))),
+            output = OutputFormatConfig(outputName = "test_output", outputImageExtensions = mutableListOf("png")),
+        )
+        assertAstroProcess(config)
+    }
+
+    @Test
     fun `processAstro runs with enhance using tgvDenoise`() {
         initTestRun()
         createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)

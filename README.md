@@ -473,10 +473,24 @@ enhance:
   steps:
     - removeStars:
         factor: 2.0           # Star ellipse radius multiplier × FWHM (default 2.0)
+        inpaint: Erosion       # Fill algorithm for star holes (default: Erosion)
     - sigmoid: { midpoint: 0.3, strength: 1.2 }
 ```
 
 Star positions are read from `astro-process/aligned/stars.yaml` (written after alignment). If that file does not exist, `findStars` runs on the stacked image.
+
+**`inpaint` algorithms:**
+
+| Value | Description | Quality | Speed |
+|---|---|---|---|
+| `None` | Leave star holes as black | — | Fastest |
+| `Annulus` | Fill with median of a thin ring just outside the star ellipse | Good | Fast |
+| `Erosion` | BFS inward from boundary, averaging known neighbours each layer (default) | Good | Fast |
+| `Polynomial` | Fit a 2-D plane through the annulus boundary samples | Very good | Fast |
+| `RBF` | Thin-plate spline through boundary samples | Very good | Moderate |
+| `Telea` | Fast-marching fill with distance-weighted gradient propagation | Excellent | Moderate |
+
+**Recommendation:** `Erosion` for a fast general-purpose fill; `Polynomial` for stars on smooth sky backgrounds; `Telea` for best quality over structured backgrounds (nebulosity, gradients).
 
 ---
 
@@ -1054,7 +1068,7 @@ The enhancement pipeline supports these step types (use exactly one per step):
 - **`cosmeticCorrection`** - Remove hot/cold pixels
 - **`highDynamicRange`** - Combine multiple enhancement results
 - **`extractStars`** - Separate stars and background, process independently, recombine
-- **`removeStars`** - Subtract detected stars to produce a starless background image. Parameter: `factor` (star radius multiplier × FWHM, default 2.0)
+- **`removeStars`** - Subtract detected stars to produce a starless background image. Parameters: `factor` (star radius multiplier × FWHM, default 1.0), `inpaint` (fill algorithm for holes: `None` | `Annulus` | `Erosion` | `Polynomial` | `RBF` | `Telea`, default `Erosion`)
 - **`decompose`** - Split into LRGB/RGB/HSB components, process each, recombine
 - **`compositeChannels`** - Assemble named sources (R, G, B) into a single RGB image
 - **`mergeWith`** - HDR-blend a named source into the current image
