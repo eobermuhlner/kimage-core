@@ -450,13 +450,24 @@ enhance:
   steps:
     - linearPercentile: { minPercentile: 0.0001, maxPercentile: 0.9999 }
     - extractStars:
-        factor: 2.0                            # Star ellipse radius multiplier × FWHM
-        softMaskBlurRadius: 5                    # Gaussian feather radius in pixels
+        starMaskAlgorithm: FwhmEllipse           # Star mask algorithm (see table below)
+        factor: 2.0                              # FwhmEllipse / GaussianPsfFit: radius multiplier × FWHM
+        softMaskBlurRadius: 5                    # Gaussian feather radius applied to all mask algorithms
         inpaint: Erosion                         # Background fill: None | Annulus | Erosion | Polynomial | RBF | Telea
-        starImageAlgorithm: Subtract              # Star image creation: Copy | Subtract | SoftMaskedMultiply
+        starImageAlgorithm: Subtract             # Star image creation: Copy | Subtract | SoftMaskedMultiply
         mergeAlgorithm: LinearSoftBlend          # Branch merge: LinearSoftBlend | AdditiveMerge
-        starThreshold: 0.2                      # Minimum brightness to consider a pixel as a star (default 0.2)
-        channel: Gray                            # Channel to use for star detection: Gray | Red | Green | Blue | etc.
+        starThreshold: 0.2                       # findStars threshold (FwhmEllipse / GaussianPsfFit / RegionGrowing)
+        channel: Gray                            # Channel for star detection / mask computation
+        # Algorithm-specific parameters (only the relevant ones take effect):
+        diskRadius: 10                           # WhiteTopHat: morphological disk radius in pixels
+        blurRadius: 20                           # GaussianBlurDiff: blur radius for background estimation
+        dogRadius1: 2                            # DifferenceOfGaussians: small (star-scale) blur radius
+        dogRadius2: 10                           # DifferenceOfGaussians: large (background-scale) blur radius
+        maskThreshold: 0.05                      # WhiteTopHat / GaussianBlurDiff / DoG: pixel threshold after subtraction
+        windowRadius: 10                         # AdaptiveLocalThreshold: local median window radius
+        kappa: 1.5                               # AdaptiveLocalThreshold: pixel must exceed kappa × local median
+        percentile: 0.98                         # LuminancePercentile: top-N% brightest pixels are masked
+        growthFactor: 0.5                        # RegionGrowing: grow while pixel > background + factor×(peak−background)
         starsBranch:
           steps:
             - reduceNoise: { thresholds: [0.00005] }
@@ -466,6 +477,19 @@ enhance:
             - removeBackground: {}
     - sigmoid: { midpoint: 0.3, strength: 1.2 }
 ```
+
+**`starMaskAlgorithm` options:**
+
+| Value | Needs `findStars` | Description |
+|---|---|---|
+| `FwhmEllipse` | Yes | FWHM-based ellipses per star (default; original behaviour). Params: `factor`, `starThreshold`, `channel` |
+| `WhiteTopHat` | No | Morphological white top-hat: `original − open(original, disk)`. Params: `diskRadius`, `maskThreshold` |
+| `GaussianBlurDiff` | No | Subtract a heavily blurred version and threshold: `original − blur(original, blurRadius)`. Params: `blurRadius`, `maskThreshold` |
+| `DifferenceOfGaussians` | No | Scale-selective: `blur(img, dogRadius1) − blur(img, dogRadius2)`. Params: `dogRadius1`, `dogRadius2`, `maskThreshold` |
+| `RegionGrowing` | Yes | BFS outward from each star peak until pixel drops below background fraction. Params: `growthFactor`, `starThreshold`, `channel` |
+| `GaussianPsfFit` | Yes | 2D brightness-weighted moment fit per star for accurate PSF sigma; draws ellipses with fitted FWHM. Params: `factor`, `starThreshold`, `channel` |
+| `AdaptiveLocalThreshold` | No | Per-pixel: flag if value exceeds `kappa × localMedian`. Params: `windowRadius`, `kappa` |
+| `LuminancePercentile` | No | Mask pixels above the Kth percentile of the channel histogram. Params: `percentile` |
 
 **`starImageAlgorithm` options:**
 

@@ -603,6 +603,24 @@ data class ExtractStarsConfig(
     var backgroundBranch: BranchConfig = BranchConfig(name = "background"),
     var starThreshold: Double = 0.2,
     var channel: Channel = Channel.Gray,
+    // Star mask algorithm selection (default preserves original behaviour)
+    var starMaskAlgorithm: StarMaskAlgorithm = StarMaskAlgorithm.FwhmEllipse,
+    // WhiteTopHat: morphological disk radius
+    var diskRadius: Int = 10,
+    // GaussianBlurDiff: blur radius for background estimation
+    var blurRadius: Int = 20,
+    // DifferenceOfGaussians: small and large blur radii
+    var dogRadius1: Int = 2,
+    var dogRadius2: Int = 10,
+    // Threshold applied to the pixel difference for image-based algorithms
+    var maskThreshold: Double = 0.05,
+    // AdaptiveLocalThreshold: local window radius and ratio multiplier
+    var windowRadius: Int = 10,
+    var kappa: Double = 1.5,
+    // LuminancePercentile: percentile cutoff (0..1)
+    var percentile: Double = 0.98,
+    // RegionGrowing: fraction of (peak - background) used as growth stop threshold
+    var growthFactor: Double = 0.5,
 )
 
 data class RemoveStarsConfig(
@@ -1851,31 +1869,7 @@ class AstroProcess(val config: ProcessConfig) {
         return findStars(image, alignConfig.starThreshold).take(alignConfig.maxStars)
     }
 
-    private fun buildStarMask(image: Image, stars: List<ch.obermuhlner.kimage.astro.align.Star>, factor: Double, blurRadius: Int): ch.obermuhlner.kimage.core.matrix.Matrix {
-        val maskMatrix = FloatMatrix(image.height, image.width) { _, _ -> 0f }
-        val width = image.width
-        val height = image.height
-        for (star in stars) {
-            val radiusX = (star.fwhmX * factor / 2 + 0.5).toInt().coerceAtLeast(1)
-            val radiusY = (star.fwhmY * factor / 2 + 0.5).toInt().coerceAtLeast(1)
-            val cx = star.intX
-            val cy = star.intY
-            for (y in (cy - radiusY)..(cy + radiusY)) {
-                for (x in (cx - radiusX)..(cx + radiusX)) {
-                    if (x in 0 until width && y in 0 until height) {
-                        val dx = (x - cx).toDouble() / radiusX
-                        val dy = (y - cy).toDouble() / radiusY
-                        if (dx * dx + dy * dy <= 1.0) {
-                            maskMatrix[y, x] = 1.0
-                        }
-                    }
-                }
-            }
-        }
-        val maskImage = MatrixImage(maskMatrix)
-        val blurred = if (blurRadius > 0) maskImage.gaussianBlurFilter(blurRadius) else maskImage
-        return blurred[Channel.Red]
-    }
+
 
     private fun blendWithMask(insideImage: Image, outsideImage: Image, maskMatrix: ch.obermuhlner.kimage.core.matrix.Matrix): Image {
         val width = insideImage.width
@@ -1902,9 +1896,9 @@ class AstroProcess(val config: ProcessConfig) {
     ): Image {
         subCacheDir.mkdirs()
 
-        val stars = findStars(image, cfg.starThreshold, cfg.channel)
+        val stars by lazy { findStars(image, cfg.starThreshold, cfg.channel) }
 
-        val starMaskMatrix by lazy { buildStarMask(image, stars, cfg.factor, cfg.softMaskBlurRadius) }
+        val starMaskMatrix by lazy { buildStarMask(image, { stars }, cfg) }
 
         val (starImage, backgroundImage) = when (cfg.starImageAlgorithm) {
             StarImageAlgorithm.Copy -> {
@@ -2028,7 +2022,7 @@ class AstroProcess(val config: ProcessConfig) {
             MaskSource.Stars -> {
                 val starsYamlFile = workingDirectory.resolve(config.align.alignedOutputDirectory).resolve("stars.yaml")
                 val stars = loadOrFindStars(starsYamlFile, image, config.align)
-                buildStarMask(image, stars, cfg.mask.factor, cfg.mask.blur)
+                buildStarMask(image, { stars }, ExtractStarsConfig(factor = cfg.mask.factor, softMaskBlurRadius = cfg.mask.blur))
             }
             MaskSource.Luminance -> {
                 val threshold = cfg.mask.threshold

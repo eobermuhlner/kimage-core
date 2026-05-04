@@ -70,8 +70,10 @@ fun findStars(image: Image, threshold: Double = 0.2, channel: Channel = Channel.
     val width = image.width
 
     val matrixXY = image[channel].asXY()
-    val visited = Array(height) { BooleanArray(width) { false } }
-    val localMaxima = mutableSetOf<PointXY>()
+    val visited = Array(height) { BooleanArray(width) }
+    // Bitmap avoids per-lookup PointXY allocations in the BFS hot path.
+    val localMaximaBitmap = Array(height) { BooleanArray(width) }
+    val localMaximaPositions = mutableListOf<PointXY>()
 
     for (y in 1 until height - 1) {
         for (x in 1 until width - 1) {
@@ -81,14 +83,21 @@ fun findStars(image: Image, threshold: Double = 0.2, channel: Channel = Channel.
                 loop@ for (dy in -1..1) {
                     for (dx in -1..1) {
                         if (dx == 0 && dy == 0) continue
-                        if (matrixXY[x + dx, y + dy] > centerValue) {
+                        val neighborValue = matrixXY[x + dx, y + dy]
+                        // Canonical tie-breaking: among equal-valued pixels only the one
+                        // earliest in scan order (smallest y, then smallest x) wins.
+                        // This collapses flat/quantized regions to one local maximum each
+                        // while still detecting real star peaks.
+                        if (neighborValue > centerValue ||
+                            (neighborValue == centerValue && (dy < 0 || (dy == 0 && dx < 0)))) {
                             isLocalMax = false
                             break@loop
                         }
                     }
                 }
                 if (isLocalMax) {
-                    localMaxima.add(PointXY(x, y))
+                    localMaximaBitmap[y][x] = true
+                    localMaximaPositions.add(PointXY(x, y))
                 }
             }
         }
@@ -98,7 +107,7 @@ fun findStars(image: Image, threshold: Double = 0.2, channel: Channel = Channel.
     val labelMap = Array(height) { IntArray(width) { -1 } }
     var currentLabel = 0
 
-    for ((x, y) in localMaxima) {
+    for ((x, y) in localMaximaPositions) {
         if (!visited[y][x]) {
             val queue = ArrayDeque<PointXY>()
             val cluster = mutableListOf<PointXY>()
@@ -115,7 +124,7 @@ fun findStars(image: Image, threshold: Double = 0.2, channel: Channel = Channel.
                         val nx = cx + dx
                         val ny = cy + dy
                         if (nx in 0 until width && ny in 0 until height &&
-                            !visited[ny][nx] && localMaxima.contains(PointXY(nx, ny))) {
+                            !visited[ny][nx] && localMaximaBitmap[ny][nx]) {
                             visited[ny][nx] = true
                             queue.add(PointXY(nx, ny))
                         }

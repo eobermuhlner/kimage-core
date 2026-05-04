@@ -910,4 +910,41 @@ class AstroProcessIntegrationTest : AbstractAstroProcessIntegrationTest() {
         assertAstroProcess(config)
     }
 
+    @Test
+    fun `processAstro runs with enhance using extractStars with SoftMaskedMultiply`() {
+        initTestRun()
+        createRandomAstroImages(testDir, "light", 10, addBiasNoise = false)
+
+        val config = ProcessConfig(
+            format = FormatConfig(
+                inputImageExtension = "png",
+                outputImageExtension = "png",
+                debayer = DebayerConfig(enabled = false)
+            ),
+            calibrate = CalibrateConfig(enabled = false),
+            normalizeBackground = NormalizeBackgroundConfig(enabled = false),
+            align = AlignConfig(),
+            stack = StackConfig(algorithm = StackAlgorithm.Median),
+            enhance = EnhanceConfig(
+                steps = mutableListOf(
+                    EnhanceStepConfig(
+                        extractStars = ExtractStarsConfig(
+                            inpaint = InpaintAlgorithm.Erosion,
+                            starImageAlgorithm = StarImageAlgorithm.SoftMaskedMultiply,
+                            mergeAlgorithm = MergeAlgorithm.AdditiveMerge,
+                            starsBranch = BranchConfig(name = "stars", steps = mutableListOf(EnhanceStepConfig(autoStretch = AutoStretchConfig()))),
+                            backgroundBranch = BranchConfig(name = "background", steps = mutableListOf(EnhanceStepConfig(autoStretch = AutoStretchConfig())))
+                        )
+                    )
+                )
+            ),
+            output = OutputFormatConfig(
+                outputName = "test_output",
+                outputImageExtensions = mutableListOf("png"),
+            )
+        )
+
+        assertAstroProcess(config)
+    }
+
 }
